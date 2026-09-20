@@ -5,7 +5,6 @@
   import Sidebar from '../components/Sidebar.svelte';
   import TelemetryBento from '../components/TelemetryBento.svelte';
   import DownloadTable from '../components/DownloadTable.svelte';
-  import SegmentVisualizer from '../components/SegmentVisualizer.svelte';
   import AddDownloadModal from '../components/AddDownloadModal.svelte';
   import DownloadProgressModal from '../components/DownloadProgressModal.svelte';
   import DownloadOutcomeModal from '../components/DownloadOutcomeModal.svelte';
@@ -53,9 +52,6 @@
 
       <!-- Active Downloads Queue / Cards -->
       <DownloadTable />
-
-      <!-- IDM Realtime Segment Monitor for Selected Task -->
-      <SegmentVisualizer />
     </main>
   </div>
 
