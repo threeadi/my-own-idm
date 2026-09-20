@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "My Own IDM",
+  "productName": "IDM Turbo Desktop",
   "version": "0.1.0",
   "identifier": "com.myownidm.app",
   "build": {
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "My Own IDM",
+        "title": "IDM Turbo Desktop",
         "width": 1120,
         "height": 720,
         "minWidth": 860,

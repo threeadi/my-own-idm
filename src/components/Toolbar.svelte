@@ -27,9 +27,11 @@
   <div class="h-10 px-4 flex items-center justify-between border-b border-[#252a33]/80">
     <!-- Brand / Logo -->
     <div class="flex items-center gap-2.5">
-      <div class="w-6 h-6 rounded-lg bg-gradient-to-tr from-[#2563eb] to-[#00e5ff] flex items-center justify-center shadow-[0_0_12px_rgba(0,229,255,0.3)]">
-        <Download class="w-3.5 h-3.5 text-slate-950 font-bold" />
-      </div>
+      <img
+        src="/favicon.png"
+        alt="IDM Turbo"
+        class="w-6 h-6 rounded-lg object-contain shadow-[0_0_12px_rgba(0,229,255,0.35)]"
+      />
       <span class="font-bold text-xs sm:text-sm tracking-tight text-[#dee2ee]">
         IDM Turbo Desktop
       </span>

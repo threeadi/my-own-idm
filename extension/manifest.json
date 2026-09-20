@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "My Own IDM Integration Module",
+  "name": "IDM Turbo Integration Module",
   "version": "1.0.0",
-  "description": "Integrate Google Chrome, Microsoft Edge, and Firefox with My Own IDM high-speed multi-threaded downloader.",
+  "description": "Integrate Google Chrome, Microsoft Edge, and Firefox with IDM Turbo high-speed multi-threaded downloader.",
   "permissions": [
     "nativeMessaging",
     "downloads",
@@ -29,7 +29,7 @@
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "My Own IDM",
+    "default_title": "IDM Turbo",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",

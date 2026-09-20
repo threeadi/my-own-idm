@@ -170,9 +170,11 @@
       <!-- Window Title Bar -->
       <div data-tauri-drag-region class="px-4 py-2.5 bg-[#252a33]/90 flex items-center justify-between border-b border-[#30353e]/80 cursor-move">
         <div class="flex items-center gap-2">
-          <div class="w-6 h-6 rounded-lg bg-[#4d8eff]/20 flex items-center justify-center text-[#4d8eff] border border-[#4d8eff]/30">
-            <CloudDownload class="w-3.5 h-3.5" />
-          </div>
+          <img
+            src="/favicon.png"
+            alt="IDM Turbo"
+            class="w-5 h-5 rounded-md object-contain shadow-[0_0_8px_rgba(0,229,255,0.3)]"
+          />
           <span class="font-sans text-xs sm:text-sm font-semibold text-[#dee2ee]">
             Tambah Unduhan Baru - IDM Turbo
           </span>

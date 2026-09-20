@@ -65,9 +65,11 @@
       <!-- Title Bar -->
       <header data-tauri-drag-region class="flex items-center justify-between px-3.5 py-2.5 bg-[#0f1420] border-b border-[#1a2236] select-none cursor-move">
         <div class="flex items-center gap-2 overflow-hidden pr-2">
-          <div class="flex items-center justify-center w-5 h-5 rounded-md bg-gradient-to-tr from-[#2563eb] to-[#00e5ff] shadow-glow-cyan shrink-0">
-            <Download class="w-3 h-3 text-slate-950 font-bold" />
-          </div>
+          <img
+            src="/favicon.png"
+            alt="IDM Turbo"
+            class="w-5 h-5 rounded-md shrink-0 object-contain shadow-[0_0_8px_rgba(0,229,255,0.3)]"
+          />
           <h1 class="text-xs sm:text-[13px] font-medium text-slate-200 tracking-tight truncate flex items-center gap-1.5">
             <span class="font-bold text-[#00e5ff] font-mono">{pct.toFixed(0)}%</span>
             <span class="truncate">{task.filename}</span>

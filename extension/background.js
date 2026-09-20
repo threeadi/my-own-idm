@@ -8,7 +8,7 @@ let detectedMediaByTab = {};
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
     id: "download-with-myownidm",
-    title: "Download with My Own IDM",
+    title: "Unduh dengan IDM Turbo",
     contexts: ["link", "video", "audio", "image"]
   });
 });
@@ -88,7 +88,7 @@ chrome.webRequest?.onResponseStarted?.addListener(
         // Update badge
         const count = detectedMediaByTab[details.tabId].length;
         chrome.action.setBadgeText({ tabId: details.tabId, text: String(count) });
-        chrome.action.setBadgeBackgroundColor({ tabId: details.tabId, color: "#06b6d4" });
+        chrome.action.setBadgeBackgroundColor({ tabId: details.tabId, color: "#00e5ff" });
       }
     }
   },

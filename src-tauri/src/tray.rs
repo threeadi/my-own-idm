@@ -3,8 +3,8 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{AppHandle, Manager};
 
 pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
-    let show_i = MenuItem::with_id(app, "show", "Show My Own IDM", true, None::<&str>)?;
-    let quit_i = MenuItem::with_id(app, "quit", "Exit", true, None::<&str>)?;
+    let show_i = MenuItem::with_id(app, "show", "Buka IDM Turbo Desktop", true, None::<&str>)?;
+    let quit_i = MenuItem::with_id(app, "quit", "Keluar", true, None::<&str>)?;
 
     let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
 

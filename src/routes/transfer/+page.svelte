@@ -247,7 +247,7 @@
           {:else if isFailed}
             <AlertTriangle class="w-3.5 h-3.5" />
           {:else}
-            <Download class="w-3.5 h-3.5" />
+            <img src="/favicon.png" alt="IDM Turbo" class="w-4 h-4 object-contain" />
           {/if}
         </div>
         <h1 class="text-xs font-semibold text-slate-200 tracking-tight truncate flex items-center gap-1.5">
