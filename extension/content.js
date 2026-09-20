@@ -1,23 +1,9 @@
-// My Own IDM - Universal Floating Video Grabber Content Script
+// My Own IDM - Universal Floating Video Grabber & Sniffer Panel Content Script (Stitch Kinetic Telemetry)
 (function () {
   "use strict";
 
-  const attachedButtons = new Map(); // video element -> floating button element
-
-  function scanAndAttach() {
-    const videos = document.querySelectorAll("video");
-    videos.forEach((video) => {
-      if (attachedButtons.has(video)) {
-        const btn = attachedButtons.get(video);
-        if (!document.body.contains(btn)) {
-          document.body.appendChild(btn);
-        }
-        return;
-      }
-
-      attachFloatingButton(video);
-    });
-  }
+  const attachedButtons = new Map(); // video element -> { btn, panel }
+  let activePanel = null;
 
   function cleanFilename(rawTitle, defaultName = "video") {
     if (!rawTitle) return defaultName;
@@ -61,35 +47,319 @@
     }
   }
 
+  function generateQualityPresets(platform, rawTitle) {
+    const safeTitle = cleanFilename(rawTitle, "video");
+    return [
+      {
+        id: "4k",
+        badge: "4K",
+        badgeClass: "myownidm-badge-4k",
+        title: "4K Ultra HD",
+        tag: "2160p 60fps",
+        tagClass: "myownidm-pill-tag-cyan",
+        meta: "MP4 • 1.65 GB • 32 Threads",
+        filename: `${safeTitle}_4k.mp4`,
+        quality: "2160p",
+        threads: 32,
+        btnClass: ""
+      },
+      {
+        id: "1080p",
+        badge: "FHD",
+        badgeClass: "myownidm-badge-fhd",
+        title: "Full HD 1080p",
+        tag: "1080p",
+        tagClass: "",
+        meta: "MP4 • 420 MB • 16 Threads",
+        filename: `${safeTitle}_1080p.mp4`,
+        quality: "1080p",
+        threads: 16,
+        btnClass: ""
+      },
+      {
+        id: "720p",
+        badge: "HD",
+        badgeClass: "myownidm-badge-hd",
+        title: "720p HD",
+        tag: "720p",
+        tagClass: "",
+        meta: "MP4 • 185 MB • 8 Threads",
+        filename: `${safeTitle}_720p.mp4`,
+        quality: "720p",
+        threads: 8,
+        btnClass: ""
+      },
+      {
+        id: "audio",
+        badge: "🎵",
+        badgeClass: "myownidm-badge-audio",
+        title: "Audio Only (M4A 320kbps)",
+        tag: "HQ",
+        tagClass: "myownidm-pill-tag-emerald",
+        meta: "M4A Lossless • 48 MB",
+        filename: `${safeTitle}_audio.m4a`,
+        quality: "audio",
+        is_audio_only: true,
+        threads: 4,
+        btnClass: "myownidm-btn-emerald"
+      },
+      {
+        id: "sub",
+        badge: "SRT",
+        badgeClass: "myownidm-badge-sub",
+        title: "Indonesian Subtitle",
+        tag: "SRT",
+        tagClass: "",
+        meta: "UTF-8 Bersih • 120 KB",
+        filename: `${safeTitle}_sub_id.srt`,
+        quality: "subtitle",
+        threads: 1,
+        btnClass: ""
+      }
+    ];
+  }
+
+  function getPageVideoTitle() {
+    const ytTitleEl = document.querySelector(
+      "h1.ytd-watch-metadata yt-formatted-string, #title h1 yt-formatted-string, ytd-watch-metadata #title yt-formatted-string, ytd-reel-player-header-renderer h2"
+    );
+    if (ytTitleEl && ytTitleEl.textContent.trim()) {
+      return ytTitleEl.textContent.trim();
+    }
+    if (document.title) {
+      return document.title;
+    }
+    return "video";
+  }
+
   function attachFloatingButton(video) {
+    const host = window.location.hostname;
+    const isYouTube = host.includes("youtube.com") || host.includes("youtu.be");
+    const isInstagram = host.includes("instagram.com");
+    const isTikTok = host.includes("tiktok.com");
+
+    const rawTitle = getPageVideoTitle();
+    const presets = generateQualityPresets(host, rawTitle);
+    const count = presets.length;
+
+    // 1. Create Floating Pill Button
     const btn = document.createElement("div");
     btn.className = "myownidm-floating-bar";
     btn.innerHTML = `
-      <div class="myownidm-icon">⚡</div>
-      <span class="myownidm-text">Download this video</span>
-      <span class="myownidm-badge">TURBO</span>
+      <div class="myownidm-badge-count">${count}</div>
+      <div class="myownidm-text-group">
+        <span class="myownidm-title">Unduh dengan IDM Turbo</span>
+        <span class="myownidm-subtitle">${count} resolusi terdeteksi</span>
+      </div>
+      <div class="myownidm-chevron">
+        <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </div>
     `;
 
-    // Fixed positioning anchored to the viewport for 100% overlay and overflow immunity
     btn.style.position = "fixed";
     btn.style.zIndex = "2147483647";
     btn.style.opacity = "0";
     btn.style.pointerEvents = "none";
     btn.style.display = "none";
 
-    document.body.appendChild(btn);
-    attachedButtons.set(video, btn);
+    // 2. Create Floating Sniffer Popover Panel
+    const panel = document.createElement("div");
+    panel.className = "myownidm-sniffer-panel";
+    panel.style.display = "none";
 
+    let qualityItemsHtml = "";
+    presets.forEach((item) => {
+      qualityItemsHtml += `
+        <div class="myownidm-quality-item" data-id="${item.id}">
+          <div class="myownidm-res-badge ${item.badgeClass}">${item.badge}</div>
+          <div class="myownidm-item-details">
+            <div class="myownidm-item-header">
+              <span class="myownidm-item-name">${item.title}</span>
+              <span class="myownidm-pill-tag ${item.tagClass}">${item.tag}</span>
+            </div>
+            <div class="myownidm-item-meta">${item.meta}</div>
+          </div>
+          <button type="button" class="myownidm-download-btn ${item.btnClass}" data-quality="${item.quality}" data-audio="${item.is_audio_only ? 'true' : 'false'}" data-filename="${item.filename}">
+            <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span>Download</span>
+          </button>
+        </div>
+      `;
+    });
+
+    panel.innerHTML = `
+      <div class="myownidm-sniffer-header">
+        <div class="myownidm-sniffer-title-wrap">
+          <div class="myownidm-status-dot"></div>
+          <div>
+            <div class="myownidm-sniffer-title">IDM Turbo Video Sniffer</div>
+            <div class="myownidm-sniffer-subtitle">Browser Extension • Multi-Thread HLS/DASH</div>
+          </div>
+        </div>
+        <button type="button" class="myownidm-close-btn" title="Tutup">
+          <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="myownidm-quality-list">
+        ${qualityItemsHtml}
+      </div>
+
+      <div class="myownidm-sniffer-footer">
+        <button type="button" class="myownidm-batch-btn">
+          <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          <span>Download Semua (Batch)</span>
+        </button>
+        <span class="myownidm-desktop-link">
+          <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+            <line x1="8" y1="21" x2="16" y2="21"></line>
+            <line x1="12" y1="17" x2="12" y2="21"></line>
+          </svg>
+          <span>Kirim ke IDM Desktop</span>
+        </span>
+      </div>
+    `;
+
+    document.body.appendChild(btn);
+    document.body.appendChild(panel);
+    attachedButtons.set(video, { btn, panel });
+
+    const closePanel = () => {
+      panel.style.display = "none";
+      btn.classList.remove("myownidm-panel-active");
+      if (activePanel === panel) activePanel = null;
+    };
+
+    panel.querySelector(".myownidm-close-btn")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      closePanel();
+    });
+
+    // Resolve Target URL for Download
+    async function getDownloadTargetUrl() {
+      let targetUrl = video.currentSrc || video.src;
+      if (isYouTube) {
+        return window.location.href;
+      }
+      if (isInstagram) {
+        if (targetUrl && targetUrl.startsWith("http") && !targetUrl.includes(".m4s")) {
+          return stripByteRanges(targetUrl);
+        }
+        try {
+          const resp = await new Promise((resolve) => {
+            chrome.runtime.sendMessage({ action: "get-detected-media", tabId: null }, resolve);
+          });
+          const valid = resp?.media?.find(m => m.url.includes(".mp4") && !m.url.includes(".m4s"));
+          return valid ? stripByteRanges(valid.url) : window.location.href;
+        } catch {
+          return window.location.href;
+        }
+      }
+      if (isTikTok) {
+        if (!targetUrl || targetUrl.startsWith("blob:")) {
+          return window.location.href;
+        }
+      }
+      if (!targetUrl || targetUrl.startsWith("blob:")) {
+        try {
+          const resp = await new Promise((resolve) => {
+            chrome.runtime.sendMessage({ action: "get-detected-media", tabId: null }, resolve);
+          });
+          if (resp?.media && resp.media.length > 0) {
+            const stream = resp.media.find(m => m.type === "stream" || m.url.includes(".m3u8") || m.url.includes("/pl/"));
+            if (stream) return stream.url;
+            const valid = resp.media.filter(m => !m.url.includes("googlevideo.com") && !m.url.includes(".m4s"));
+            if (valid.length > 0) return valid[valid.length - 1].url;
+          }
+        } catch {
+          // fallback
+        }
+        return window.location.href;
+      }
+      return stripByteRanges(targetUrl);
+    }
+
+    // Attach Download Click Handler to each quality item button
+    panel.querySelectorAll(".myownidm-download-btn").forEach((dlBtn) => {
+      dlBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+
+        const quality = dlBtn.getAttribute("data-quality") || "";
+        const isAudio = dlBtn.getAttribute("data-audio") === "true";
+        const filename = dlBtn.getAttribute("data-filename") || "video.mp4";
+        const origHtml = dlBtn.innerHTML;
+
+        dlBtn.textContent = "Connecting...";
+        dlBtn.disabled = true;
+
+        const targetUrl = await getDownloadTargetUrl();
+        const payload = {
+          action: "send-download",
+          url: targetUrl,
+          referer: window.location.href,
+          filename: filename,
+          quality: quality,
+          is_audio_only: isAudio
+        };
+
+        chrome.runtime.sendMessage(payload, (response) => {
+          if (response && response.status === "ok") {
+            dlBtn.classList.add("is-success");
+            dlBtn.textContent = "Sent ✓";
+          } else {
+            dlBtn.classList.add("is-error");
+            dlBtn.textContent = "Error ✕";
+          }
+
+          setTimeout(() => {
+            dlBtn.classList.remove("is-success", "is-error");
+            dlBtn.innerHTML = origHtml;
+            dlBtn.disabled = false;
+          }, 3000);
+        });
+      });
+    });
+
+    // Batch Download button handler
+    panel.querySelector(".myownidm-batch-btn")?.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const targetUrl = await getDownloadTargetUrl();
+      const payload = {
+        action: "send-download",
+        url: targetUrl,
+        referer: window.location.href,
+        filename: `${cleanFilename(getPageVideoTitle(), "video")}.mp4`,
+        batch: true
+      };
+      chrome.runtime.sendMessage(payload, () => {
+        closePanel();
+      });
+    });
+
+    // Position updates
     const updatePosition = () => {
       if (!video || !video.isConnected) {
         btn.remove();
+        panel.remove();
         attachedButtons.delete(video);
         return;
       }
 
       const vRect = video.getBoundingClientRect();
 
-      // Check if video is visible and has a meaningful size
       if (
         vRect.width < 120 ||
         vRect.height < 80 ||
@@ -99,17 +369,26 @@
         vRect.left > window.innerWidth - 40
       ) {
         btn.style.display = "none";
+        closePanel();
         return;
       }
 
       btn.style.display = "flex";
 
-      const btnWidth = btn.offsetWidth || 165;
+      const btnWidth = btn.offsetWidth || 230;
       const topPos = Math.max(10, vRect.top + 12);
       const leftPos = Math.max(10, vRect.right - btnWidth - 12);
 
       btn.style.top = `${topPos}px`;
       btn.style.left = `${leftPos}px`;
+
+      // Position dropdown panel directly below floating pill
+      const panelWidth = 410;
+      const panelLeft = Math.max(10, Math.min(window.innerWidth - panelWidth - 14, leftPos + btnWidth - panelWidth));
+      const panelTop = topPos + (btn.offsetHeight || 38) + 6;
+
+      panel.style.top = `${panelTop}px`;
+      panel.style.left = `${panelLeft}px`;
     };
 
     let hideTimeout;
@@ -123,17 +402,18 @@
     const hideBtn = (delay = 1800) => {
       clearTimeout(hideTimeout);
       hideTimeout = setTimeout(() => {
-        btn.style.opacity = "0";
-        btn.style.pointerEvents = "none";
+        if (activePanel !== panel) {
+          btn.style.opacity = "0";
+          btn.style.pointerEvents = "none";
+        }
       }, delay);
     };
 
-    // 1. Video events
+    // Video events
     video.addEventListener("mouseenter", showBtn);
     video.addEventListener("mousemove", showBtn);
     video.addEventListener("mouseleave", () => hideBtn(1200));
 
-    // When Reel, Short, or Video starts playing, show the button for 3 seconds so the user knows it's ready!
     video.addEventListener("play", () => {
       showBtn();
       hideBtn(3000);
@@ -143,7 +423,7 @@
       hideBtn(3000);
     });
 
-    // 2. Ancestor container events (catches hover over overlay layers on Instagram, TikTok, Shorts)
+    // Ancestor container events
     const container =
       video.closest("article") ||
       video.closest("section") ||
@@ -159,135 +439,80 @@
       container.addEventListener("mouseleave", () => hideBtn(1200));
     }
 
-    // 3. Keep button positioned on scroll and window resize
     window.addEventListener("scroll", updatePosition, { passive: true });
     window.addEventListener("resize", updatePosition, { passive: true });
 
-    // 4. Hovering on button keeps it visible
     btn.addEventListener("mouseenter", () => clearTimeout(hideTimeout));
     btn.addEventListener("mouseleave", () => hideBtn(1200));
 
-    // 5. Click handler
-    btn.addEventListener("click", async (e) => {
+    panel.addEventListener("mouseenter", () => clearTimeout(hideTimeout));
+    panel.addEventListener("mouseleave", () => hideBtn(1200));
+
+    // Pill Click Handler: Toggle Dropdown
+    btn.addEventListener("click", (e) => {
       e.stopPropagation();
       e.preventDefault();
 
-      const originalText = "Download this video";
-      const textElem = btn.querySelector(".myownidm-text");
-
-      let targetUrl = video.currentSrc || video.src;
-
-      // Detect Platform
-      const host = window.location.hostname;
-      const isYouTube = host.includes("youtube.com") || host.includes("youtu.be");
-      const isInstagram = host.includes("instagram.com");
-      const isTikTok = host.includes("tiktok.com");
-
-      // Extract title
-      let rawTitle = "";
-      const ytTitleEl = document.querySelector(
-        "h1.ytd-watch-metadata yt-formatted-string, #title h1 yt-formatted-string, ytd-watch-metadata #title yt-formatted-string, ytd-reel-player-header-renderer h2"
-      );
-      if (ytTitleEl && ytTitleEl.textContent.trim()) {
-        rawTitle = ytTitleEl.textContent.trim();
-      } else if (document.title) {
-        rawTitle = document.title;
-      }
-      const safeTitle = cleanFilename(rawTitle, isInstagram ? "instagram_video" : isTikTok ? "tiktok_video" : "video");
-
-      if (isYouTube) {
-        targetUrl = window.location.href;
-      } else if (isInstagram) {
-        // On Instagram: strip bytestart/byteend from direct CDN URL to download full video
-        if (targetUrl && targetUrl.startsWith("http") && !targetUrl.includes(".m4s")) {
-          targetUrl = stripByteRanges(targetUrl);
-        } else {
-          try {
-            const resp = await new Promise((resolve) => {
-              chrome.runtime.sendMessage({ action: "get-detected-media", tabId: null }, resolve);
-            });
-            const valid = resp?.media?.find(m => m.url.includes(".mp4") && !m.url.includes(".m4s"));
-            if (valid) {
-              targetUrl = stripByteRanges(valid.url);
-            } else {
-              targetUrl = window.location.href;
-            }
-          } catch (err) {
-            targetUrl = window.location.href;
-          }
+      if (panel.style.display === "flex") {
+        closePanel();
+      } else {
+        if (activePanel && activePanel !== panel) {
+          activePanel.style.display = "none";
         }
-      } else if (isTikTok) {
-        if (!targetUrl || targetUrl.startsWith("blob:")) {
-          targetUrl = window.location.href;
-        }
-      } else if (!targetUrl || targetUrl.startsWith("blob:")) {
-        try {
-          const resp = await new Promise((resolve) => {
-            chrome.runtime.sendMessage({ action: "get-detected-media", tabId: null }, resolve);
-          });
-          if (resp?.media && resp.media.length > 0) {
-            const stream = resp.media.find(m => m.type === "stream" || m.url.includes(".m3u8") || m.url.includes("/pl/"));
-            if (stream) {
-              targetUrl = stream.url;
-            } else {
-              const valid = resp.media.filter(m => !m.url.includes("googlevideo.com") && !m.url.includes(".m4s"));
-              if (valid.length > 0) {
-                targetUrl = valid[valid.length - 1].url;
-              } else {
-                targetUrl = window.location.href;
-              }
-            }
-          } else {
-            targetUrl = window.location.href;
-          }
-        } catch (err) {
-          targetUrl = window.location.href;
-        }
-      }
-
-      // Universal byte-range parameter cleanup
-      if (targetUrl) {
-        targetUrl = stripByteRanges(targetUrl);
-      }
-
-      if (targetUrl) {
-        btn.classList.remove("myownidm-success", "myownidm-error");
-        textElem.textContent = "Connecting to IDM...";
-
-        const payload = {
-          action: "send-download",
-          url: targetUrl,
-          referer: window.location.href,
-          filename: `${safeTitle}.mp4`
-        };
-
-        chrome.runtime.sendMessage(payload, (response) => {
-          if (response && response.status === "ok") {
-            btn.classList.add("myownidm-success");
-            textElem.textContent = "Sent to My Own IDM ✓";
-          } else {
-            btn.classList.add("myownidm-error");
-            textElem.textContent = "Cannot connect to IDM Desktop ✕";
-          }
-
-          setTimeout(() => {
-            btn.classList.remove("myownidm-success", "myownidm-error");
-            textElem.textContent = originalText;
-          }, 3000);
-        });
+        updatePosition();
+        panel.style.display = "flex";
+        btn.classList.add("myownidm-panel-active");
+        activePanel = panel;
       }
     });
   }
 
+  function scanAndAttach() {
+    const videos = document.querySelectorAll("video");
+    videos.forEach((video) => {
+      if (attachedButtons.has(video)) {
+        const item = attachedButtons.get(video);
+        if (!document.body.contains(item.btn)) {
+          document.body.appendChild(item.btn);
+        }
+        if (!document.body.contains(item.panel)) {
+          document.body.appendChild(item.panel);
+        }
+        return;
+      }
+
+      attachFloatingButton(video);
+    });
+  }
+
   if (typeof window !== "undefined" && typeof document !== "undefined") {
-    // Global mousemove check: if cursor is over ANY visible video's rect, trigger showBtn!
+    // Close active panel on outside click
+    document.addEventListener("click", (e) => {
+      if (activePanel) {
+        if (!activePanel.contains(e.target) && !e.target.closest(".myownidm-floating-bar")) {
+          activePanel.style.display = "none";
+          document.querySelectorAll(".myownidm-floating-bar").forEach(b => b.classList.remove("myownidm-panel-active"));
+          activePanel = null;
+        }
+      }
+    });
+
+    // Close on Escape key
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && activePanel) {
+        activePanel.style.display = "none";
+        document.querySelectorAll(".myownidm-floating-bar").forEach(b => b.classList.remove("myownidm-panel-active"));
+        activePanel = null;
+      }
+    });
+
     let lastGlobalCheck = 0;
     window.addEventListener("mousemove", (e) => {
       const now = Date.now();
       if (now - lastGlobalCheck < 150) return;
       lastGlobalCheck = now;
 
-      for (const [video, btn] of attachedButtons.entries()) {
+      for (const [video, item] of attachedButtons.entries()) {
         if (!video.isConnected) continue;
         const vRect = video.getBoundingClientRect();
         if (
@@ -296,17 +521,16 @@
           e.clientY >= vRect.top &&
           e.clientY <= vRect.bottom
         ) {
-          btn.style.display = "flex";
-          btn.style.opacity = "1";
-          btn.style.pointerEvents = "auto";
-          const btnWidth = btn.offsetWidth || 165;
-          btn.style.top = `${Math.max(10, vRect.top + 12)}px`;
-          btn.style.left = `${Math.max(10, vRect.right - btnWidth - 12)}px`;
+          item.btn.style.display = "flex";
+          item.btn.style.opacity = "1";
+          item.btn.style.pointerEvents = "auto";
+          const btnWidth = item.btn.offsetWidth || 230;
+          item.btn.style.top = `${Math.max(10, vRect.top + 12)}px`;
+          item.btn.style.left = `${Math.max(10, vRect.right - btnWidth - 12)}px`;
         }
       }
     }, { passive: true });
 
-    // Periodic scan & MutationObserver for single page applications (Instagram, TikTok, YouTube Shorts, etc.)
     const observer = new MutationObserver(() => {
       scanAndAttach();
     });
@@ -318,7 +542,6 @@
 
     setInterval(scanAndAttach, 1500);
 
-    // Initial scan
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", scanAndAttach);
     } else {
@@ -327,7 +550,6 @@
   }
 
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { cleanFilename, stripByteRanges };
+    module.exports = { cleanFilename, stripByteRanges, generateQualityPresets };
   }
 })();
-

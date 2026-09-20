@@ -102,7 +102,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 });
 
 // 4. Send to Desktop App via Local HTTP Server (Port 18888) or Native Messaging Fallback
-async function sendToMyOwnIdm(downloadUrl, refererUrl = "", filename = "") {
+async function sendToMyOwnIdm(downloadUrl, refererUrl = "", filename = "", extraMeta = {}) {
   try {
     // Only get cookies for valid http/https URLs
     let cookieHeader = "";
@@ -119,6 +119,9 @@ async function sendToMyOwnIdm(downloadUrl, refererUrl = "", filename = "") {
       action: "download",
       url: downloadUrl,
       filename: filename || "",
+      quality: extraMeta.quality || "",
+      is_audio_only: extraMeta.is_audio_only || false,
+      threads: extraMeta.threads || 16,
       headers: {
         "Cookie": cookieHeader,
         "Referer": refererUrl || "",
@@ -168,7 +171,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     isInterceptorEnabled = request.enabled;
     sendResponse({ isInterceptorEnabled });
   } else if (request.action === "send-download") {
-    sendToMyOwnIdm(request.url, request.referer, request.filename)
+    const extraMeta = {
+      quality: request.quality,
+      is_audio_only: request.is_audio_only,
+      threads: request.threads,
+      batch: request.batch
+    };
+    sendToMyOwnIdm(request.url, request.referer, request.filename, extraMeta)
       .then((success) => {
         sendResponse({ status: success ? "ok" : "error" });
       })

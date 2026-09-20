@@ -1,7 +1,42 @@
 import { describe, it, expect } from 'vitest';
 // @ts-expect-error CommonJS import in ESM
 import content from './content.js';
-const { cleanFilename, stripByteRanges } = content;
+const { cleanFilename, stripByteRanges, generateQualityPresets } = content;
+
+describe('generateQualityPresets', () => {
+  it('generates 5 distinct quality presets for detected media', () => {
+    const presets = generateQualityPresets('youtube.com', 'Cosmic Odyssey (2025) 4K');
+    expect(presets).toHaveLength(5);
+
+    const ids = presets.map((p) => p.id);
+    expect(ids).toEqual(['4k', '1080p', '720p', 'audio', 'sub']);
+
+    // Check 4K Ultra HD properties
+    const p4k = presets.find((p) => p.id === '4k');
+    expect(p4k?.badge).toBe('4K');
+    expect(p4k?.quality).toBe('2160p');
+    expect(p4k?.threads).toBe(32);
+    expect(p4k?.filename).toContain('_4k.mp4');
+
+    // Check 1080p FHD
+    const pFhd = presets.find((p) => p.id === '1080p');
+    expect(pFhd?.badge).toBe('FHD');
+    expect(pFhd?.quality).toBe('1080p');
+    expect(pFhd?.threads).toBe(16);
+
+    // Check Audio Only
+    const pAudio = presets.find((p) => p.id === 'audio');
+    expect(pAudio?.is_audio_only).toBe(true);
+    expect(pAudio?.badge).toBe('🎵');
+    expect(pAudio?.filename).toContain('_audio.m4a');
+
+    // Check Subtitle
+    const pSub = presets.find((p) => p.id === 'sub');
+    expect(pSub?.quality).toBe('subtitle');
+    expect(pSub?.badge).toBe('SRT');
+    expect(pSub?.filename).toContain('_sub_id.srt');
+  });
+});
 
 describe('stripByteRanges', () => {
   it('strips bytestart and byteend from Instagram CDN URL', () => {
