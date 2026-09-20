@@ -126,3 +126,11 @@ export function bpsToUnit(bps: number | null | undefined): { value: number; unit
   return { value: Math.round(bps / 1024), unit: 'KB/s' };
 }
 
+export function formatDisplayVersion(version?: string | null, prefix = 'v'): string {
+  if (!version || typeof version !== 'string' || !version.trim()) {
+    return `${prefix}0.1.0-dev`;
+  }
+  const clean = version.trim().replace(/^v/i, '');
+  return `${prefix}${clean}`;
+}
+

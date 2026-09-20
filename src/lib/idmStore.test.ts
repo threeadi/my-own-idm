@@ -64,6 +64,7 @@ describe('IdmStore State & Filtering', () => {
     expect(store.activeCategory).toBe('all');
     expect(store.searchQuery).toBe('');
     expect(store.isAddModalOpen).toBe(false);
+    expect(store.appVersion).toBe('0.1.0-dev');
   });
 
   it('filters tasks by category', () => {
@@ -745,6 +746,20 @@ describe('IdmStore State & Filtering', () => {
     // IPC error branch
     mockInvoke.mockRejectedValueOnce(new Error('DB error'));
     await store.setTaskSpeedLimit('task-speed-1', 512000); // shouldn't throw
+  });
+
+  it('initializes store and loads appVersion on init()', async () => {
+    mockIsTauriReturn = true;
+    mockInvoke.mockImplementation((cmd: string) => {
+      if (cmd === 'get_all_tasks') return Promise.resolve([]);
+      if (cmd === 'get_global_speed_limit') return Promise.resolve({ enabled: false, limit_bps: null });
+      return Promise.resolve(undefined);
+    });
+
+    const store = new IdmStore();
+    await store.init();
+    expect(store.appVersion).toBeDefined();
+    expect(store.appVersion).toBe('0.1.0-dev');
   });
 });
 

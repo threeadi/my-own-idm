@@ -1,6 +1,6 @@
 <script lang="ts">
   import { store } from '$lib/idmStore.svelte';
-  import { formatSpeed } from '$lib/types';
+  import { formatSpeed, formatDisplayVersion } from '$lib/types';
   import {
     Plus,
     Play,
@@ -36,7 +36,7 @@
         IDM Turbo Desktop
       </span>
       <span class="px-1.5 py-0.5 rounded bg-[#252a33] text-[#4cd7f6] font-mono text-[9px] uppercase tracking-wider font-semibold">
-        v4.2 PRO
+        {formatDisplayVersion(store.appVersion)}
       </span>
     </div>
 

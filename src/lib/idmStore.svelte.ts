@@ -2,6 +2,7 @@ import { invoke, isTauri as coreIsTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import type { DownloadCategory, DownloadTask, SpeedMetrics, SpeedLimitUnit, GlobalSpeedLimitConfig } from './types';
 import { unitToBps, bpsToUnit } from './types';
+import { getCompileTimeVersion, fetchRuntimeAppVersion } from './version';
 
 export function isTauri(): boolean {
   if (typeof window === 'undefined') return false;
@@ -9,6 +10,7 @@ export function isTauri(): boolean {
 }
 
 export class IdmStore {
+  appVersion = $state<string>(getCompileTimeVersion());
   tasks = $state<DownloadTask[]>([]);
   selectedTaskId = $state<string | null>(null);
   activeCategory = $state<string>('all');
@@ -126,6 +128,13 @@ export class IdmStore {
   });
 
   async init() {
+    try {
+      const v = await fetchRuntimeAppVersion();
+      if (v) this.appVersion = v;
+    } catch {
+      // fallback to compile time version
+    }
+
     if (!isTauri()) {
       console.info('Running in browser preview mode (Tauri IPC inactive).');
       if (this.tasks.length === 0) {

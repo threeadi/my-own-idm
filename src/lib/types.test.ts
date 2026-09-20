@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatBytes, formatSpeed, formatEta, getPercent, unitToBps, bpsToUnit } from './types';
+import { formatBytes, formatSpeed, formatEta, getPercent, unitToBps, bpsToUnit, formatDisplayVersion } from './types';
 
 describe('formatBytes', () => {
   it('handles null and undefined', () => {
@@ -106,6 +106,21 @@ describe('bpsToUnit', () => {
     expect(bpsToUnit(1048576)).toEqual({ value: 1, unit: 'MB/s' });
     expect(bpsToUnit(2097152)).toEqual({ value: 2, unit: 'MB/s' });
     expect(bpsToUnit(2621440)).toEqual({ value: 2.5, unit: 'MB/s' });
+  });
+});
+
+describe('formatDisplayVersion', () => {
+  it('formats clean versions and prefixes', () => {
+    expect(formatDisplayVersion('0.1.0-dev')).toBe('v0.1.0-dev');
+    expect(formatDisplayVersion('v0.1.0-dev')).toBe('v0.1.0-dev');
+    expect(formatDisplayVersion('1.0.0-beta', 'ver ')).toBe('ver 1.0.0-beta');
+  });
+
+  it('handles null, undefined and empty strings', () => {
+    expect(formatDisplayVersion(null)).toBe('v0.1.0-dev');
+    expect(formatDisplayVersion(undefined)).toBe('v0.1.0-dev');
+    expect(formatDisplayVersion('')).toBe('v0.1.0-dev');
+    expect(formatDisplayVersion('   ')).toBe('v0.1.0-dev');
   });
 });
 

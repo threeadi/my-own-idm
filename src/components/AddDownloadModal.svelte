@@ -3,7 +3,7 @@
   import { invoke } from '@tauri-apps/api/core';
   import { open } from '@tauri-apps/plugin-dialog';
   import type { DownloadCategory, ProbeResult } from '$lib/types';
-  import { formatBytes } from '$lib/types';
+  import { formatBytes, formatDisplayVersion } from '$lib/types';
   import {
     CloudDownload,
     X,
@@ -179,7 +179,7 @@
             Tambah Unduhan Baru - IDM Turbo
           </span>
           <span class="px-1.5 py-0.2 rounded bg-[#090e16] text-[#4edea3] font-mono text-[10px] font-semibold">
-            Akrilik v4.2
+            Akrilik {formatDisplayVersion(store.appVersion)}
           </span>
         </div>
         <div class="flex items-center gap-1">
