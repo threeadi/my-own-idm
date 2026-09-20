@@ -146,9 +146,9 @@
         <div class="h-4 w-[1px] bg-[#30353e] mx-1"></div>
 
         <button
-          onclick={() => store.openProgressModal(selected.id)}
+          onclick={() => store.openTransferWindow(selected.id)}
           class="h-7 px-2.5 rounded-lg bg-[#252a33] text-[#4cd7f6] hover:bg-[#343942] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
-          title="Buka Dialog Rincian Transfer"
+          title="Buka Jendela Rincian Transfer"
         >
           <Zap class="w-3 h-3 text-[#4cd7f6]" />
           <span class="hidden xl:inline">Detail Transfer</span>

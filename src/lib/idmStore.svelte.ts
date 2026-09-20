@@ -394,6 +394,22 @@ export class IdmStore {
     this.isAddModalOpen = true;
   }
 
+  async openTransferWindow(taskId?: string): Promise<void> {
+    const id = taskId || this.selectedTaskId || this.progressModalTaskId;
+    if (!id) return;
+    this.progressModalTaskId = id;
+    this.selectedTaskId = id;
+    if (isTauri()) {
+      try {
+        await invoke('open_transfer_window', { taskId: id });
+        return;
+      } catch (e) {
+        console.warn('Failed to open native transfer window, falling back to modal:', e);
+      }
+    }
+    this.isProgressModalOpen = true;
+  }
+
   openProgressModal(taskId?: string) {
     if (taskId) {
       this.progressModalTaskId = taskId;

@@ -93,13 +93,13 @@ d:/Development/my-own-idm/
   - SQLite database `mark_task_completed` records `downloaded_bytes = actual_final_bytes` and `total_bytes = actual_final_bytes`.
   - When `task.status === 'completed'`, `getPercent(task)` MUST evaluate to `100.0%`.
 
-### C. Modal Transitions & Window Experience
-- In-flight transfer dialog ([DownloadProgressModal.svelte](file:///d:/Development/my-own-idm/src/components/DownloadProgressModal.svelte)) automatically closes upon `download-completed` or `download-failed`.
-- The completion dialog ([DownloadOutcomeModal.svelte](file:///d:/Development/my-own-idm/src/components/DownloadOutcomeModal.svelte)) automatically opens with quick actions:
-  - **Buka Berkas** -> calls `store.openFile(file_path)`
-  - **Buka Folder** -> calls `store.openFolder(file_path)`
-  - **Tutup** -> calls `store.closeOutcomeModal()`
-- Modals use clean translucent overlays (`bg-black/40 backdrop-blur-[2px]`) and draggable headers (`data-tauri-drag-region`), avoiding heavy blackout backdrops.
+### C. Dedicated Floating Window & In-Place Lifecycle Transitions
+- Active transfers open in a dedicated native Tauri floating window ([transfer/+page.svelte](file:///d:/Development/my-own-idm/src/routes/transfer/+page.svelte) via `commands::open_transfer_window`).
+- **In-Place Lifecycle Transitions**:
+  - The window does NOT close upon finish; instead, it morphs smoothly in-place from transfer progress to the completion view (**Buka Berkas**, **Buka Folder**, **Tutup**) with Emerald glow, or to the failure view (**Perbarui Tautan Unduhan...**, **Coba Lagi**, **Tutup**) with Rose Red glow.
+  - Multi-window permission is granted via `"windows": ["*"]` in [default.json](file:///d:/Development/my-own-idm/src-tauri/capabilities/default.json).
+  - Windows are frameless with Stitch "Kinetic Telemetry" custom titlebars, draggable via `data-tauri-drag-region`, and support independent minimize/close.
+  - In web preview environments, `store.openTransferWindow` automatically falls back to [DownloadProgressModal.svelte](file:///d:/Development/my-own-idm/src/components/DownloadProgressModal.svelte).
 
 ### D. Refresh Download Address Flow (Expiring URLs & Resumption)
 - **Problem**: Temporary CDN tokens, signed URLs (YouTube, GDrive, video hosts), or long pauses can cause URL expiration (`HTTP 403`, `HTTP 410`, or timeout).

@@ -263,6 +263,43 @@ pub async fn set_task_speed_limit(
     state.manager.set_task_speed_limit(&task_id, limit_bps).await
 }
 
+pub fn sanitize_window_label(task_id: &str) -> String {
+    let sanitized: String = task_id
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .collect();
+    format!("transfer-{}", sanitized)
+}
+
+#[tauri::command]
+pub async fn open_transfer_window(
+    app: tauri::AppHandle,
+    task_id: String,
+) -> Result<(), String> {
+    use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+
+    let label = sanitize_window_label(&task_id);
+
+    if let Some(win) = app.get_webview_window(&label) {
+        let _ = win.show();
+        let _ = win.unminimize();
+        let _ = win.set_focus();
+        return Ok(());
+    }
+
+    let url_path = format!("transfer?id={}", task_id);
+    let builder = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App(url_path.into()))
+        .title("Transfer Unduhan")
+        .inner_size(560.0, 400.0)
+        .min_inner_size(480.0, 340.0)
+        .resizable(true)
+        .decorations(false)
+        .center();
+
+    builder.build().map_err(|e| format!("Failed to create transfer window: {}", e))?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -352,5 +389,12 @@ mod tests {
         // Test task speed limit
         let res_task = manager.set_task_speed_limit("task-1", Some(1_000_000)).await;
         assert!(res_task.is_ok());
+    }
+
+    #[test]
+    fn test_sanitize_window_label() {
+        assert_eq!(sanitize_window_label("abc-123"), "transfer-abc-123");
+        assert_eq!(sanitize_window_label("task with spaces!@#"), "transfer-task_with_spaces___");
+        assert_eq!(sanitize_window_label("uuid-v4_1234"), "transfer-uuid-v4_1234");
     }
 }

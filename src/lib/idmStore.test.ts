@@ -390,6 +390,32 @@ describe('IdmStore State & Filtering', () => {
     expect(store.progressModalTaskId).toBeNull();
   });
 
+  it('manages openTransferWindow with Tauri invoke and fallback', async () => {
+    const store = new IdmStore();
+    mockInvoke.mockResolvedValue(undefined);
+
+    // 1. Success with explicit taskId
+    await store.openTransferWindow('task-win-1');
+    expect(mockInvoke).toHaveBeenCalledWith('open_transfer_window', { taskId: 'task-win-1' });
+    expect(store.progressModalTaskId).toBe('task-win-1');
+    expect(store.selectedTaskId).toBe('task-win-1');
+
+    // 2. Invoking with selectedTaskId fallback
+    store.selectedTaskId = 'task-win-2';
+    await store.openTransferWindow();
+    expect(mockInvoke).toHaveBeenCalledWith('open_transfer_window', { taskId: 'task-win-2' });
+
+    // 3. Fallback to modal when invoke fails
+    mockInvoke.mockRejectedValueOnce(new Error('Tauri window error'));
+    await store.openTransferWindow('task-win-3');
+    expect(store.isProgressModalOpen).toBe(true);
+
+    // 4. Return early when no id is available
+    store.selectedTaskId = null;
+    store.progressModalTaskId = null;
+    await store.openTransferWindow();
+  });
+
   it('handles batch operations: resumeAll, pauseAll, clearCompleted', async () => {
     const store = new IdmStore();
     store.tasks = [

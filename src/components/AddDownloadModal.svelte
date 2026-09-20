@@ -150,7 +150,7 @@
       store.isAddModalOpen = false;
 
       if (downloadNow) {
-        store.openProgressModal(task.id);
+        store.openTransferWindow(task.id);
       }
     } catch (e: any) {
       probeError = `Gagal memulai unduhan: ${e}`;

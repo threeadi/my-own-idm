@@ -94,8 +94,8 @@
   }
 
   function handleTaskDoubleClick(task: DownloadTask) {
-    if (task.status === 'downloading') {
-      store.openProgressModal(task.id);
+    if (task.status === 'downloading' || task.status === 'paused') {
+      store.openTransferWindow(task.id);
     } else {
       store.openPropertiesModal(task.id);
     }
@@ -302,9 +302,9 @@
               {/if}
 
               <button
-                onclick={(e) => { e.stopPropagation(); store.openProgressModal(task.id); }}
+                onclick={(e) => { e.stopPropagation(); store.openTransferWindow(task.id); }}
                 class="w-7 h-7 rounded-lg bg-[#252a33] text-[#4cd7f6] hover:bg-[#343942] flex items-center justify-center transition-colors cursor-pointer"
-                title="Buka Dialog Rincian Transfer"
+                title="Buka Jendela Rincian Transfer"
               >
                 <Zap class="w-3.5 h-3.5" />
               </button>
@@ -449,7 +449,7 @@
                     Properti
                   </button>
                   <button
-                    onclick={(e) => { e.stopPropagation(); store.openProgressModal(task.id); }}
+                    onclick={(e) => { e.stopPropagation(); store.openTransferWindow(task.id); }}
                     class="px-2 py-0.5 rounded bg-[#252a33] text-[#4cd7f6] hover:bg-[#343942] text-[10px] font-semibold cursor-pointer"
                   >
                     Detail
@@ -505,6 +505,17 @@
         >
           <RotateCw class="w-3.5 h-3.5 text-[#00e5ff]" />
           <span>Perbarui Tautan Unduhan...</span>
+        </button>
+      {/if}
+
+      {#if contextTask.status === 'downloading' || contextTask.status === 'paused'}
+        <button
+          onclick={() => { store.openTransferWindow(contextTask.id); closeContextMenu(); }}
+          class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-[#00e5ff]/15 text-[#4cd7f6] transition text-left cursor-pointer"
+          role="menuitem"
+        >
+          <Zap class="w-3.5 h-3.5 text-[#00e5ff]" />
+          <span>Buka Jendela Transfer...</span>
         </button>
       {/if}
 

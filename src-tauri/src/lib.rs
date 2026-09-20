@@ -54,10 +54,12 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            // Minimize to tray on close
+            // Minimize to tray on close for main window only
             if let WindowEvent::CloseRequested { api, .. } = event {
-                api.prevent_close();
-                let _ = window.hide();
+                if window.label() == "main" {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -77,7 +79,8 @@ pub fn run() {
             commands::refresh_download_url,
             commands::set_global_speed_limit,
             commands::get_global_speed_limit,
-            commands::set_task_speed_limit
+            commands::set_task_speed_limit,
+            commands::open_transfer_window
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
