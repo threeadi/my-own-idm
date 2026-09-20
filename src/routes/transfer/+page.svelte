@@ -49,11 +49,10 @@
   let copied = $state<boolean>(false);
   let autoOpenOnClose = $state<boolean>(false);
 
+  import { invoke } from '@tauri-apps/api/core';
+
   onMount(async () => {
-    store.init();
-    if (store.tasks.length === 0) {
-      await store.refreshTasks();
-    }
+    await store.init();
   });
 
   $effect(() => {
@@ -111,22 +110,48 @@
 
   const FileIcon = $derived(getFileIcon(task?.category));
 
-  async function minimizeWindow() {
+  async function minimizeWindow(e?: MouseEvent) {
+    e?.stopPropagation();
+    e?.preventDefault();
     try {
-      const { getCurrentWindow } = await import('@tauri-apps/api/window');
-      await getCurrentWindow().minimize();
+      await invoke('minimize_current_window');
     } catch {
-      // Browser preview fallback
+      try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        await getCurrentWindow().minimize();
+      } catch (err) {
+        console.warn('Minimize fallback failed:', err);
+      }
     }
   }
 
-  async function closeWindow() {
+  async function closeWindow(e?: MouseEvent) {
+    e?.stopPropagation();
+    e?.preventDefault();
     try {
-      const { getCurrentWindow } = await import('@tauri-apps/api/window');
-      await getCurrentWindow().close();
+      await invoke('close_current_window');
     } catch {
-      if (typeof window !== 'undefined') {
-        window.close();
+      try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        await getCurrentWindow().close();
+      } catch {
+        if (typeof window !== 'undefined') {
+          window.close();
+        }
+      }
+    }
+  }
+
+  async function handleHeaderMouseDown(e: MouseEvent) {
+    if ((e.target as HTMLElement).closest('button, a, input, select')) return;
+    try {
+      await invoke('start_dragging_window');
+    } catch {
+      try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        await getCurrentWindow().startDragging();
+      } catch (err) {
+        console.warn('Start dragging failed:', err);
       }
     }
   }
@@ -166,17 +191,23 @@
   }
 </script>
 
-<main class="w-screen h-screen bg-[#090e16] text-slate-100 flex flex-col select-none overflow-hidden font-sans border border-[#252a33]">
+<main class="w-full h-screen bg-[#090e16] text-slate-100 flex flex-col select-none overflow-hidden font-sans border border-[#252a33] box-border">
   {#if !task}
     <!-- Loading or Not Found State -->
-    <header data-tauri-drag-region class="h-10 px-3 bg-[#0f141c] border-b border-[#252a33] flex items-center justify-between cursor-move">
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <header
+      data-tauri-drag-region
+      onmousedown={handleHeaderMouseDown}
+      class="h-10 px-3 bg-[#0f141c] border-b border-[#252a33] flex items-center justify-between cursor-move shrink-0"
+    >
       <span class="text-xs font-medium text-slate-400">Transfer Unduhan</span>
       <button
         type="button"
         onclick={closeWindow}
-        class="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-white hover:bg-red-600/80 transition-colors"
+        class="w-7 h-7 flex items-center justify-center rounded text-slate-400 hover:text-white hover:bg-red-600/80 transition-colors cursor-pointer"
+        title="Tutup"
       >
-        <X class="w-3.5 h-3.5" />
+        <X class="w-3.5 h-3.5 pointer-events-none" />
       </button>
     </header>
     <div class="flex-1 flex flex-col items-center justify-center p-6 text-center">
@@ -197,11 +228,13 @@
     ></div>
 
     <!-- Custom Window Titlebar -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <header
       data-tauri-drag-region
+      onmousedown={handleHeaderMouseDown}
       class="h-10 px-3.5 bg-[#0f141c] border-b border-[#1f242e] flex items-center justify-between select-none cursor-move shrink-0"
     >
-      <div class="flex items-center gap-2 overflow-hidden pr-2">
+      <div class="flex items-center gap-2 overflow-hidden pr-2 pointer-events-none">
         <div
           class="flex items-center justify-center w-5 h-5 rounded-md shrink-0 {isCompleted
             ? 'bg-[#10b981]/20 text-[#10b981]'
@@ -234,19 +267,19 @@
       <div class="flex items-center gap-1 shrink-0">
         <button
           onclick={minimizeWindow}
-          class="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-slate-200 hover:bg-[#1a2236] transition-colors cursor-pointer"
+          class="w-7 h-7 flex items-center justify-center rounded text-slate-400 hover:text-slate-100 hover:bg-[#1a2236] transition-colors cursor-pointer"
           title="Minimalkan"
           type="button"
         >
-          <Minus class="w-3.5 h-3.5" />
+          <Minus class="w-3.5 h-3.5 pointer-events-none" />
         </button>
         <button
           onclick={closeWindow}
-          class="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-white hover:bg-red-600/80 transition-colors cursor-pointer"
+          class="w-7 h-7 flex items-center justify-center rounded text-slate-400 hover:text-white hover:bg-red-600/80 transition-colors cursor-pointer"
           title="Tutup"
           type="button"
         >
-          <X class="w-3.5 h-3.5" />
+          <X class="w-3.5 h-3.5 pointer-events-none" />
         </button>
       </div>
     </header>
@@ -596,10 +629,10 @@
               </div>
               <div class="relative w-full h-4 bg-[#07090e] rounded border border-[#222d45] overflow-hidden flex items-center">
                 <div
-                  class="relative h-full bg-gradient-to-r from-emerald-600 via-emerald-500 to-green-400 bg-striped transition-all duration-200 shadow-glow-emerald"
+                  class="relative h-full bg-gradient-to-r from-emerald-600 via-emerald-500 to-green-400 bg-striped transition-[width] duration-150 ease-out will-change-[width] shadow-glow-emerald"
                   style="width: {pct}%"
                 >
-                  <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer"></div>
+                  <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer pointer-events-none"></div>
                 </div>
               </div>
             </div>
@@ -612,18 +645,18 @@
               </div>
               <div class="w-full h-3 bg-[#07090e] border border-[#222d45] rounded overflow-hidden flex items-center p-0.5 gap-0.5">
                 {#if task.segments && task.segments.length > 0}
-                  {#each task.segments as seg}
+                  {#each task.segments as seg (seg.index)}
                     {@const segTotal = seg.end_byte - seg.start_byte + 1}
                     {@const segPct = segTotal > 0 ? (seg.downloaded_bytes / segTotal) * 100 : 0}
                     <div
-                      class="h-full rounded-xs transition-all {seg.is_finished ? 'bg-[#10b981]' : isDownloading && segPct > 0 ? 'bg-gradient-to-r from-blue-700 to-[#00e5ff] shadow-[0_0_6px_rgba(0,229,255,0.4)]' : 'bg-[#141b2b]'}"
+                      class="h-full rounded-xs {seg.is_finished ? 'bg-[#10b981]' : isDownloading && segPct > 0 ? 'bg-gradient-to-r from-blue-700 to-[#00e5ff] shadow-[0_0_6px_rgba(0,229,255,0.4)]' : 'bg-[#141b2b]'}"
                       style="flex: 1;"
                       title="Jalur #{seg.index + 1}: {segPct.toFixed(0)}%"
                     ></div>
                   {/each}
                 {:else}
                   <div
-                    class="h-full bg-gradient-to-r from-blue-700 to-[#00e5ff] rounded-xs transition-all"
+                    class="h-full bg-gradient-to-r from-blue-700 to-[#00e5ff] rounded-xs transition-[width] duration-150"
                     style="width: {pct}%"
                   ></div>
                 {/if}

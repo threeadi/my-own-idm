@@ -290,14 +290,30 @@ pub async fn open_transfer_window(
     let url_path = format!("transfer?id={}", task_id);
     let builder = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App(url_path.into()))
         .title("Transfer Unduhan")
-        .inner_size(560.0, 400.0)
+        .inner_size(560.0, 420.0)
         .min_inner_size(480.0, 340.0)
         .resizable(true)
         .decorations(false)
+        .shadow(true)
         .center();
 
     builder.build().map_err(|e| format!("Failed to create transfer window: {}", e))?;
     Ok(())
+}
+
+#[tauri::command]
+pub async fn close_current_window(window: tauri::Window) -> Result<(), String> {
+    window.close().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn minimize_current_window(window: tauri::Window) -> Result<(), String> {
+    window.minimize().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn start_dragging_window(window: tauri::Window) -> Result<(), String> {
+    window.start_dragging().map_err(|e| e.to_string())
 }
 
 #[cfg(test)]

@@ -80,7 +80,10 @@ pub fn run() {
             commands::set_global_speed_limit,
             commands::get_global_speed_limit,
             commands::set_task_speed_limit,
-            commands::open_transfer_window
+            commands::open_transfer_window,
+            commands::close_current_window,
+            commands::minimize_current_window,
+            commands::start_dragging_window
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
