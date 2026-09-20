@@ -1,0 +1,194 @@
+<script lang="ts">
+  import { store } from '$lib/idmStore.svelte';
+  import { formatSpeed } from '$lib/types';
+  import {
+    Plus,
+    Play,
+    Pause,
+    Trash2,
+    FolderOpen,
+    FileText,
+    Settings,
+    Search,
+    Gauge,
+    Sliders,
+    User,
+    CheckCheck,
+    Zap,
+    Download
+  } from '@lucide/svelte';
+
+  const selected = $derived(store.selectedTask);
+  const totalSpeed = $derived(store.totalSpeedBps);
+</script>
+
+<header class="w-full shrink-0 select-none bg-[#171c24]/95 backdrop-blur-xl border-b border-[#30353e]/80 shadow-[0_2px_12px_rgba(0,0,0,0.35)] z-30">
+  <!-- Tier 1: Window Titlebar & Quick Search -->
+  <div class="h-10 px-4 flex items-center justify-between border-b border-[#252a33]/80">
+    <!-- Brand / Logo -->
+    <div class="flex items-center gap-2.5">
+      <div class="w-6 h-6 rounded-lg bg-gradient-to-tr from-[#2563eb] to-[#00e5ff] flex items-center justify-center shadow-[0_0_12px_rgba(0,229,255,0.3)]">
+        <Download class="w-3.5 h-3.5 text-slate-950 font-bold" />
+      </div>
+      <span class="font-bold text-xs sm:text-sm tracking-tight text-[#dee2ee]">
+        IDM Turbo Desktop
+      </span>
+      <span class="px-1.5 py-0.5 rounded bg-[#252a33] text-[#4cd7f6] font-mono text-[9px] uppercase tracking-wider font-semibold">
+        v4.2 PRO
+      </span>
+    </div>
+
+    <!-- Center Search Input -->
+    <div class="flex items-center gap-2 flex-1 max-w-sm mx-4">
+      <div class="relative w-full flex items-center">
+        <Search class="w-3.5 h-3.5 absolute left-2.5 text-[#8c909f]" />
+        <input
+          type="text"
+          bind:value={store.searchQuery}
+          placeholder="Cari file, tautan unduhan, atau hash MD5..."
+          class="w-full h-7 pl-8 pr-3 bg-[#090e16] text-[#dee2ee] font-sans text-xs rounded-lg focus:outline-none focus:ring-1 focus:ring-[#4cd7f6] placeholder-[#8c909f] transition-all border border-[#252a33]"
+        />
+      </div>
+    </div>
+
+    <!-- Right Controls -->
+    <div class="flex items-center gap-2">
+      {#if totalSpeed > 0}
+        <div class="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#10b981]/15 border border-[#10b981]/30 text-[#4edea3] text-[11px] font-mono">
+          <Zap class="w-3 h-3 text-[#4edea3]" />
+          <span class="font-semibold">{formatSpeed(totalSpeed)}</span>
+        </div>
+      {/if}
+
+      <button
+        onclick={() => (store.isSettingsModalOpen = true)}
+        class="w-7 h-7 flex items-center justify-center rounded-lg text-[#c2c6d6] hover:bg-[#252a33] hover:text-[#dee2ee] transition-colors cursor-pointer"
+        title="Pengaturan Aplikasi"
+      >
+        <Sliders class="w-3.5 h-3.5" />
+      </button>
+
+      <div class="w-7 h-7 rounded-full bg-[#adc6ff]/20 text-[#adc6ff] flex items-center justify-center">
+        <User class="w-3.5 h-3.5" />
+      </div>
+
+      <!-- Window Control Dots -->
+      <div class="flex items-center gap-1.5 ml-2 pl-2 border-l border-[#252a33]">
+        <span class="w-2.5 h-2.5 rounded-full bg-[#30353e] hover:bg-[#8c909f] transition-colors inline-block" title="Minimalkan"></span>
+        <span class="w-2.5 h-2.5 rounded-full bg-[#30353e] hover:bg-[#8c909f] transition-colors inline-block" title="Maksimalkan"></span>
+        <span class="w-2.5 h-2.5 rounded-full bg-[#93000a] hover:bg-[#ffb4ab] transition-colors inline-block" title="Tutup"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tier 2: IDM Operational Actions Toolbar -->
+  <div class="h-11 px-4 bg-[#1b2028]/90 flex items-center justify-between gap-2 overflow-x-auto">
+    <!-- Left Action Group -->
+    <div class="flex items-center gap-1.5 shrink-0">
+      <!-- + Tambah URL -->
+      <button
+        onclick={() => store.openAddModal()}
+        class="h-7 px-3 rounded-lg bg-[#4d8eff] hover:bg-[#3b82f6] text-white font-sans text-xs font-semibold flex items-center gap-1.5 shadow-[0_0_14px_-2px_rgba(77,142,255,0.45)] active:scale-95 transition-all cursor-pointer"
+      >
+        <Plus class="w-3.5 h-3.5 stroke-[2.5]" />
+        <span>+ Tambah URL</span>
+      </button>
+
+      <div class="h-4 w-[1px] bg-[#30353e] mx-1"></div>
+
+      <!-- Mulai Semua -->
+      <button
+        onclick={() => store.resumeAll()}
+        class="h-7 px-2.5 rounded-lg bg-[#252a33] text-[#dee2ee] hover:bg-[#343942] hover:text-[#4edea3] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+        title="Mulai/Lanjutkan Semua Unduhan"
+      >
+        <Play class="w-3 h-3 text-[#4edea3] fill-[#4edea3]" />
+        <span class="hidden sm:inline">Mulai Semua</span>
+      </button>
+
+      <!-- Jeda Semua -->
+      <button
+        onclick={() => store.pauseAll()}
+        class="h-7 px-2.5 rounded-lg bg-[#252a33] text-[#dee2ee] hover:bg-[#343942] hover:text-[#ffb4ab] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+        title="Jeda Semua Unduhan Aktif"
+      >
+        <Pause class="w-3 h-3 text-[#ffb4ab] fill-[#ffb4ab]" />
+        <span class="hidden sm:inline">Jeda Semua</span>
+      </button>
+
+      <!-- Bersihkan Selesai -->
+      <button
+        onclick={() => store.clearCompleted()}
+        class="h-7 px-2.5 rounded-lg bg-[#252a33] text-[#dee2ee] hover:bg-[#343942] hover:text-[#dee2ee] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+        title="Bersihkan Task yang Selesai dari Antrean"
+      >
+        <CheckCheck class="w-3 h-3 text-[#8c909f]" />
+        <span class="hidden md:inline">Bersihkan Selesai</span>
+      </button>
+
+      <div class="h-4 w-[1px] bg-[#30353e] mx-1"></div>
+
+      <!-- Batasi Kecepatan Toggle -->
+      <button
+        onclick={() => (store.speedLimiterEnabled = !store.speedLimiterEnabled)}
+        class="h-7 px-2.5 rounded-lg {store.speedLimiterEnabled ? 'bg-[#03b5d3]/20 text-[#4cd7f6] border border-[#03b5d3]/40' : 'bg-[#252a33] text-[#dee2ee] hover:bg-[#343942]'} text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+        title="Aktifkan / Nonaktifkan Pembatas Kecepatan"
+      >
+        <Gauge class="w-3 h-3 {store.speedLimiterEnabled ? 'text-[#4cd7f6]' : 'text-[#8c909f]'}" />
+        <span class="hidden lg:inline">{store.speedLimiterEnabled ? 'Kecepatan Terbatas' : 'Batasi Kecepatan'}</span>
+      </button>
+
+      <!-- Selected Task Actions (if selected) -->
+      {#if selected}
+        <div class="h-4 w-[1px] bg-[#30353e] mx-1"></div>
+
+        <button
+          onclick={() => store.openProgressModal(selected.id)}
+          class="h-7 px-2.5 rounded-lg bg-[#252a33] text-[#4cd7f6] hover:bg-[#343942] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+          title="Buka Dialog Rincian Transfer"
+        >
+          <Zap class="w-3 h-3 text-[#4cd7f6]" />
+          <span class="hidden xl:inline">Detail Transfer</span>
+        </button>
+
+        {#if selected.status === 'completed'}
+          <button
+            onclick={() => store.openFile(selected.file_path)}
+            class="h-7 px-2 rounded-lg bg-[#252a33] text-[#dee2ee] hover:text-[#4cd7f6] hover:bg-[#343942] text-xs transition-colors cursor-pointer"
+            title="Buka Berkas"
+          >
+            <FileText class="w-3.5 h-3.5" />
+          </button>
+        {/if}
+
+        <button
+          onclick={() => store.openFolder(selected.file_path)}
+          class="h-7 px-2 rounded-lg bg-[#252a33] text-[#dee2ee] hover:text-[#4cd7f6] hover:bg-[#343942] text-xs transition-colors cursor-pointer"
+          title="Buka Folder Penyimpanan"
+        >
+          <FolderOpen class="w-3.5 h-3.5" />
+        </button>
+
+        <button
+          onclick={() => store.cancelTask(selected.id, true)}
+          class="h-7 px-2 rounded-lg bg-[#252a33] text-[#dee2ee] hover:text-[#ffb4ab] hover:bg-[#343942] text-xs transition-colors cursor-pointer"
+          title="Hapus Task dan Berkas"
+        >
+          <Trash2 class="w-3.5 h-3.5" />
+        </button>
+      {/if}
+    </div>
+
+    <!-- Right: Settings -->
+    <div class="flex items-center gap-1.5 shrink-0">
+      <button
+        onclick={() => (store.isSettingsModalOpen = true)}
+        class="h-7 px-2.5 rounded-lg bg-[#252a33] text-[#dee2ee] hover:bg-[#343942] hover:text-[#dee2ee] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+        title="Pengaturan Unduhan & Jaringan"
+      >
+        <Settings class="w-3 h-3 text-[#8c909f]" />
+        <span class="hidden sm:inline">Pengaturan</span>
+      </button>
+    </div>
+  </div>
+</header>

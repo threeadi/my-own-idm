@@ -1,0 +1,442 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { DownloadTask, SpeedMetrics } from './types';
+
+// Mock Tauri APIs
+const mockInvoke = vi.fn();
+const eventListeners = new Map<string, (event: { payload: any }) => void>();
+
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: (...args: any[]) => mockInvoke(...args),
+  isTauri: () => true,
+}));
+
+vi.mock('@tauri-apps/api/event', () => ({
+  listen: (eventName: string, callback: (event: { payload: any }) => void) => {
+    eventListeners.set(eventName, callback);
+    return Promise.resolve(() => eventListeners.delete(eventName));
+  },
+}));
+
+// Import after mocks
+import { IdmStore, isTauri } from './idmStore.svelte';
+
+function makeTask(overrides: Partial<DownloadTask> = {}): DownloadTask {
+  return {
+    id: 'test-1',
+    url: 'https://example.com/video.mp4',
+    filename: 'video.mp4',
+    save_dir: 'C:\\Downloads',
+    file_path: 'C:\\Downloads\\video.mp4',
+    total_bytes: 1048576,
+    downloaded_bytes: 524288,
+    category: 'video',
+    status: 'downloading',
+    connections: 4,
+    supports_range: true,
+    is_hls: false,
+    created_at: '2026-09-20 12:00:00',
+    completed_at: null,
+    error_message: null,
+    segments: [],
+    speed_bps: 100000,
+    eta_seconds: 5,
+    ...overrides,
+  };
+}
+
+describe('IdmStore State & Filtering', () => {
+  beforeEach(() => {
+    (globalThis as any).window = {
+      __TAURI_INTERNALS__: {},
+      isTauri: true,
+    };
+    mockInvoke.mockReset();
+    eventListeners.clear();
+  });
+
+
+  it('initializes with default empty state', () => {
+    const store = new IdmStore();
+    expect(store.tasks).toEqual([]);
+    expect(store.selectedTaskId).toBeNull();
+    expect(store.activeCategory).toBe('all');
+    expect(store.searchQuery).toBe('');
+    expect(store.isAddModalOpen).toBe(false);
+  });
+
+  it('filters tasks by category', () => {
+    const store = new IdmStore();
+    store.tasks = [
+      makeTask({ id: '1', filename: 'clip.mp4', category: 'video' }),
+      makeTask({ id: '2', filename: 'archive.zip', category: 'compressed' }),
+      makeTask({ id: '3', filename: 'paper.pdf', category: 'documents' }),
+    ];
+
+    store.activeCategory = 'video';
+    expect(store.filteredTasks.length).toBe(1);
+    expect(store.filteredTasks[0].id).toBe('1');
+
+    store.activeCategory = 'all';
+    expect(store.filteredTasks.length).toBe(3);
+  });
+
+  it('filters tasks by status', () => {
+    const store = new IdmStore();
+    store.tasks = [
+      makeTask({ id: '1', status: 'downloading' }),
+      makeTask({ id: '2', status: 'completed' }),
+      makeTask({ id: '3', status: 'paused' }),
+    ];
+
+    store.activeCategory = 'downloading';
+    expect(store.filteredTasks.length).toBe(1);
+    expect(store.filteredTasks[0].id).toBe('1');
+
+    store.activeCategory = 'completed';
+    expect(store.filteredTasks.length).toBe(1);
+    expect(store.filteredTasks[0].id).toBe('2');
+
+    store.activeCategory = 'paused';
+    expect(store.filteredTasks.length).toBe(1);
+    expect(store.filteredTasks[0].id).toBe('3');
+  });
+
+  it('filters tasks by search query', () => {
+    const store = new IdmStore();
+    store.tasks = [
+      makeTask({ id: '1', filename: 'Avatar_Trailer.mp4', url: 'https://youtube.com/watch' }),
+      makeTask({ id: '2', filename: 'Rust_Book.pdf', url: 'https://rust-lang.org/book' }),
+    ];
+
+    store.searchQuery = 'avatar';
+    expect(store.filteredTasks.length).toBe(1);
+    expect(store.filteredTasks[0].id).toBe('1');
+
+    store.searchQuery = 'rust-lang';
+    expect(store.filteredTasks.length).toBe(1);
+    expect(store.filteredTasks[0].id).toBe('2');
+
+    store.searchQuery = 'nonexistent';
+    expect(store.filteredTasks.length).toBe(0);
+  });
+
+  it('computes categoryCounts accurately', () => {
+    const store = new IdmStore();
+    store.tasks = [
+      makeTask({ id: '1', category: 'video', status: 'downloading' }),
+      makeTask({ id: '2', category: 'video', status: 'completed' }),
+      makeTask({ id: '3', category: 'documents', status: 'paused' }),
+    ];
+
+    const counts = store.categoryCounts;
+    expect(counts.all).toBe(3);
+    expect(counts.video).toBe(2);
+    expect(counts.documents).toBe(1);
+    expect(counts.downloading).toBe(1);
+    expect(counts.completed).toBe(1);
+    expect(counts.paused).toBe(1);
+  });
+
+  it('computes totalSpeedBps accurately', () => {
+    const store = new IdmStore();
+    store.tasks = [
+      makeTask({ id: '1', status: 'downloading', speed_bps: 500000 }),
+      makeTask({ id: '2', status: 'downloading', speed_bps: 250000 }),
+      makeTask({ id: '3', status: 'paused', speed_bps: 999999 }), // Should not count paused
+    ];
+
+    expect(store.totalSpeedBps).toBe(750000);
+  });
+
+  it('opens add modal with prefilled data', () => {
+    const store = new IdmStore();
+    store.openAddModal('https://example.com/file.iso', 'file.iso', { Authorization: 'Bearer token' });
+
+    expect(store.isAddModalOpen).toBe(true);
+    expect(store.initialAddUrl).toBe('https://example.com/file.iso');
+    expect(store.initialFilename).toBe('file.iso');
+    expect(store.initialHeaders).toEqual({ Authorization: 'Bearer token' });
+  });
+
+  it('verifies isTauri helper', () => {
+    // In node environment, window may be undefined or mock
+    expect(typeof isTauri()).toBe('boolean');
+  });
+
+  it('refreshes tasks from Tauri backend', async () => {
+    const store = new IdmStore();
+    const taskList = [
+      makeTask({ id: 't1', filename: 't1.mp4' }),
+      makeTask({ id: 't2', filename: 't2.zip' }),
+    ];
+    mockInvoke.mockResolvedValueOnce(taskList);
+
+    await store.refreshTasks();
+    expect(mockInvoke).toHaveBeenCalledWith('get_all_tasks');
+    expect(store.tasks.length).toBe(2);
+    expect(store.selectedTaskId).toBe('t1');
+    expect(store.selectedTask?.filename).toBe('t1.mp4');
+  });
+
+  it('handles refreshTasks error gracefully', async () => {
+    const store = new IdmStore();
+    mockInvoke.mockRejectedValueOnce(new Error('IPC failed'));
+    await store.refreshTasks();
+    expect(store.tasks.length).toBe(0);
+  });
+
+  it('initializes store and hooks event listeners', async () => {
+    const store = new IdmStore();
+    mockInvoke.mockResolvedValueOnce([]);
+
+    await store.init();
+    expect(eventListeners.has('download-progress')).toBe(true);
+    expect(eventListeners.has('download-completed')).toBe(true);
+    expect(eventListeners.has('download-paused')).toBe(true);
+    expect(eventListeners.has('download-failed')).toBe(true);
+    expect(eventListeners.has('browser-download-requested')).toBe(true);
+  });
+
+  it('handles init in non-Tauri preview environment', async () => {
+    delete (globalThis as any).window;
+    const store = new IdmStore();
+    await store.init(); // Should log info and return early without throwing
+    expect(store.tasks.length).toBe(0);
+  });
+
+  it('updates task on download-progress event', async () => {
+    const store = new IdmStore();
+    store.tasks = [makeTask({ id: 'task-prog', downloaded_bytes: 0, speed_bps: 0 })];
+
+    await store.setupEventListeners();
+
+    const progressHandler = eventListeners.get('download-progress');
+    expect(progressHandler).toBeDefined();
+
+    const progressPayload: SpeedMetrics = {
+      task_id: 'task-prog',
+      downloaded_bytes: 500000,
+      total_bytes: 1000000,
+      speed_bps: 250000,
+      eta_seconds: 2,
+      status: 'downloading',
+      segments: [],
+    };
+    progressHandler!({ payload: progressPayload });
+
+    expect(store.tasks[0].downloaded_bytes).toBe(500000);
+    expect(store.tasks[0].speed_bps).toBe(250000);
+    expect(store.tasks[0].eta_seconds).toBe(2);
+  });
+
+  it('updates task on download-completed event and triggers outcome modal', async () => {
+    const store = new IdmStore();
+    store.tasks = [makeTask({ id: 'task-comp', status: 'downloading', speed_bps: 50000, total_bytes: 5000, downloaded_bytes: 2500 })];
+    store.isProgressModalOpen = true;
+    store.progressModalTaskId = 'task-comp';
+
+    await store.setupEventListeners();
+    const handler = eventListeners.get('download-completed');
+    handler!({ payload: 'task-comp' });
+
+    expect(store.tasks[0].status).toBe('completed');
+    expect(store.tasks[0].speed_bps).toBe(0);
+    expect(store.tasks[0].eta_seconds).toBe(0);
+    expect(store.tasks[0].downloaded_bytes).toBe(5000);
+    expect(store.isProgressModalOpen).toBe(false);
+    expect(store.isOutcomeModalOpen).toBe(true);
+    expect(store.outcomeType).toBe('completed');
+    expect(store.outcomeTaskId).toBe('task-comp');
+    expect(store.outcomeTask?.id).toBe('task-comp');
+  });
+
+  it('updates task on download-paused event', async () => {
+    const store = new IdmStore();
+    store.tasks = [makeTask({ id: 'task-pause', status: 'downloading', speed_bps: 50000 })];
+
+    await store.setupEventListeners();
+    const handler = eventListeners.get('download-paused');
+    handler!({ payload: 'task-pause' });
+
+    expect(store.tasks[0].status).toBe('paused');
+    expect(store.tasks[0].speed_bps).toBe(0);
+  });
+
+  it('updates task on download-failed event and triggers outcome modal', async () => {
+    const store = new IdmStore();
+    store.tasks = [makeTask({ id: 'task-fail', status: 'downloading', speed_bps: 50000 })];
+    store.isProgressModalOpen = true;
+    store.progressModalTaskId = 'task-fail';
+
+    await store.setupEventListeners();
+    const handler = eventListeners.get('download-failed');
+    handler!({ payload: 'task-fail' });
+
+    expect(store.tasks[0].status).toEqual({ failed: 'Gagal mengunduh berkas atau koneksi terputus.' });
+    expect(store.tasks[0].speed_bps).toBe(0);
+    expect(store.isProgressModalOpen).toBe(false);
+    expect(store.isOutcomeModalOpen).toBe(true);
+    expect(store.outcomeType).toBe('failed');
+    expect(store.outcomeTaskId).toBe('task-fail');
+  });
+
+  it('handles browser-download-requested event', async () => {
+    const store = new IdmStore();
+    await store.setupEventListeners();
+    const handler = eventListeners.get('browser-download-requested');
+
+    handler!({
+      payload: {
+        url: 'https://youtube.com/watch?v=123',
+        filename: 'video.mp4',
+        headers: { 'User-Agent': 'Custom' },
+      },
+    });
+
+    expect(store.isAddModalOpen).toBe(true);
+    expect(store.initialAddUrl).toBe('https://youtube.com/watch?v=123');
+    expect(store.initialFilename).toBe('video.mp4');
+    expect(store.initialHeaders).toEqual({ 'User-Agent': 'Custom' });
+  });
+
+  it('pauses and resumes download task', async () => {
+    const store = new IdmStore();
+    store.tasks = [makeTask({ id: 't-ctrl', status: 'downloading', speed_bps: 50000 })];
+
+    mockInvoke.mockResolvedValue(undefined);
+
+    await store.pauseTask('t-ctrl');
+    expect(mockInvoke).toHaveBeenCalledWith('pause_download', { taskId: 't-ctrl' });
+    expect(store.tasks[0].status).toBe('paused');
+    expect(store.tasks[0].speed_bps).toBe(0);
+
+    await store.resumeTask('t-ctrl');
+    expect(mockInvoke).toHaveBeenCalledWith('resume_download', { taskId: 't-ctrl' });
+    expect(store.tasks[0].status).toBe('downloading');
+  });
+
+  it('cancels download task and cleans selection', async () => {
+    const store = new IdmStore();
+    store.tasks = [
+      makeTask({ id: 't1', filename: 't1.mp4' }),
+      makeTask({ id: 't2', filename: 't2.mp4' }),
+    ];
+    store.selectedTaskId = 't1';
+
+    mockInvoke.mockResolvedValue(undefined);
+
+    await store.cancelTask('t1', true);
+    expect(mockInvoke).toHaveBeenCalledWith('cancel_download', { taskId: 't1', deleteFile: true });
+    expect(store.tasks.length).toBe(1);
+    expect(store.tasks[0].id).toBe('t2');
+    expect(store.selectedTaskId).toBe('t2');
+  });
+
+  it('opens file and folder via Tauri invoke', async () => {
+    const store = new IdmStore();
+    mockInvoke.mockResolvedValue(undefined);
+
+    await store.openFile('C:\\Downloads\\test.mp4');
+    expect(mockInvoke).toHaveBeenCalledWith('open_file', { path: 'C:\\Downloads\\test.mp4' });
+
+    await store.openFolder('C:\\Downloads\\test.mp4');
+    expect(mockInvoke).toHaveBeenCalledWith('open_file_in_folder', { path: 'C:\\Downloads\\test.mp4' });
+  });
+
+  it('handles IPC errors gracefully in pause, resume, cancel, openFile, openFolder', async () => {
+    const store = new IdmStore();
+    store.tasks = [makeTask({ id: 't-err' })];
+    mockInvoke.mockRejectedValue(new Error('Simulated backend error'));
+
+    // None of these should throw uncaught exceptions
+    await store.pauseTask('t-err');
+    await store.resumeTask('t-err');
+    await store.cancelTask('t-err');
+    await store.openFile('invalid');
+    await store.openFolder('invalid');
+  });
+
+  it('manages progress modal state and target task ID', () => {
+    const store = new IdmStore();
+    expect(store.isProgressModalOpen).toBe(false);
+    expect(store.progressModalTaskId).toBeNull();
+
+    store.openProgressModal('task-prog-1');
+    expect(store.isProgressModalOpen).toBe(true);
+    expect(store.progressModalTaskId).toBe('task-prog-1');
+    expect(store.selectedTaskId).toBe('task-prog-1');
+
+    store.closeProgressModal();
+    expect(store.isProgressModalOpen).toBe(false);
+    expect(store.progressModalTaskId).toBeNull();
+  });
+
+  it('handles batch operations: resumeAll, pauseAll, clearCompleted', async () => {
+    const store = new IdmStore();
+    store.tasks = [
+      makeTask({ id: 't-paused-1', status: 'paused' }),
+      makeTask({ id: 't-failed-1', status: { failed: 'network error' } as any }),
+      makeTask({ id: 't-active-1', status: 'downloading' }),
+      makeTask({ id: 't-active-2', status: 'downloading' }),
+      makeTask({ id: 't-done-1', status: 'completed' }),
+    ];
+
+    mockInvoke.mockResolvedValue(undefined);
+
+    // Test resumeAll: should resume paused and failed tasks
+    await store.resumeAll();
+    expect(mockInvoke).toHaveBeenCalledWith('resume_download', { taskId: 't-paused-1' });
+    expect(mockInvoke).toHaveBeenCalledWith('resume_download', { taskId: 't-failed-1' });
+
+    // Test pauseAll: should pause downloading tasks
+    mockInvoke.mockClear();
+    await store.pauseAll();
+    expect(mockInvoke).toHaveBeenCalledWith('pause_download', { taskId: 't-active-1' });
+    expect(mockInvoke).toHaveBeenCalledWith('pause_download', { taskId: 't-active-2' });
+
+    // Test clearCompleted: should cancel completed tasks without deleting files
+    mockInvoke.mockClear();
+    await store.clearCompleted();
+    expect(mockInvoke).toHaveBeenCalledWith('cancel_download', { taskId: 't-done-1', deleteFile: false });
+  });
+
+  it('supports Stitch UI customization properties', () => {
+    const store = new IdmStore();
+    expect(store.viewMode).toBe('cards');
+    store.viewMode = 'table';
+    expect(store.viewMode).toBe('table');
+
+    expect(store.sortBy).toBe('date');
+    store.sortBy = 'speed';
+    expect(store.sortBy).toBe('speed');
+
+    expect(store.speedLimiterEnabled).toBe(false);
+    store.speedLimiterEnabled = true;
+    expect(store.speedLimiterEnabled).toBe(true);
+  });
+
+  it('manages outcome modal open and close methods', () => {
+    const store = new IdmStore();
+    expect(store.isOutcomeModalOpen).toBe(false);
+
+    store.openOutcomeModal('task-123', 'completed');
+    expect(store.isOutcomeModalOpen).toBe(true);
+    expect(store.outcomeTaskId).toBe('task-123');
+    expect(store.outcomeType).toBe('completed');
+    expect(store.outcomeErrorMessage).toBeNull();
+
+    store.openOutcomeModal('task-456', 'failed', 'Connection timeout');
+    expect(store.isOutcomeModalOpen).toBe(true);
+    expect(store.outcomeTaskId).toBe('task-456');
+    expect(store.outcomeType).toBe('failed');
+    expect(store.outcomeErrorMessage).toBe('Connection timeout');
+
+    store.closeOutcomeModal();
+    expect(store.isOutcomeModalOpen).toBe(false);
+    expect(store.outcomeTaskId).toBeNull();
+    expect(store.outcomeErrorMessage).toBeNull();
+  });
+});
+
+
+

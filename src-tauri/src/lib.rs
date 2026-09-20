@@ -1,0 +1,78 @@
+pub mod commands;
+pub mod db;
+pub mod engine;
+pub mod ipc_server;
+pub mod logger;
+pub mod native_messaging;
+pub mod tray;
+
+use std::sync::Arc;
+use tauri::{Manager, WindowEvent};
+
+use commands::AppState;
+use db::Database;
+use engine::manager::DownloadManager;
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_shell::init())
+        .setup(|app| {
+            // 1. Initialize robust file and console logger
+            logger::AppLogger::init();
+            log_info!("init", "My Own IDM application starting up...");
+
+            // Setup SQLite DB in AppData
+            let app_data_dir = app
+                .path()
+                .app_data_dir()
+                .unwrap_or_else(|_| std::path::PathBuf::from("."));
+            let db_path = app_data_dir.join("idm.db");
+            let db = Database::new(db_path).expect("Failed to initialize SQLite database");
+            let db_arc = Arc::new(db);
+
+            let manager = Arc::new(DownloadManager::new(db_arc));
+
+            app.manage(AppState { manager });
+
+            // Start Windows Named Pipe IPC Server for Browser Extensions
+            ipc_server::start_ipc_server(app.handle().clone());
+
+            // Auto-register browser Native Messaging Host manifests
+            if let Ok(exe_path) = std::env::current_exe() {
+                let _ = native_messaging::register_native_messaging_manifests(&exe_path);
+            }
+
+            // Setup tray
+            if let Err(e) = tray::setup_tray(app.handle()) {
+                eprintln!("Warning: Failed to setup tray icon: {}", e);
+            }
+
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            // Minimize to tray on close
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+            }
+        })
+        .invoke_handler(tauri::generate_handler![
+            commands::probe_url,
+            commands::start_download,
+            commands::pause_download,
+            commands::resume_download,
+            commands::cancel_download,
+            commands::get_all_tasks,
+            commands::get_default_download_dir,
+            commands::open_file_in_folder,
+            commands::open_file,
+            commands::open_log_folder,
+            commands::get_recent_logs
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}

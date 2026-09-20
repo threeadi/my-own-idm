@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+  --font-sans: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: #0f141c;
+  color: #dee2ee;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* Custom IDM Turbo Obsidian Sleek Scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: #090e16;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #252a33;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #30353e;
+}
+
+/* Animated Striped Sheen for Download Buffers */
+.bg-striped {
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.12),
+    rgba(255, 255, 255, 0.12) 8px,
+    transparent 8px,
+    transparent 16px
+  );
+}
+
+/* Shimmer Animation */
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.animate-shimmer {
+  animation: shimmer 2.2s infinite linear;
+}
+
+/* Glow Shadows */
+.shadow-glow-cyan {
+  box-shadow: 0 0 16px -2px rgba(0, 229, 255, 0.45);
+}
+
+.shadow-glow-emerald {
+  box-shadow: 0 0 14px -2px rgba(16, 185, 129, 0.45);
+}
+
+.shadow-window {
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(76, 215, 246, 0.18);
+}

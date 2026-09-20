@@ -1,0 +1,226 @@
+use std::collections::HashMap;
+use std::path::Path;
+use std::sync::Arc;
+use tauri::State;
+
+use crate::engine::manager::DownloadManager;
+use crate::engine::probe::Prober;
+use crate::engine::types::{DownloadTask, ProbeResult};
+
+pub struct AppState {
+    pub manager: Arc<DownloadManager>,
+}
+
+#[tauri::command]
+pub async fn probe_url(
+    state: State<'_, AppState>,
+    url: String,
+    headers: Option<HashMap<String, String>>,
+) -> Result<ProbeResult, String> {
+    Prober::probe(&state.manager.client, &url, headers).await
+}
+
+#[tauri::command]
+pub async fn start_download(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    url: String,
+    filename: String,
+    save_dir: String,
+    connections: usize,
+    headers: Option<HashMap<String, String>>,
+) -> Result<DownloadTask, String> {
+    state
+        .manager
+        .start_download(app, url, filename, save_dir, connections, headers)
+        .await
+}
+
+#[tauri::command]
+pub async fn pause_download(
+    state: State<'_, AppState>,
+    task_id: String,
+) -> Result<(), String> {
+    state.manager.pause_download(&task_id).await
+}
+
+#[tauri::command]
+pub async fn resume_download(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    task_id: String,
+) -> Result<(), String> {
+    state.manager.resume_download(app, &task_id).await
+}
+
+#[tauri::command]
+pub async fn cancel_download(
+    state: State<'_, AppState>,
+    task_id: String,
+    delete_file: bool,
+) -> Result<(), String> {
+    state.manager.cancel_download(&task_id, delete_file).await
+}
+
+#[tauri::command]
+pub async fn get_all_tasks(state: State<'_, AppState>) -> Result<Vec<DownloadTask>, String> {
+    Ok(state.manager.get_all_tasks().await)
+}
+
+#[tauri::command]
+pub async fn get_default_download_dir() -> Result<String, String> {
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(user_profile) = std::env::var_os("USERPROFILE") {
+            let path = Path::new(&user_profile).join("Downloads");
+            return Ok(path.to_string_lossy().to_string());
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        if let Some(home) = std::env::var_os("HOME") {
+            let path = Path::new(&home).join("Downloads");
+            return Ok(path.to_string_lossy().to_string());
+        }
+    }
+    Ok("C:\\Downloads".to_string())
+}
+
+pub fn build_open_in_folder_command(path: &str) -> std::process::Command {
+    #[cfg(target_os = "windows")]
+    {
+        let mut cmd = std::process::Command::new("explorer");
+        cmd.arg("/select,").arg(path);
+        cmd
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let mut cmd = std::process::Command::new("xdg-open");
+        if let Some(parent) = Path::new(path).parent() {
+            cmd.arg(parent);
+        }
+        cmd
+    }
+}
+
+pub fn build_open_file_command(path: &str) -> std::process::Command {
+    #[cfg(target_os = "windows")]
+    {
+        let mut cmd = std::process::Command::new("cmd");
+        cmd.args(["/C", "start", "", path]);
+        cmd
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let mut cmd = std::process::Command::new("xdg-open");
+        cmd.arg(path);
+        cmd
+    }
+}
+
+#[tauri::command]
+pub fn open_file_in_folder(path: String) -> Result<(), String> {
+    build_open_in_folder_command(&path)
+        .spawn()
+        .map_err(|e| format!("Failed to open folder: {}", e))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn open_file(path: String) -> Result<(), String> {
+    build_open_file_command(&path)
+        .spawn()
+        .map_err(|e| format!("Failed to open file: {}", e))?;
+    Ok(())
+}
+
+pub fn build_open_folder_command(path: &str) -> std::process::Command {
+    #[cfg(target_os = "windows")]
+    {
+        let mut cmd = std::process::Command::new("explorer");
+        cmd.arg(path);
+        cmd
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let mut cmd = std::process::Command::new("xdg-open");
+        cmd.arg(path);
+        cmd
+    }
+}
+
+#[tauri::command]
+pub fn open_log_folder() -> Result<(), String> {
+    let log_dir = crate::logger::get_log_dir();
+    build_open_folder_command(&log_dir.to_string_lossy())
+        .spawn()
+        .map_err(|e| format!("Failed to open log folder: {}", e))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_recent_logs(max_lines: Option<usize>) -> Vec<String> {
+    crate::logger::AppLogger::get().get_recent_lines(max_lines.unwrap_or(100))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_get_default_download_dir() {
+        let res = get_default_download_dir().await;
+        assert!(res.is_ok());
+        let dir = res.unwrap();
+        assert!(!dir.is_empty());
+        assert!(dir.contains("Downloads"));
+    }
+
+    #[test]
+    fn test_get_recent_logs_command() {
+        let logs = get_recent_logs(Some(10));
+        assert!(logs.len() <= 10);
+
+        let default_logs = get_recent_logs(None);
+        assert!(default_logs.len() <= 100);
+    }
+
+    #[tokio::test]
+    async fn test_app_state_and_manager_methods() {
+        let db = Arc::new(crate::db::Database::open_in_memory().unwrap());
+        let manager = Arc::new(DownloadManager::new(db));
+        let state = AppState { manager: manager.clone() };
+
+        let all = state.manager.get_all_tasks().await;
+        assert_eq!(all.len(), 0);
+
+        let pause_res = state.manager.pause_download("non-existent-task").await;
+        assert!(pause_res.is_ok());
+
+        let cancel_res = state.manager.cancel_download("non-existent-task", false).await;
+        assert!(cancel_res.is_ok());
+    }
+
+    #[test]
+    fn test_build_open_in_folder_command() {
+
+        let cmd = build_open_in_folder_command("C:\\Downloads\\file.mp4");
+        let program = cmd.get_program().to_string_lossy();
+        assert!(program.contains("explorer") || program.contains("xdg-open"));
+    }
+
+    #[test]
+    fn test_build_open_file_command() {
+        let cmd = build_open_file_command("C:\\Downloads\\file.mp4");
+        let program = cmd.get_program().to_string_lossy();
+        assert!(program.contains("cmd") || program.contains("xdg-open"));
+    }
+
+    #[test]
+    fn test_build_open_folder_command() {
+        let cmd = build_open_folder_command("C:\\Downloads");
+        let program = cmd.get_program().to_string_lossy();
+        assert!(program.contains("explorer") || program.contains("xdg-open"));
+    }
+}
+
