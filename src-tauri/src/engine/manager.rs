@@ -9,9 +9,11 @@ use uuid::Uuid;
 use crate::db::Database;
 #[allow(unused_imports)]
 use crate::engine::hls::HlsDownloader;
+use crate::engine::limiter::TokenBucketRateLimiter;
 use crate::engine::probe::Prober;
 use crate::engine::types::{
-    DownloadCategory, DownloadTask, ProbeResult, Segment, SpeedMetrics, TaskStatus,
+    DownloadCategory, DownloadTask, GlobalSpeedLimitConfig, ProbeResult, Segment, SpeedMetrics,
+    TaskStatus,
 };
 use crate::engine::worker::SegmentWorker;
 use crate::engine::writer::FileWriter;
@@ -21,6 +23,9 @@ pub struct DownloadManager {
     pub client: reqwest::Client,
     pub tasks: Arc<RwLock<HashMap<String, DownloadTask>>>,
     pub cancel_flags: Arc<RwLock<HashMap<String, Arc<AtomicBool>>>>,
+    pub global_limiter: Arc<TokenBucketRateLimiter>,
+    pub global_limiter_enabled: Arc<AtomicBool>,
+    pub task_limiters: Arc<RwLock<HashMap<String, Arc<TokenBucketRateLimiter>>>>,
 }
 
 impl DownloadManager {
@@ -33,15 +38,43 @@ impl DownloadManager {
 
         let initial_tasks = db.load_all_tasks().unwrap_or_default();
         let mut map = HashMap::new();
+        let mut task_limiters_map = HashMap::new();
         for t in initial_tasks {
+            if let Some(bps) = t.speed_limit_bps {
+                if bps > 0 {
+                    task_limiters_map
+                        .insert(t.id.clone(), Arc::new(TokenBucketRateLimiter::new(bps)));
+                }
+            }
             map.insert(t.id.clone(), t);
         }
+
+        let global_enabled = db
+            .get_setting("global_speed_limit_enabled")
+            .unwrap_or(None)
+            .map(|v| v == "true")
+            .unwrap_or(false);
+        let global_bps = db
+            .get_setting("global_speed_limit_bps")
+            .unwrap_or(None)
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(2 * 1024 * 1024);
+
+        let global_limiter = Arc::new(TokenBucketRateLimiter::new(if global_enabled {
+            global_bps
+        } else {
+            0
+        }));
+        let global_limiter_enabled = Arc::new(AtomicBool::new(global_enabled));
 
         Self {
             db,
             client,
             tasks: Arc::new(RwLock::new(map)),
             cancel_flags: Arc::new(RwLock::new(HashMap::new())),
+            global_limiter,
+            global_limiter_enabled,
+            task_limiters: Arc::new(RwLock::new(task_limiters_map)),
         }
     }
 
@@ -115,6 +148,72 @@ impl DownloadManager {
         Ok(probe)
     }
 
+    pub async fn set_global_speed_limit(
+        &self,
+        enabled: bool,
+        limit_bps: Option<u64>,
+    ) -> Result<(), String> {
+        let bps = limit_bps.unwrap_or(0);
+        let _ = self.db.set_setting(
+            "global_speed_limit_enabled",
+            if enabled { "true" } else { "false" },
+        );
+        let _ = self
+            .db
+            .set_setting("global_speed_limit_bps", &bps.to_string());
+
+        self.global_limiter_enabled
+            .store(enabled, Ordering::Relaxed);
+        self.global_limiter
+            .set_limit_bps(if enabled { bps } else { 0 });
+        Ok(())
+    }
+
+    pub async fn get_global_speed_limit(&self) -> Result<GlobalSpeedLimitConfig, String> {
+        let enabled = self.global_limiter_enabled.load(Ordering::Relaxed);
+        let limit_bps = self.global_limiter.get_limit_bps();
+        Ok(GlobalSpeedLimitConfig {
+            enabled,
+            limit_bps: if limit_bps > 0 {
+                Some(limit_bps)
+            } else {
+                None
+            },
+        })
+    }
+
+    pub async fn set_task_speed_limit(
+        &self,
+        task_id: &str,
+        limit_bps: Option<u64>,
+    ) -> Result<(), String> {
+        self.db
+            .update_task_speed_limit(task_id, limit_bps)
+            .map_err(|e| format!("Database error: {}", e))?;
+
+        let mut tasks = self.tasks.write().await;
+        if let Some(t) = tasks.get_mut(task_id) {
+            t.speed_limit_bps = limit_bps;
+        }
+
+        let mut limiters = self.task_limiters.write().await;
+        let bps = limit_bps.unwrap_or(0);
+        if bps > 0 {
+            if let Some(limiter) = limiters.get(task_id) {
+                limiter.set_limit_bps(bps);
+            } else {
+                limiters.insert(
+                    task_id.to_string(),
+                    Arc::new(TokenBucketRateLimiter::new(bps)),
+                );
+            }
+        } else if let Some(limiter) = limiters.get(task_id) {
+            limiter.set_limit_bps(0);
+        }
+
+        Ok(())
+    }
+
     pub async fn prepare_download_task(
         &self,
         url: &str,
@@ -125,57 +224,36 @@ impl DownloadManager {
     ) -> Result<(DownloadTask, Arc<AtomicBool>), String> {
         let clean_url = crate::engine::probe::clean_stream_url(url);
 
-        let referer = custom_headers
-            .as_ref()
-            .and_then(|h| h.get("Referer").or_else(|| h.get("referer")))
-            .cloned();
+        // 1. Probe the URL
+        let probe = Prober::probe(&self.client, &clean_url, custom_headers.clone()).await?;
 
-        // 1. Probe URL to detect range support, actual size and HLS
-        let probe = Prober::probe(&self.client, &clean_url, custom_headers).await?;
-
-        let candidate_filename = if filename.trim().is_empty() {
-            probe.filename
+        let final_filename = if filename.is_empty() {
+            probe.filename.clone()
         } else {
             filename.to_string()
         };
-
-        let final_filename = crate::engine::probe::sanitize_filename_with_ext(
-            &candidate_filename,
-            if probe.is_hls { "mp4" } else { "bin" },
-        );
 
         let file_path = Path::new(save_dir)
             .join(&final_filename)
             .to_string_lossy()
             .to_string();
 
-        let total_bytes = probe.total_bytes;
-        let supports_range = probe.supports_range && total_bytes.is_some();
-        let is_hls = probe.is_hls;
-        let category = DownloadCategory::from_filename(&final_filename);
-
         let task_id = Uuid::new_v4().to_string();
-        let conn_count = if supports_range {
-            connections.clamp(1, 32)
+        let total_bytes = probe.total_bytes;
+        let supports_range = probe.supports_range;
+        let is_hls = probe.is_hls;
+        let category = probe.category;
+
+        // 2. Partition into segments
+        let conn_count = if supports_range && !is_hls {
+            connections.max(1)
         } else {
             1
         };
 
-        crate::log_info!(
-            "manager",
-            "Starting task {}: filename='{}', dest='{}', conn={}, size={:?}",
-            task_id, final_filename, file_path, conn_count, total_bytes
-        );
-
-        // 2. Build segments
         let segments = if let Some(total) = total_bytes {
-            if supports_range && conn_count > 1 {
-                calculate_segments(total, conn_count)
-            } else {
-                calculate_segments(total, 1)
-            }
+            calculate_segments(total, conn_count)
         } else {
-            // Unknown file size
             vec![Segment {
                 index: 0,
                 start_byte: 0,
@@ -184,6 +262,11 @@ impl DownloadManager {
                 is_finished: false,
             }]
         };
+
+        let referer = custom_headers
+            .as_ref()
+            .and_then(|h| h.get("referer").or(h.get("Referer")))
+            .cloned();
 
         let task = DownloadTask {
             id: task_id.clone(),
@@ -203,6 +286,7 @@ impl DownloadManager {
             error_message: None,
             segments,
             referer,
+            speed_limit_bps: None,
         };
 
         // Save to DB and Memory
@@ -234,6 +318,17 @@ impl DownloadManager {
             .prepare_download_task(&url, &filename, &save_dir, connections, custom_headers.clone())
             .await?;
 
+        // Extract rate limiters
+        let global_limiter = if self.global_limiter_enabled.load(Ordering::Relaxed) {
+            Some(self.global_limiter.clone())
+        } else {
+            None
+        };
+        let task_limiter = {
+            let limiters = self.task_limiters.read().await;
+            limiters.get(&task.id).cloned()
+        };
+
         // Spawn runner task
         let db_clone = self.db.clone();
         let tasks_clone = self.tasks.clone();
@@ -249,6 +344,8 @@ impl DownloadManager {
                 task_for_run,
                 cancel_flag,
                 custom_headers,
+                task_limiter,
+                global_limiter,
             )
             .await;
         });
@@ -299,6 +396,16 @@ impl DownloadManager {
                 flags.insert(task_id.to_string(), cancel_flag.clone());
             }
 
+            let global_limiter = if self.global_limiter_enabled.load(Ordering::Relaxed) {
+                Some(self.global_limiter.clone())
+            } else {
+                None
+            };
+            let task_limiter = {
+                let limiters = self.task_limiters.read().await;
+                limiters.get(&task.id).cloned()
+            };
+
             let db_clone = self.db.clone();
             let tasks_clone = self.tasks.clone();
             let client_clone = self.client.clone();
@@ -312,6 +419,8 @@ impl DownloadManager {
                     task,
                     cancel_flag,
                     None,
+                    task_limiter,
+                    global_limiter,
                 )
                 .await;
             });
@@ -365,6 +474,8 @@ impl DownloadManager {
         task: DownloadTask,
         cancel_flag: Arc<AtomicBool>,
         custom_headers: Option<HashMap<String, String>>,
+        task_limiter: Option<Arc<TokenBucketRateLimiter>>,
+        global_limiter: Option<Arc<TokenBucketRateLimiter>>,
     ) {
         Self::execute_task_core(
             Arc::new(app_handle),
@@ -374,6 +485,8 @@ impl DownloadManager {
             task,
             cancel_flag,
             custom_headers,
+            task_limiter,
+            global_limiter,
         )
         .await;
     }
@@ -386,6 +499,8 @@ impl DownloadManager {
         mut task: DownloadTask,
         cancel_flag: Arc<AtomicBool>,
         custom_headers: Option<HashMap<String, String>>,
+        task_limiter: Option<Arc<TokenBucketRateLimiter>>,
+        global_limiter: Option<Arc<TokenBucketRateLimiter>>,
     ) {
         let (tx, mut rx) = tokio::sync::mpsc::channel::<(usize, u64)>(500);
 
@@ -458,6 +573,8 @@ impl DownloadManager {
                 let worker_cancel = cancel_flag.clone();
                 let worker_tx = tx.clone();
                 let headers_clone = custom_headers.clone();
+                let worker_task_limiter = task_limiter.clone();
+                let worker_global_limiter = global_limiter.clone();
 
                 tauri::async_runtime::spawn(async move {
                     let _ = SegmentWorker::run(
@@ -471,6 +588,8 @@ impl DownloadManager {
                         worker_cancel,
                         worker_tx,
                         headers_clone,
+                        worker_task_limiter,
+                        worker_global_limiter,
                     )
                     .await;
                 });
@@ -827,6 +946,7 @@ mod tests {
             error_message: None,
             segments: vec![],
             referer: None,
+            speed_limit_bps: None,
         };
         db.insert_task(&task1).unwrap();
 
@@ -869,6 +989,7 @@ mod tests {
             error_message: None,
             segments: vec![],
             referer: None,
+            speed_limit_bps: None,
         };
         db.insert_task(&task2).unwrap();
         manager.tasks.write().await.insert("task-mgr-2".to_string(), task2);
@@ -902,6 +1023,7 @@ mod tests {
             error_message: None,
             segments: vec![],
             referer: None,
+            speed_limit_bps: None,
         };
         manager.tasks.write().await.insert("task-mgr-3".to_string(), task3);
         let del_res = manager.cancel_download("task-mgr-3", true).await;
@@ -1108,6 +1230,7 @@ mod tests {
                 is_finished: false,
             }],
             referer: None,
+            speed_limit_bps: None,
         };
         db.insert_task(&task).unwrap();
 
@@ -1126,6 +1249,8 @@ mod tests {
             client,
             task,
             cancel,
+            None,
+            None,
             None,
         ).await;
 
@@ -1155,6 +1280,7 @@ mod tests {
             error_message: None,
             segments: vec![],
             referer: None,
+            speed_limit_bps: None,
         };
         db.insert_task(&task).unwrap();
 
@@ -1173,6 +1299,8 @@ mod tests {
             client,
             task,
             cancel,
+            None,
+            None,
             None,
         ).await;
 
@@ -1208,6 +1336,7 @@ mod tests {
             error_message: None,
             segments: vec![],
             referer: None,
+            speed_limit_bps: None,
         };
         db.insert_task(&task).unwrap();
 
@@ -1226,6 +1355,8 @@ mod tests {
             client,
             task,
             cancel,
+            None,
+            None,
             None,
         ).await;
 
@@ -1261,6 +1392,7 @@ mod tests {
             error_message: None,
             segments: vec![],
             referer: None,
+            speed_limit_bps: None,
         };
         db.insert_task(&task).unwrap();
 
@@ -1280,6 +1412,8 @@ mod tests {
             task,
             cancel,
             Some(headers),
+            None,
+            None,
         ).await;
 
         let evs = events.lock().unwrap();
@@ -1330,6 +1464,7 @@ mod tests {
             error_message: Some("Connection timeout".to_string()),
             segments: vec![],
             referer: Some("https://example.com/download".to_string()),
+            speed_limit_bps: None,
         };
         db.insert_task(&initial_task).unwrap();
         manager.tasks.write().await.insert("task-refresh-1".to_string(), initial_task);
@@ -1394,6 +1529,7 @@ mod tests {
             error_message: None,
             segments: vec![],
             referer: None,
+            speed_limit_bps: None,
         };
         db.insert_task(&initial_task).unwrap();
         manager.tasks.write().await.insert("task-refresh-mismatch".to_string(), initial_task);
@@ -1455,6 +1591,87 @@ mod tests {
         assert_eq!(task.total_bytes, None);
         assert_eq!(task.segments.len(), 1);
         assert_eq!(task.segments[0].end_byte, u64::MAX);
+    }
+
+    #[tokio::test]
+    async fn test_manager_global_speed_limit() {
+        let db = Arc::new(Database::open_in_memory().unwrap());
+        let manager = DownloadManager::new(db.clone());
+
+        let initial_cfg = manager.get_global_speed_limit().await.unwrap();
+        assert!(!initial_cfg.enabled);
+        assert_eq!(initial_cfg.limit_bps, None);
+
+        // Enable with 1 MB/s (1_048_576 B/s)
+        manager.set_global_speed_limit(true, Some(1_048_576)).await.unwrap();
+        let cfg = manager.get_global_speed_limit().await.unwrap();
+        assert!(cfg.enabled);
+        assert_eq!(cfg.limit_bps, Some(1_048_576));
+        assert_eq!(manager.global_limiter.get_limit_bps(), 1_048_576);
+
+        // Disable limit
+        manager.set_global_speed_limit(false, None).await.unwrap();
+        let disabled_cfg = manager.get_global_speed_limit().await.unwrap();
+        assert!(!disabled_cfg.enabled);
+        assert_eq!(disabled_cfg.limit_bps, None);
+        assert_eq!(manager.global_limiter.get_limit_bps(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_manager_task_speed_limit() {
+        let db = Arc::new(Database::open_in_memory().unwrap());
+        let manager = DownloadManager::new(db.clone());
+
+        let task = DownloadTask {
+            id: "task-limit-1".to_string(),
+            url: "http://127.0.0.1:9999/file.bin".to_string(),
+            filename: "file.bin".to_string(),
+            save_dir: "/tmp".to_string(),
+            file_path: "/tmp/file.bin".to_string(),
+            total_bytes: Some(10_000_000),
+            downloaded_bytes: 0,
+            category: DownloadCategory::General,
+            status: TaskStatus::Downloading,
+            connections: 4,
+            supports_range: true,
+            is_hls: false,
+            created_at: "2026-09-20 12:00:00".to_string(),
+            completed_at: None,
+            error_message: None,
+            segments: vec![],
+            referer: None,
+            speed_limit_bps: None,
+        };
+        db.insert_task(&task).unwrap();
+        manager.tasks.write().await.insert(task.id.clone(), task.clone());
+
+        // Set per-task speed limit 500 KB/s (512_000 B/s)
+        manager.set_task_speed_limit("task-limit-1", Some(512_000)).await.unwrap();
+
+        // Verify task in memory
+        {
+            let tasks = manager.tasks.read().await;
+            assert_eq!(tasks.get("task-limit-1").unwrap().speed_limit_bps, Some(512_000));
+        }
+
+        // Verify limiter in map
+        {
+            let limiters = manager.task_limiters.read().await;
+            let limiter = limiters.get("task-limit-1").unwrap();
+            assert_eq!(limiter.get_limit_bps(), 512_000);
+        }
+
+        // Verify in DB
+        let loaded = db.load_all_tasks().unwrap();
+        assert_eq!(loaded[0].speed_limit_bps, Some(512_000));
+
+        // Clear task limit
+        manager.set_task_speed_limit("task-limit-1", None).await.unwrap();
+        {
+            let limiters = manager.task_limiters.read().await;
+            let limiter = limiters.get("task-limit-1").unwrap();
+            assert_eq!(limiter.get_limit_bps(), 0);
+        }
     }
 }
 

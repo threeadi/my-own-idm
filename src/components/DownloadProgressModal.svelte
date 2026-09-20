@@ -1,6 +1,6 @@
 <script lang="ts">
   import { store } from '$lib/idmStore.svelte';
-  import { formatBytes, formatEta, formatSpeed, type DownloadTask } from '$lib/types';
+  import { formatBytes, formatEta, formatSpeed, type DownloadTask, type SpeedLimitUnit, bpsToUnit, unitToBps } from '$lib/types';
   import {
     Download,
     X,
@@ -22,10 +22,30 @@
   const task = $derived(store.progressModalTask);
   let activeTab = $state<'status' | 'limiter' | 'options'>('status');
   let showDetails = $state<boolean>(true);
-  let enableLimiter = $state<boolean>(false);
-  let maxSpeedKb = $state<number>(1024);
+  let taskLimiterEnabled = $state<boolean>(false);
+  let taskLimitValue = $state<number>(1);
+  let taskLimitUnit = $state<SpeedLimitUnit>('MB/s');
   let showCompleteDialog = $state<boolean>(true);
   let shutdownAfterComplete = $state<boolean>(false);
+
+  $effect(() => {
+    if (task) {
+      if (task.speed_limit_bps && task.speed_limit_bps > 0) {
+        taskLimiterEnabled = true;
+        const parsed = bpsToUnit(task.speed_limit_bps);
+        taskLimitValue = parsed.value;
+        taskLimitUnit = parsed.unit;
+      } else {
+        taskLimiterEnabled = false;
+      }
+    }
+  });
+
+  async function applyTaskLimit() {
+    if (!task) return;
+    const bps = taskLimiterEnabled ? unitToBps(taskLimitValue, taskLimitUnit) : null;
+    await store.setTaskSpeedLimit(task.id, bps);
+  }
 
   function getPercent(t: DownloadTask): number {
     if (t.status === 'completed') return 100;
@@ -101,52 +121,39 @@
         </button>
       </nav>
 
-      <!-- Tab Content Panels -->
-      <div class="p-3.5 bg-[#0b0f17] min-h-[145px]">
+      <!-- Tab Content Area -->
+      <div class="p-3.5 space-y-3 min-h-[160px]">
         {#if activeTab === 'status'}
-          <section class="space-y-2 text-xs">
-            <div class="grid grid-cols-1 gap-1.5 bg-[#0f1420]/70 p-3 rounded-lg border border-[#1a2236]">
+          <!-- Status Tab Rows -->
+          <section class="space-y-1.5 text-xs">
+            <div class="bg-[#0f1420]/70 p-3 rounded-lg border border-[#1a2236] space-y-1.5">
               <div class="flex items-center justify-between">
-                <span class="text-slate-400">Status Unduhan:</span>
-                <div class="flex items-center gap-1.5">
-                  {#if isDownloading}
-                    <span class="w-2 h-2 rounded-full bg-[#00e5ff] animate-pulse"></span>
-                    <span class="font-medium text-[#00e5ff]">Sedang mengunduh berkas...</span>
-                  {:else if isCompleted}
-                    <span class="w-2 h-2 rounded-full bg-[#10b981]"></span>
-                    <span class="font-medium text-[#10b981]">Pengunduhan Selesai</span>
-                  {:else if isPaused}
-                    <span class="w-2 h-2 rounded-full bg-[#f59e0b]"></span>
-                    <span class="font-medium text-[#f59e0b]">Unduhan Dijeda</span>
-                  {:else}
-                    <span class="w-2 h-2 rounded-full bg-[#ffb4ab]"></span>
-                    <span class="font-medium text-[#ffb4ab]">Unduhan Gagal</span>
-                  {/if}
-                </div>
+                <span class="text-slate-400">Status:</span>
+                <span class="font-medium {isCompleted ? 'text-emerald-400' : isDownloading ? 'text-[#00e5ff]' : 'text-amber-400'} capitalize">
+                  {typeof task.status === 'string' ? task.status : 'Gagal'}
+                </span>
               </div>
 
               <div class="flex items-center justify-between">
                 <span class="text-slate-400">Ukuran Berkas:</span>
+                <span class="font-mono text-slate-200">{formatBytes(task.total_bytes)}</span>
+              </div>
+
+              <div class="flex items-center justify-between">
+                <span class="text-slate-400">Telah Diunduh:</span>
                 <span class="font-mono text-slate-200">
-                  <strong class="text-white font-semibold">{formatBytes(task.downloaded_bytes)}</strong>
+                  {formatBytes(task.downloaded_bytes)}
                   {#if task.total_bytes}
-                    dari {formatBytes(task.total_bytes)} ({pct.toFixed(0)}% selesai)
+                    <span class="text-slate-400">({pct.toFixed(1)}%)</span>
                   {/if}
                 </span>
               </div>
 
               <div class="flex items-center justify-between">
-                <span class="text-slate-400">Tingkat Transfer:</span>
-                <div class="flex items-center gap-2">
-                  <span class="font-mono text-emerald-400 font-semibold text-xs tracking-tight">
-                    {isDownloading ? formatSpeed(task.speed_bps) : '0 B/s'}
-                  </span>
-                  {#if isDownloading}
-                    <span class="px-1.5 py-0.2 text-[9px] uppercase font-bold tracking-wider rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                      Turbo Peak
-                    </span>
-                  {/if}
-                </div>
+                <span class="text-slate-400">Kecepatan Transfer:</span>
+                <span class="font-mono font-bold text-emerald-400">
+                  {isDownloading ? formatSpeed(task.speed_bps) : '0 B/s'}
+                </span>
               </div>
 
               <div class="flex items-center justify-between">
@@ -167,32 +174,95 @@
           </section>
         {:else if activeTab === 'limiter'}
           <section class="space-y-2.5 text-xs">
-            <div class="bg-[#0f1420]/70 p-3 rounded-lg border border-[#1a2236] space-y-2.5">
+            <div class="bg-[#0f1420]/70 p-3 rounded-lg border border-[#1a2236] space-y-3">
               <div class="flex items-center justify-between">
                 <span class="text-slate-300 font-medium">Tingkat transfer saat ini:</span>
-                <span class="font-mono text-emerald-400 font-semibold">{formatSpeed(task.speed_bps)}</span>
+                <span class="font-mono text-[#00e5ff] font-bold">{formatSpeed(task.speed_bps)}</span>
               </div>
 
+              <!-- Per-Task Limiter Toggle -->
               <label class="flex items-center gap-2 cursor-pointer select-none pt-1">
                 <input
                   type="checkbox"
-                  bind:checked={enableLimiter}
+                  bind:checked={taskLimiterEnabled}
+                  onchange={applyTaskLimit}
                   class="w-4 h-4 rounded bg-[#0b0f17] border-[#222d45] text-[#00e5ff] focus:ring-0 cursor-pointer"
                 />
-                <span class="text-slate-200">Gunakan Pembatas Kecepatan</span>
+                <span class="text-slate-200 font-medium">Batasi Kecepatan Khusus Unduhan Ini</span>
               </label>
 
-              <div class="space-y-1 pl-6">
-                <label class="block text-slate-400 text-[11px]" for="max-speed-box">Kecepatan unduhan maksimum:</label>
-                <div class="flex items-center gap-2">
-                  <input
-                    id="max-speed-box"
-                    type="number"
-                    bind:value={maxSpeedKb}
-                    class="w-24 px-2 py-1 text-right font-mono bg-[#07090e] border border-[#222d45] rounded text-slate-100 focus:outline-none focus:border-[#00e5ff] text-xs"
-                  />
-                  <span class="text-slate-300 font-mono text-[11px]">KByte/dtk</span>
+              {#if taskLimiterEnabled}
+                <div class="space-y-2 pl-6 pt-1 border-t border-[#1a2236]/60">
+                  <span class="block text-slate-400 text-[11px]">Batas kecepatan maksimum berkas ini:</span>
+                  <div class="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="1"
+                      step="any"
+                      bind:value={taskLimitValue}
+                      oninput={applyTaskLimit}
+                      class="w-24 px-2 py-1 font-mono bg-[#07090e] border border-[#222d45] rounded text-slate-100 focus:outline-none focus:border-[#00e5ff] text-xs"
+                    />
+                    
+                    <div class="flex rounded bg-[#07090e] p-0.5 border border-[#222d45]">
+                      <button
+                        type="button"
+                        onclick={() => { taskLimitUnit = 'KB/s'; applyTaskLimit(); }}
+                        class="px-2 py-0.5 text-[10px] font-mono font-medium rounded transition-colors {taskLimitUnit === 'KB/s' ? 'bg-[#00e5ff] text-slate-950 font-bold' : 'text-[#8c909f] hover:text-[#dee2ee]'}"
+                      >
+                        KB/s
+                      </button>
+                      <button
+                        type="button"
+                        onclick={() => { taskLimitUnit = 'MB/s'; applyTaskLimit(); }}
+                        class="px-2 py-0.5 text-[10px] font-mono font-medium rounded transition-colors {taskLimitUnit === 'MB/s' ? 'bg-[#00e5ff] text-slate-950 font-bold' : 'text-[#8c909f] hover:text-[#dee2ee]'}"
+                      >
+                        MB/s
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Quick Presets -->
+                  <div class="flex items-center gap-1.5 pt-1 flex-wrap">
+                    <span class="text-[10px] text-slate-400">Pilihan Cepat:</span>
+                    <button
+                      type="button"
+                      onclick={() => { taskLimitValue = 500; taskLimitUnit = 'KB/s'; applyTaskLimit(); }}
+                      class="px-1.5 py-0.5 rounded bg-[#141b2b] hover:bg-[#1a2236] text-[10px] font-mono text-slate-300 hover:text-[#00e5ff] border border-[#222d45]"
+                    >
+                      500 KB/s
+                    </button>
+                    <button
+                      type="button"
+                      onclick={() => { taskLimitValue = 1; taskLimitUnit = 'MB/s'; applyTaskLimit(); }}
+                      class="px-1.5 py-0.5 rounded bg-[#141b2b] hover:bg-[#1a2236] text-[10px] font-mono text-slate-300 hover:text-[#00e5ff] border border-[#222d45]"
+                    >
+                      1 MB/s
+                    </button>
+                    <button
+                      type="button"
+                      onclick={() => { taskLimitValue = 2; taskLimitUnit = 'MB/s'; applyTaskLimit(); }}
+                      class="px-1.5 py-0.5 rounded bg-[#141b2b] hover:bg-[#1a2236] text-[10px] font-mono text-slate-300 hover:text-[#00e5ff] border border-[#222d45]"
+                    >
+                      2 MB/s
+                    </button>
+                    <button
+                      type="button"
+                      onclick={() => { taskLimitValue = 5; taskLimitUnit = 'MB/s'; applyTaskLimit(); }}
+                      class="px-1.5 py-0.5 rounded bg-[#141b2b] hover:bg-[#1a2236] text-[10px] font-mono text-slate-300 hover:text-[#00e5ff] border border-[#222d45]"
+                    >
+                      5 MB/s
+                    </button>
+                  </div>
                 </div>
+              {/if}
+
+              <!-- Global Limiter Status Notice -->
+              <div class="pt-2 border-t border-[#1a2236] flex items-center justify-between text-[11px]">
+                <span class="text-slate-400">Batas Global Keseluruhan:</span>
+                <span class="font-mono {store.speedLimiterEnabled ? 'text-[#00e5ff] font-semibold' : 'text-slate-400'}">
+                  {store.speedLimiterEnabled ? `Aktif (${store.globalSpeedLimitValue} ${store.globalSpeedLimitUnit})` : 'Tak Terbatas'}
+                </span>
               </div>
             </div>
           </section>

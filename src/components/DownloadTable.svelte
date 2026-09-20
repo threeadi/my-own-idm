@@ -1,6 +1,6 @@
 <script lang="ts">
   import { store } from '$lib/idmStore.svelte';
-  import { formatBytes, formatEta, formatSpeed, type DownloadTask } from '$lib/types';
+  import { formatBytes, formatEta, formatSpeed, bpsToUnit, type DownloadTask } from '$lib/types';
   import {
     Play,
     Pause,
@@ -21,7 +21,8 @@
     Copy,
     Check,
     LayoutGrid,
-    List
+    List,
+    Gauge
   } from '@lucide/svelte';
 
   const tasks = $derived(store.filteredTasks);
@@ -243,6 +244,14 @@
                       Gagal
                     </span>
                   {/if}
+
+                  {#if task.speed_limit_bps && task.speed_limit_bps > 0}
+                    {@const limitParsed = bpsToUnit(task.speed_limit_bps)}
+                    <span class="shrink-0 px-2 py-0.2 rounded-full bg-[#00e5ff]/10 text-[#00e5ff] font-mono text-[10px] font-semibold border border-[#00e5ff]/30 flex items-center gap-1" title="Batas Kecepatan Berkas Ini">
+                      <Gauge class="w-3 h-3 text-[#00e5ff]" />
+                      {limitParsed.value} {limitParsed.unit}
+                    </span>
+                  {/if}
                 </div>
 
                 <!-- Telemetry Row -->
@@ -407,9 +416,18 @@
                 {task.status === 'downloading' ? formatEta(task.eta_seconds) : '--'}
               </td>
               <td class="py-2 px-3">
-                <span class="text-[10px] px-1.5 py-0.5 rounded font-medium {task.status === 'completed' ? 'bg-[#10b981]/20 text-[#4edea3]' : task.status === 'downloading' ? 'bg-[#03b5d3]/20 text-[#4cd7f6]' : 'bg-[#252a33] text-[#8c909f]'}">
-                  {task.status === 'downloading' ? 'Mengunduh' : task.status === 'completed' ? 'Selesai' : 'Dijeda'}
-                </span>
+                <div class="flex items-center gap-1 flex-wrap">
+                  <span class="text-[10px] px-1.5 py-0.5 rounded font-medium {task.status === 'completed' ? 'bg-[#10b981]/20 text-[#4edea3]' : task.status === 'downloading' ? 'bg-[#03b5d3]/20 text-[#4cd7f6]' : 'bg-[#252a33] text-[#8c909f]'}">
+                    {task.status === 'downloading' ? 'Mengunduh' : task.status === 'completed' ? 'Selesai' : 'Dijeda'}
+                  </span>
+                  {#if task.speed_limit_bps && task.speed_limit_bps > 0}
+                    {@const lp = bpsToUnit(task.speed_limit_bps)}
+                    <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#00e5ff]/10 text-[#00e5ff] border border-[#00e5ff]/30 flex items-center gap-0.5" title="Batas Kecepatan: {lp.value} {lp.unit}">
+                      <Gauge class="w-2.5 h-2.5 text-[#00e5ff]" />
+                      {lp.value} {lp.unit}
+                    </span>
+                  {/if}
+                </div>
               </td>
               <td class="py-2 px-3 text-right">
                 <div class="flex items-center justify-end gap-1">
@@ -524,6 +542,15 @@
       </button>
 
       <div class="h-px bg-[#252a33] my-1"></div>
+
+      <button
+        onclick={() => { store.openPropertiesModal(contextTask.id); closeContextMenu(); }}
+        class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-[#00e5ff]/15 text-[#4cd7f6] transition text-left cursor-pointer"
+        role="menuitem"
+      >
+        <Gauge class="w-3.5 h-3.5 text-[#00e5ff]" />
+        <span>Atur Batas Kecepatan...</span>
+      </button>
 
       <button
         onclick={() => { store.openPropertiesModal(contextTask.id); closeContextMenu(); }}

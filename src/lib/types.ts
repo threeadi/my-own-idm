@@ -41,9 +41,17 @@ export interface DownloadTask {
   error_message: string | null;
   segments: Segment[];
   referer?: string | null;
+  speed_limit_bps?: number | null;
   // Computed in frontend
   speed_bps?: number;
   eta_seconds?: number | null;
+}
+
+export type SpeedLimitUnit = 'KB/s' | 'MB/s';
+
+export interface GlobalSpeedLimitConfig {
+  enabled: boolean;
+  limit_bps: number | null;
 }
 
 export interface SpeedMetrics {
@@ -97,5 +105,24 @@ export function getPercent(task: DownloadTask): number {
   if (task.status === 'completed') return 100.0;
   if (!task.total_bytes || task.total_bytes <= 0) return 0.0;
   return Math.min(100.0, (task.downloaded_bytes / task.total_bytes) * 100);
+}
+
+export function unitToBps(value: number, unit: SpeedLimitUnit): number {
+  if (value <= 0 || isNaN(value)) return 0;
+  if (unit === 'MB/s') {
+    return Math.round(value * 1024 * 1024);
+  }
+  return Math.round(value * 1024);
+}
+
+export function bpsToUnit(bps: number | null | undefined): { value: number; unit: SpeedLimitUnit } {
+  if (!bps || bps <= 0) return { value: 0, unit: 'KB/s' };
+  if (bps >= 1024 * 1024) {
+    const mb = parseFloat((bps / (1024 * 1024)).toFixed(2));
+    if (bps % (1024 * 1024) === 0 || mb >= 1) {
+      return { value: mb, unit: 'MB/s' };
+    }
+  }
+  return { value: Math.round(bps / 1024), unit: 'KB/s' };
 }
 

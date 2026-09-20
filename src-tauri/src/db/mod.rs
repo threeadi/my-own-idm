@@ -17,6 +17,7 @@ impl Database {
         let conn = Connection::open(db_path)?;
         conn.execute_batch(schema::CREATE_TABLES)?;
         let _ = conn.execute("ALTER TABLE downloads ADD COLUMN referer TEXT", []);
+        let _ = conn.execute("ALTER TABLE downloads ADD COLUMN speed_limit_bps INTEGER", []);
         Ok(Self {
             conn: Mutex::new(conn),
         })
@@ -26,6 +27,7 @@ impl Database {
         let conn = Connection::open_in_memory()?;
         conn.execute_batch(schema::CREATE_TABLES)?;
         let _ = conn.execute("ALTER TABLE downloads ADD COLUMN referer TEXT", []);
+        let _ = conn.execute("ALTER TABLE downloads ADD COLUMN speed_limit_bps INTEGER", []);
         Ok(Self {
             conn: Mutex::new(conn),
         })
@@ -40,8 +42,8 @@ impl Database {
             r#"INSERT OR REPLACE INTO downloads (
                 id, url, filename, save_dir, file_path, total_bytes, downloaded_bytes,
                 category, status, connections, supports_range, is_hls, created_at,
-                completed_at, error_message, referer
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)"#,
+                completed_at, error_message, referer, speed_limit_bps
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)"#,
             params![
                 task.id,
                 task.url,
@@ -58,7 +60,8 @@ impl Database {
                 task.created_at,
                 task.completed_at,
                 task.error_message,
-                task.referer
+                task.referer,
+                task.speed_limit_bps.map(|b| b as i64)
             ],
         )?;
 
@@ -143,7 +146,7 @@ impl Database {
             r#"SELECT 
                 id, url, filename, save_dir, file_path, total_bytes, downloaded_bytes,
                 category, status, connections, supports_range, is_hls, created_at,
-                completed_at, error_message, referer
+                completed_at, error_message, referer, speed_limit_bps
             FROM downloads ORDER BY created_at DESC"#,
         )?;
 
@@ -165,6 +168,7 @@ impl Database {
             let completed_at: Option<String> = row.get(13)?;
             let error_message: Option<String> = row.get(14)?;
             let referer: Option<String> = row.get(15)?;
+            let speed_limit_bps: Option<i64> = row.get(16)?;
 
             let category: DownloadCategory = serde_json::from_str(&category_str).unwrap_or(DownloadCategory::General);
             let mut status: TaskStatus = serde_json::from_str(&status_str).unwrap_or(TaskStatus::Queued);
@@ -192,6 +196,7 @@ impl Database {
                 error_message,
                 segments: Vec::new(),
                 referer,
+                speed_limit_bps: speed_limit_bps.map(|b| b as u64),
             })
         })?;
 
@@ -241,6 +246,15 @@ impl Database {
         conn.execute(
             "UPDATE downloads SET referer = ?1 WHERE id = ?2",
             params![referer, task_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_task_speed_limit(&self, task_id: &str, limit_bps: Option<u64>) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE downloads SET speed_limit_bps = ?1 WHERE id = ?2",
+            params![limit_bps.map(|b| b as i64), task_id],
         )?;
         Ok(())
     }
@@ -301,6 +315,7 @@ mod tests {
                 },
             ],
             referer: Some("https://example.com/download-page".to_string()),
+            speed_limit_bps: None,
         }
     }
 
@@ -444,5 +459,21 @@ mod tests {
         assert_eq!(loaded[0].url, "https://new-cdn.example.com/test.zip");
         assert_eq!(loaded[0].referer, Some("https://example.com/fresh-page".to_string()));
         assert_eq!(loaded[0].downloaded_bytes, 200); // Bytes preserved
+    }
+
+    #[test]
+    fn test_db_update_task_speed_limit() {
+        let db = Database::open_in_memory().expect("open in-memory db");
+        let task = create_sample_task("task-spd-1", TaskStatus::Downloading);
+        db.insert_task(&task).expect("insert");
+
+        db.update_task_speed_limit("task-spd-1", Some(1024 * 500)).expect("update speed limit");
+        let loaded = db.load_all_tasks().expect("load");
+        assert_eq!(loaded[0].speed_limit_bps, Some(1024 * 500));
+
+        // Disable speed limit (set to None)
+        db.update_task_speed_limit("task-spd-1", None).expect("clear speed limit");
+        let loaded_cleared = db.load_all_tasks().expect("load");
+        assert_eq!(loaded_cleared[0].speed_limit_bps, None);
     }
 }

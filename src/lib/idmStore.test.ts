@@ -657,6 +657,69 @@ describe('IdmStore State & Filtering', () => {
 
     mockIsTauriReturn = true;
   });
+
+  it('handles setGlobalSpeedLimit and derived globalSpeedLimitBps', async () => {
+    const store = new IdmStore();
+    expect(store.speedLimiterEnabled).toBe(false);
+    expect(store.globalSpeedLimitBps).toBeNull();
+
+    // Enable with 2 MB/s
+    await store.setGlobalSpeedLimit(true, 2, 'MB/s');
+    expect(store.speedLimiterEnabled).toBe(true);
+    expect(store.globalSpeedLimitValue).toBe(2);
+    expect(store.globalSpeedLimitUnit).toBe('MB/s');
+    expect(store.globalSpeedLimitBps).toBe(2097152);
+    expect(mockInvoke).toHaveBeenCalledWith('set_global_speed_limit', {
+      enabled: true,
+      limitBps: 2097152,
+    });
+
+    // Change to 500 KB/s
+    await store.setGlobalSpeedLimit(true, 500, 'KB/s');
+    expect(store.globalSpeedLimitValue).toBe(500);
+    expect(store.globalSpeedLimitUnit).toBe('KB/s');
+    expect(store.globalSpeedLimitBps).toBe(512000);
+    expect(mockInvoke).toHaveBeenCalledWith('set_global_speed_limit', {
+      enabled: true,
+      limitBps: 512000,
+    });
+
+    // Disable limit
+    await store.setGlobalSpeedLimit(false);
+    expect(store.speedLimiterEnabled).toBe(false);
+    expect(store.globalSpeedLimitBps).toBeNull();
+    expect(mockInvoke).toHaveBeenCalledWith('set_global_speed_limit', {
+      enabled: false,
+      limitBps: null,
+    });
+
+    // IPC error branch
+    mockInvoke.mockRejectedValueOnce(new Error('IPC failed'));
+    await store.setGlobalSpeedLimit(true, 1, 'MB/s'); // shouldn't throw
+  });
+
+  it('handles setTaskSpeedLimit', async () => {
+    const store = new IdmStore();
+    const task = makeTask({ id: 'task-speed-1', speed_limit_bps: null });
+    store.tasks = [task];
+
+    mockInvoke.mockResolvedValue(undefined);
+    await store.setTaskSpeedLimit('task-speed-1', 1048576);
+
+    expect(store.tasks[0].speed_limit_bps).toBe(1048576);
+    expect(mockInvoke).toHaveBeenCalledWith('set_task_speed_limit', {
+      taskId: 'task-speed-1',
+      limitBps: 1048576,
+    });
+
+    // Clear limit
+    await store.setTaskSpeedLimit('task-speed-1', null);
+    expect(store.tasks[0].speed_limit_bps).toBeNull();
+
+    // IPC error branch
+    mockInvoke.mockRejectedValueOnce(new Error('DB error'));
+    await store.setTaskSpeedLimit('task-speed-1', 512000); // shouldn't throw
+  });
 });
 
 

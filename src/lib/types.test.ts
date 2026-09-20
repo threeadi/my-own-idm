@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatBytes, formatSpeed, formatEta, getPercent } from './types';
+import { formatBytes, formatSpeed, formatEta, getPercent, unitToBps, bpsToUnit } from './types';
 
 describe('formatBytes', () => {
   it('handles null and undefined', () => {
@@ -71,4 +71,42 @@ describe('getPercent', () => {
     ).toBe(0.0);
   });
 });
+
+describe('unitToBps', () => {
+  it('converts KB/s to bps correctly', () => {
+    expect(unitToBps(500, 'KB/s')).toBe(512000);
+    expect(unitToBps(1024, 'KB/s')).toBe(1048576);
+  });
+
+  it('converts MB/s to bps correctly', () => {
+    expect(unitToBps(1, 'MB/s')).toBe(1048576);
+    expect(unitToBps(2.5, 'MB/s')).toBe(2621440);
+  });
+
+  it('handles 0 or negative or NaN safely', () => {
+    expect(unitToBps(0, 'KB/s')).toBe(0);
+    expect(unitToBps(-10, 'MB/s')).toBe(0);
+    expect(unitToBps(NaN, 'MB/s')).toBe(0);
+  });
+});
+
+describe('bpsToUnit', () => {
+  it('handles null, undefined, and zero', () => {
+    expect(bpsToUnit(null)).toEqual({ value: 0, unit: 'KB/s' });
+    expect(bpsToUnit(undefined)).toEqual({ value: 0, unit: 'KB/s' });
+    expect(bpsToUnit(0)).toEqual({ value: 0, unit: 'KB/s' });
+  });
+
+  it('converts small bps to KB/s', () => {
+    expect(bpsToUnit(512000)).toEqual({ value: 500, unit: 'KB/s' });
+    expect(bpsToUnit(256000)).toEqual({ value: 250, unit: 'KB/s' });
+  });
+
+  it('converts large bps to MB/s', () => {
+    expect(bpsToUnit(1048576)).toEqual({ value: 1, unit: 'MB/s' });
+    expect(bpsToUnit(2097152)).toEqual({ value: 2, unit: 'MB/s' });
+    expect(bpsToUnit(2621440)).toEqual({ value: 2.5, unit: 'MB/s' });
+  });
+});
+
 

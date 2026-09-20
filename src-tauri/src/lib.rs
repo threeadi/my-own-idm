@@ -74,7 +74,10 @@ pub fn run() {
             commands::get_recent_logs,
             commands::move_downloaded_file,
             commands::open_external_url,
-            commands::refresh_download_url
+            commands::refresh_download_url,
+            commands::set_global_speed_limit,
+            commands::get_global_speed_limit,
+            commands::set_task_speed_limit
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { store, isTauri } from "$lib/idmStore.svelte";
-  import { formatBytes } from "$lib/types";
+  import { formatBytes, type SpeedLimitUnit, bpsToUnit, unitToBps } from "$lib/types";
   import { open } from "@tauri-apps/plugin-dialog";
   import {
     CheckCircle2,
@@ -22,6 +22,7 @@
     FileCode,
     ExternalLink,
     Clock,
+    Gauge,
   } from "@lucide/svelte";
 
   const task = $derived(store.propertiesTask);
@@ -32,6 +33,28 @@
   let moveSuccess = $state(false);
   let moveError = $state<string | null>(null);
   let description = $state("Arsip unduhan IDM Turbo Desktop");
+  let taskLimiterEnabled = $state(false);
+  let taskLimitValue = $state(1);
+  let taskLimitUnit = $state<SpeedLimitUnit>('MB/s');
+
+  $effect(() => {
+    if (task) {
+      if (task.speed_limit_bps && task.speed_limit_bps > 0) {
+        taskLimiterEnabled = true;
+        const parsed = bpsToUnit(task.speed_limit_bps);
+        taskLimitValue = parsed.value;
+        taskLimitUnit = parsed.unit;
+      } else {
+        taskLimiterEnabled = false;
+      }
+    }
+  });
+
+  async function handleApplyLimit() {
+    if (!task) return;
+    const bps = taskLimiterEnabled ? unitToBps(taskLimitValue, taskLimitUnit) : null;
+    await store.setTaskSpeedLimit(task.id, bps);
+  }
 
   function getFileIcon(cat?: string) {
     switch (cat) {
@@ -351,6 +374,82 @@
             placeholder="Tambahkan catatan untuk arsip ini..."
             class="w-full h-9 bg-[#090e16] border border-[#252a33] text-slate-200 text-xs px-3 rounded-lg outline-none focus:border-[#00e5ff] transition-all"
           />
+        </div>
+
+        <!-- Batas Kecepatan Unduhan (Speed Limiter) -->
+        <div class="p-3.5 rounded-xl bg-[#171c24] border border-[#252a33] flex flex-col gap-2.5 shadow-sm text-xs">
+          <div class="flex items-center justify-between">
+            <label class="font-medium text-white flex items-center gap-1.5 cursor-pointer">
+              <Gauge class="w-3.5 h-3.5 text-[#00e5ff]" />
+              Batas Kecepatan Berkas Ini:
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                bind:checked={taskLimiterEnabled}
+                onchange={handleApplyLimit}
+                class="w-4 h-4 rounded bg-[#090e16] border-[#252a33] text-[#00e5ff] focus:ring-0 cursor-pointer"
+              />
+              <span class="text-xs font-mono {taskLimiterEnabled ? 'text-[#00e5ff] font-semibold' : 'text-slate-400'}">
+                {taskLimiterEnabled ? 'Aktif' : 'Mati'}
+              </span>
+            </label>
+          </div>
+
+          {#if taskLimiterEnabled}
+            <div class="flex items-center gap-2 pt-1 border-t border-[#252a33] flex-wrap">
+              <input
+                type="number"
+                min="1"
+                step="any"
+                bind:value={taskLimitValue}
+                oninput={handleApplyLimit}
+                class="w-24 h-8 px-2.5 bg-[#090e16] border border-[#252a33] text-white font-mono text-xs rounded-lg focus:border-[#00e5ff] outline-none"
+              />
+
+              <div class="flex rounded-lg bg-[#090e16] p-0.5 border border-[#252a33]">
+                <button
+                  type="button"
+                  onclick={() => { taskLimitUnit = 'KB/s'; handleApplyLimit(); }}
+                  class="px-2.5 py-1 text-[11px] font-mono font-medium rounded-md transition-colors {taskLimitUnit === 'KB/s' ? 'bg-[#00e5ff] text-slate-950 font-bold' : 'text-slate-400 hover:text-white'}"
+                >
+                  KB/s
+                </button>
+                <button
+                  type="button"
+                  onclick={() => { taskLimitUnit = 'MB/s'; handleApplyLimit(); }}
+                  class="px-2.5 py-1 text-[11px] font-mono font-medium rounded-md transition-colors {taskLimitUnit === 'MB/s' ? 'bg-[#00e5ff] text-slate-950 font-bold' : 'text-slate-400 hover:text-white'}"
+                >
+                  MB/s
+                </button>
+              </div>
+
+              <!-- Quick presets -->
+              <div class="flex items-center gap-1 sm:ml-auto">
+                <button
+                  type="button"
+                  onclick={() => { taskLimitValue = 500; taskLimitUnit = 'KB/s'; handleApplyLimit(); }}
+                  class="px-2 py-1 rounded-md bg-[#252a33] hover:bg-[#30353e] text-[10px] font-mono text-slate-300 hover:text-[#00e5ff]"
+                >
+                  500 KB/s
+                </button>
+                <button
+                  type="button"
+                  onclick={() => { taskLimitValue = 1; taskLimitUnit = 'MB/s'; handleApplyLimit(); }}
+                  class="px-2 py-1 rounded-md bg-[#252a33] hover:bg-[#30353e] text-[10px] font-mono text-slate-300 hover:text-[#00e5ff]"
+                >
+                  1 MB/s
+                </button>
+                <button
+                  type="button"
+                  onclick={() => { taskLimitValue = 2; taskLimitUnit = 'MB/s'; handleApplyLimit(); }}
+                  class="px-2 py-1 rounded-md bg-[#252a33] hover:bg-[#30353e] text-[10px] font-mono text-slate-300 hover:text-[#00e5ff]"
+                >
+                  2 MB/s
+                </button>
+              </div>
+            </div>
+          {/if}
         </div>
 
         <!-- Web Source & Referrer Group -->

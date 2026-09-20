@@ -92,6 +92,14 @@ pub struct DownloadTask {
     pub segments: Vec<Segment>,
     #[serde(default)]
     pub referer: Option<String>,
+    #[serde(default)]
+    pub speed_limit_bps: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct GlobalSpeedLimitConfig {
+    pub enabled: bool,
+    pub limit_bps: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -258,6 +266,7 @@ mod tests {
                 },
             ],
             referer: Some("https://example.com/download-page".to_string()),
+            speed_limit_bps: Some(1024 * 1024),
         };
 
         let json = serde_json::to_string(&task).expect("serialize task");
@@ -265,6 +274,19 @@ mod tests {
         assert_eq!(decoded.id, task.id);
         assert_eq!(decoded.filename, task.filename);
         assert_eq!(decoded.segments.len(), 2);
+        assert_eq!(decoded.referer, Some("https://example.com/download-page".to_string()));
+        assert_eq!(decoded.speed_limit_bps, Some(1024 * 1024));
+    }
+
+    #[test]
+    fn test_global_speed_limit_config_serde() {
+        let config = GlobalSpeedLimitConfig {
+            enabled: true,
+            limit_bps: Some(2 * 1024 * 1024),
+        };
+        let json = serde_json::to_string(&config).expect("serialize config");
+        let decoded: GlobalSpeedLimitConfig = serde_json::from_str(&json).expect("deserialize config");
+        assert_eq!(decoded, config);
     }
 
     #[test]

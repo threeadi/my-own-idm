@@ -98,24 +98,104 @@
     </div>
 
     <!-- Right: Quick Limiter / Priority Controls -->
-    <div class="flex flex-col gap-1 w-full sm:w-auto min-w-[190px] bg-[#1b2028] p-2.5 rounded-lg border border-[#252a33]">
-      <span class="font-sans text-[10px] text-[#8c909f] uppercase tracking-wider font-semibold">
-        Batas Kecepatan
-      </span>
-      <button
-        onclick={() => (store.speedLimiterEnabled = !store.speedLimiterEnabled)}
-        class="w-full h-7 px-2.5 rounded bg-[#252a33] text-[#dee2ee] font-sans text-xs flex items-center justify-between hover:bg-[#343942] transition-colors cursor-pointer border border-[#30353e]"
-        type="button"
-      >
-        <span class="flex items-center gap-1.5 truncate">
-          <Zap class="w-3 h-3 text-[#4edea3]" />
-          {store.speedLimiterEnabled ? 'Dibatasi (Hemat Kuota)' : 'Tak Terbatas (Maksimal)'}
+    <div class="flex flex-col gap-1.5 w-full sm:w-auto min-w-[220px] bg-[#1b2028] p-2.5 rounded-lg border border-[#252a33]">
+      <div class="flex items-center justify-between">
+        <span class="font-sans text-[10px] text-[#8c909f] uppercase tracking-wider font-semibold">
+          Batas Kecepatan Global
         </span>
-      </button>
-      <span class="font-sans text-[11px] text-[#8c909f] flex items-center gap-1 mt-0.5">
-        <ShieldCheck class="w-3.5 h-3.5 text-[#4edea3]" />
-        Prioritas Bandwidth Penuh
-      </span>
+        <button
+          type="button"
+          onclick={() => store.setGlobalSpeedLimit(!store.speedLimiterEnabled)}
+          class="inline-flex items-center gap-1 text-[11px] font-medium transition-colors cursor-pointer {store.speedLimiterEnabled ? 'text-[#00e5ff] font-semibold' : 'text-[#8c909f] hover:text-[#dee2ee]'}"
+        >
+          <span class="w-1.5 h-1.5 rounded-full {store.speedLimiterEnabled ? 'bg-[#00e5ff] shadow-[0_0_8px_#00e5ff]' : 'bg-[#30353e]'}"></span>
+          {store.speedLimiterEnabled ? 'Aktif' : 'Mati'}
+        </button>
+      </div>
+
+      {#if store.speedLimiterEnabled}
+        <!-- Input row with unit selector -->
+        <div class="flex items-center gap-1.5 mt-0.5">
+          <input
+            type="number"
+            min="1"
+            step="any"
+            value={store.globalSpeedLimitValue}
+            oninput={(e) => {
+              const val = parseFloat((e.target as HTMLInputElement).value);
+              if (!isNaN(val) && val > 0) store.setGlobalSpeedLimit(true, val);
+            }}
+            class="w-20 h-7 px-2 bg-[#090e16] text-[#dee2ee] font-mono text-xs font-semibold rounded border border-[#30353e] focus:border-[#00e5ff] focus:outline-none"
+            placeholder="1"
+          />
+
+          <!-- Unit Selector Toggle -->
+          <div class="flex rounded bg-[#090e16] p-0.5 border border-[#30353e]">
+            <button
+              type="button"
+              onclick={() => store.setGlobalSpeedLimit(true, undefined, 'KB/s')}
+              class="px-2 py-0.5 text-[10px] font-mono font-medium rounded transition-colors {store.globalSpeedLimitUnit === 'KB/s' ? 'bg-[#00e5ff] text-slate-950 font-bold' : 'text-[#8c909f] hover:text-[#dee2ee]'}"
+            >
+              KB/s
+            </button>
+            <button
+              type="button"
+              onclick={() => store.setGlobalSpeedLimit(true, undefined, 'MB/s')}
+              class="px-2 py-0.5 text-[10px] font-mono font-medium rounded transition-colors {store.globalSpeedLimitUnit === 'MB/s' ? 'bg-[#00e5ff] text-slate-950 font-bold' : 'text-[#8c909f] hover:text-[#dee2ee]'}"
+            >
+              MB/s
+            </button>
+          </div>
+        </div>
+
+        <!-- Quick Presets -->
+        <div class="flex items-center gap-1 mt-0.5 flex-wrap">
+          <button
+            type="button"
+            onclick={() => store.setGlobalSpeedLimit(true, 500, 'KB/s')}
+            class="px-1.5 py-0.5 rounded bg-[#252a33] hover:bg-[#30353e] text-[10px] font-mono text-[#8c909f] hover:text-[#4cd7f6] transition-colors"
+          >
+            500K
+          </button>
+          <button
+            type="button"
+            onclick={() => store.setGlobalSpeedLimit(true, 1, 'MB/s')}
+            class="px-1.5 py-0.5 rounded bg-[#252a33] hover:bg-[#30353e] text-[10px] font-mono text-[#8c909f] hover:text-[#4cd7f6] transition-colors"
+          >
+            1M
+          </button>
+          <button
+            type="button"
+            onclick={() => store.setGlobalSpeedLimit(true, 2, 'MB/s')}
+            class="px-1.5 py-0.5 rounded bg-[#252a33] hover:bg-[#30353e] text-[10px] font-mono text-[#8c909f] hover:text-[#4cd7f6] transition-colors"
+          >
+            2M
+          </button>
+          <button
+            type="button"
+            onclick={() => store.setGlobalSpeedLimit(true, 5, 'MB/s')}
+            class="px-1.5 py-0.5 rounded bg-[#252a33] hover:bg-[#30353e] text-[10px] font-mono text-[#8c909f] hover:text-[#4cd7f6] transition-colors"
+          >
+            5M
+          </button>
+        </div>
+      {:else}
+        <button
+          onclick={() => store.setGlobalSpeedLimit(true)}
+          class="w-full h-7 px-2.5 rounded bg-[#252a33] text-[#dee2ee] font-sans text-xs flex items-center justify-between hover:bg-[#343942] transition-colors cursor-pointer border border-[#30353e]"
+          type="button"
+        >
+          <span class="flex items-center gap-1.5 truncate">
+            <Zap class="w-3 h-3 text-[#4edea3]" />
+            Tak Terbatas (Maksimal)
+          </span>
+          <span class="text-[10px] text-[#4cd7f6] font-medium">Batasi</span>
+        </button>
+        <span class="font-sans text-[11px] text-[#8c909f] flex items-center gap-1 mt-0.5">
+          <ShieldCheck class="w-3.5 h-3.5 text-[#4edea3]" />
+          Prioritas Bandwidth Penuh
+        </span>
+      {/if}
     </div>
   </div>
 

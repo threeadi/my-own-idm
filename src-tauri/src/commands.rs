@@ -238,6 +238,31 @@ pub async fn refresh_download_url(
     state.manager.refresh_task_url(&task_id, &new_url).await
 }
 
+#[tauri::command]
+pub async fn set_global_speed_limit(
+    state: State<'_, AppState>,
+    enabled: bool,
+    limit_bps: Option<u64>,
+) -> Result<(), String> {
+    state.manager.set_global_speed_limit(enabled, limit_bps).await
+}
+
+#[tauri::command]
+pub async fn get_global_speed_limit(
+    state: State<'_, AppState>,
+) -> Result<crate::engine::types::GlobalSpeedLimitConfig, String> {
+    state.manager.get_global_speed_limit().await
+}
+
+#[tauri::command]
+pub async fn set_task_speed_limit(
+    state: State<'_, AppState>,
+    task_id: String,
+    limit_bps: Option<u64>,
+) -> Result<(), String> {
+    state.manager.set_task_speed_limit(&task_id, limit_bps).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -309,5 +334,23 @@ mod tests {
         let res = open_external_url("javascript:alert(1)".to_string());
         assert!(res.is_err());
         assert!(res.unwrap_err().contains("http://"));
+    }
+
+    #[tokio::test]
+    async fn test_speed_limit_commands_flow() {
+        let db = Arc::new(crate::db::Database::open_in_memory().unwrap());
+        let manager = Arc::new(DownloadManager::new(db));
+
+        // Test global speed limit
+        let res_set = manager.set_global_speed_limit(true, Some(2_000_000)).await;
+        assert!(res_set.is_ok());
+
+        let cfg = manager.get_global_speed_limit().await.unwrap();
+        assert!(cfg.enabled);
+        assert_eq!(cfg.limit_bps, Some(2_000_000));
+
+        // Test task speed limit
+        let res_task = manager.set_task_speed_limit("task-1", Some(1_000_000)).await;
+        assert!(res_task.is_ok());
     }
 }

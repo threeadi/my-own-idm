@@ -130,12 +130,15 @@
 
       <!-- Batasi Kecepatan Toggle -->
       <button
-        onclick={() => (store.speedLimiterEnabled = !store.speedLimiterEnabled)}
-        class="h-7 px-2.5 rounded-lg {store.speedLimiterEnabled ? 'bg-[#03b5d3]/20 text-[#4cd7f6] border border-[#03b5d3]/40' : 'bg-[#252a33] text-[#dee2ee] hover:bg-[#343942]'} text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
-        title="Aktifkan / Nonaktifkan Pembatas Kecepatan"
+        type="button"
+        onclick={() => store.setGlobalSpeedLimit(!store.speedLimiterEnabled)}
+        class="h-7 px-2.5 rounded-lg {store.speedLimiterEnabled ? 'bg-[#00e5ff]/15 text-[#00e5ff] border border-[#00e5ff]/30 shadow-[0_0_10px_rgba(0,229,255,0.2)]' : 'bg-[#252a33] text-[#dee2ee] hover:bg-[#343942]'} text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+        title="Aktifkan / Nonaktifkan Pembatas Kecepatan Global"
       >
-        <Gauge class="w-3 h-3 {store.speedLimiterEnabled ? 'text-[#4cd7f6]' : 'text-[#8c909f]'}" />
-        <span class="hidden lg:inline">{store.speedLimiterEnabled ? 'Kecepatan Terbatas' : 'Batasi Kecepatan'}</span>
+        <Gauge class="w-3 h-3 {store.speedLimiterEnabled ? 'text-[#00e5ff]' : 'text-[#8c909f]'}" />
+        <span class="hidden lg:inline">
+          {store.speedLimiterEnabled ? `Limit: ${store.globalSpeedLimitValue} ${store.globalSpeedLimitUnit}` : 'Batasi Kecepatan'}
+        </span>
       </button>
 
       <!-- Selected Task Actions (if selected) -->

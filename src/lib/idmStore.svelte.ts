@@ -1,6 +1,7 @@
 import { invoke, isTauri as coreIsTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import type { DownloadCategory, DownloadTask, SpeedMetrics } from './types';
+import type { DownloadCategory, DownloadTask, SpeedMetrics, SpeedLimitUnit, GlobalSpeedLimitConfig } from './types';
+import { unitToBps, bpsToUnit } from './types';
 
 export function isTauri(): boolean {
   if (typeof window === 'undefined') return false;
@@ -19,9 +20,15 @@ export class IdmStore {
   viewMode = $state<'cards' | 'table'>('cards');
   sortBy = $state<'date' | 'size' | 'name'>('date');
   speedLimiterEnabled = $state<boolean>(false);
+  globalSpeedLimitValue = $state<number>(1);
+  globalSpeedLimitUnit = $state<SpeedLimitUnit>('MB/s');
   initialAddUrl = $state<string>('');
   initialFilename = $state<string>('');
   initialHeaders = $state<Record<string, string> | null>(null);
+
+  globalSpeedLimitBps = $derived<number | null>(
+    this.speedLimiterEnabled ? unitToBps(this.globalSpeedLimitValue, this.globalSpeedLimitUnit) : null
+  );
 
   isOutcomeModalOpen = $state<boolean>(false);
   outcomeTaskId = $state<string | null>(null);
@@ -143,6 +150,7 @@ export class IdmStore {
             speed_bps: 0,
             eta_seconds: 0,
             referer: "https://x.com/lusthunter/status/18800000",
+            speed_limit_bps: null,
           },
           {
             id: 'mock-2',
@@ -164,6 +172,7 @@ export class IdmStore {
             speed_bps: 12500000,
             eta_seconds: 103,
             referer: "https://releases.ubuntu.com/22.04/",
+            speed_limit_bps: 1048576, // 1 MB/s limit
           },
           {
             id: 'mock-3',
@@ -185,6 +194,7 @@ export class IdmStore {
             speed_bps: 0,
             eta_seconds: 0,
             referer: "https://example.com/download-archive-page",
+            speed_limit_bps: null,
           },
           {
             id: 'mock-4',
@@ -206,6 +216,7 @@ export class IdmStore {
             speed_bps: 0,
             eta_seconds: 0,
             referer: "https://example.com/datasets",
+            speed_limit_bps: null,
           },
         ];
         this.selectedTaskId = 'mock-1';
@@ -214,6 +225,19 @@ export class IdmStore {
     }
     await this.refreshTasks();
     await this.setupEventListeners();
+    try {
+      const cfg = await invoke<GlobalSpeedLimitConfig>('get_global_speed_limit');
+      if (cfg) {
+        this.speedLimiterEnabled = cfg.enabled;
+        if (cfg.limit_bps) {
+          const parsed = bpsToUnit(cfg.limit_bps);
+          this.globalSpeedLimitValue = parsed.value;
+          this.globalSpeedLimitUnit = parsed.unit;
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load global speed limit config:', e);
+    }
   }
 
   async refreshTasks() {
@@ -520,6 +544,45 @@ export class IdmStore {
     const completed = this.tasks.filter((t) => t.status === 'completed');
     for (const t of completed) {
       await this.cancelTask(t.id, false);
+    }
+  }
+
+  async setGlobalSpeedLimit(enabled: boolean, value?: number, unit?: SpeedLimitUnit) {
+    this.speedLimiterEnabled = enabled;
+    if (value !== undefined && !isNaN(value) && value > 0) {
+      this.globalSpeedLimitValue = value;
+    }
+    if (unit !== undefined) {
+      this.globalSpeedLimitUnit = unit;
+    }
+
+    const bps = this.speedLimiterEnabled ? unitToBps(this.globalSpeedLimitValue, this.globalSpeedLimitUnit) : null;
+    if (isTauri()) {
+      try {
+        await invoke('set_global_speed_limit', {
+          enabled: this.speedLimiterEnabled,
+          limitBps: bps,
+        });
+      } catch (e) {
+        console.error('Failed to set global speed limit:', e);
+      }
+    }
+  }
+
+  async setTaskSpeedLimit(taskId: string, limitBps: number | null) {
+    const idx = this.tasks.findIndex((t) => t.id === taskId);
+    if (idx !== -1) {
+      this.tasks[idx].speed_limit_bps = limitBps;
+    }
+    if (isTauri()) {
+      try {
+        await invoke('set_task_speed_limit', {
+          taskId,
+          limitBps,
+        });
+      } catch (e) {
+        console.error('Failed to set task speed limit:', e);
+      }
     }
   }
 }
