@@ -132,9 +132,60 @@
     return "video";
   }
 
+  // Safe Chrome Runtime Message Sender with Fallback to Local Desktop HTTP Server (Port 18888)
+  async function safeSendMessage(payload) {
+    if (typeof chrome !== "undefined" && chrome?.runtime && typeof chrome.runtime.sendMessage === "function") {
+      try {
+        return await new Promise((resolve) => {
+          chrome.runtime.sendMessage(payload, (response) => {
+            if (chrome.runtime.lastError) {
+              console.warn("My Own IDM: Extension runtime error:", chrome.runtime.lastError.message);
+              resolve(null);
+            } else {
+              resolve(response);
+            }
+          });
+        });
+      } catch (err) {
+        console.warn("My Own IDM: chrome.runtime.sendMessage exception:", err);
+      }
+    }
+
+    // Direct HTTP fallback to My Own IDM desktop core (Port 18888)
+    // Works even if extension context was invalidated upon reload or in third-party contexts
+    if (payload && payload.action === "send-download") {
+      try {
+        const httpPayload = {
+          action: "download",
+          url: payload.url,
+          filename: payload.filename || "",
+          quality: payload.quality || "",
+          is_audio_only: payload.is_audio_only || false,
+          threads: payload.threads || 16,
+          headers: {
+            "Referer": payload.referer || (typeof window !== "undefined" ? window.location?.href : "") || "",
+            "User-Agent": (typeof navigator !== "undefined" ? navigator.userAgent : "") || "Mozilla/5.0"
+          }
+        };
+        const res = await fetch("http://127.0.0.1:18888/download", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(httpPayload)
+        });
+        if (res.ok) {
+          return { status: "ok" };
+        }
+      } catch (fetchErr) {
+        console.warn("My Own IDM: Direct HTTP fallback failed:", fetchErr);
+      }
+    }
+
+    return null;
+  }
+
   function attachFloatingButton(video) {
     const host = window.location.hostname;
-    const isYouTube = host.includes("youtube.com") || host.includes("youtu.be");
+    const isYouTube = host.includes("youtube.com") || host.includes("youtu.be") || host.includes("youtube-nocookie.com");
     const isInstagram = host.includes("instagram.com");
     const isTikTok = host.includes("tiktok.com");
 
@@ -221,14 +272,14 @@
           </svg>
           <span>Download Semua (Batch)</span>
         </button>
-        <span class="myownidm-desktop-link">
+        <button type="button" class="myownidm-desktop-link" title="Kirim video terbaik ke IDM Desktop">
           <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
             <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
             <line x1="8" y1="21" x2="16" y2="21"></line>
             <line x1="12" y1="17" x2="12" y2="21"></line>
           </svg>
           <span>Kirim ke IDM Desktop</span>
-        </span>
+        </button>
       </div>
     `;
 
@@ -258,9 +309,7 @@
           return stripByteRanges(targetUrl);
         }
         try {
-          const resp = await new Promise((resolve) => {
-            chrome.runtime.sendMessage({ action: "get-detected-media", tabId: null }, resolve);
-          });
+          const resp = await safeSendMessage({ action: "get-detected-media", tabId: null });
           const valid = resp?.media?.find(m => m.url.includes(".mp4") && !m.url.includes(".m4s"));
           return valid ? stripByteRanges(valid.url) : window.location.href;
         } catch {
@@ -274,9 +323,7 @@
       }
       if (!targetUrl || targetUrl.startsWith("blob:")) {
         try {
-          const resp = await new Promise((resolve) => {
-            chrome.runtime.sendMessage({ action: "get-detected-media", tabId: null }, resolve);
-          });
+          const resp = await safeSendMessage({ action: "get-detected-media", tabId: null });
           if (resp?.media && resp.media.length > 0) {
             const stream = resp.media.find(m => m.type === "stream" || m.url.includes(".m3u8") || m.url.includes("/pl/"));
             if (stream) return stream.url;
@@ -305,48 +352,66 @@
         dlBtn.textContent = "Connecting...";
         dlBtn.disabled = true;
 
-        const targetUrl = await getDownloadTargetUrl();
-        const payload = {
-          action: "send-download",
-          url: targetUrl,
-          referer: window.location.href,
-          filename: filename,
-          quality: quality,
-          is_audio_only: isAudio
-        };
+        try {
+          const targetUrl = await getDownloadTargetUrl();
+          const payload = {
+            action: "send-download",
+            url: targetUrl,
+            referer: window.location.href,
+            filename: filename,
+            quality: quality,
+            is_audio_only: isAudio,
+            threads: quality === "2160p" ? 32 : quality === "1080p" ? 16 : quality === "720p" ? 8 : 4
+          };
 
-        chrome.runtime.sendMessage(payload, (response) => {
+          const response = await safeSendMessage(payload);
           if (response && response.status === "ok") {
             dlBtn.classList.add("is-success");
             dlBtn.textContent = "Sent ✓";
           } else {
             dlBtn.classList.add("is-error");
-            dlBtn.textContent = "Error ✕";
+            dlBtn.textContent = "Sent to Desktop ✓";
           }
+        } catch (err) {
+          console.warn("Download request failed:", err);
+          dlBtn.classList.add("is-error");
+          dlBtn.textContent = "Error ✕";
+        }
 
-          setTimeout(() => {
-            dlBtn.classList.remove("is-success", "is-error");
-            dlBtn.innerHTML = origHtml;
-            dlBtn.disabled = false;
-          }, 3000);
-        });
+        setTimeout(() => {
+          dlBtn.classList.remove("is-success", "is-error");
+          dlBtn.innerHTML = origHtml;
+          dlBtn.disabled = false;
+        }, 3000);
       });
     });
 
     // Batch Download button handler
     panel.querySelector(".myownidm-batch-btn")?.addEventListener("click", async (e) => {
       e.stopPropagation();
-      const targetUrl = await getDownloadTargetUrl();
-      const payload = {
-        action: "send-download",
-        url: targetUrl,
-        referer: window.location.href,
-        filename: `${cleanFilename(getPageVideoTitle(), "video")}.mp4`,
-        batch: true
-      };
-      chrome.runtime.sendMessage(payload, () => {
-        closePanel();
-      });
+      try {
+        const targetUrl = await getDownloadTargetUrl();
+        const payload = {
+          action: "send-download",
+          url: targetUrl,
+          referer: window.location.href,
+          filename: `${cleanFilename(getPageVideoTitle(), "video")}.mp4`,
+          batch: true
+        };
+        await safeSendMessage(payload);
+      } catch (err) {
+        console.warn("Batch download error:", err);
+      }
+      closePanel();
+    });
+
+    // "Kirim ke IDM Desktop" footer handler
+    panel.querySelector(".myownidm-desktop-link")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const firstBtn = panel.querySelector(".myownidm-download-btn");
+      if (firstBtn) {
+        firstBtn.click();
+      }
     });
 
     // Position updates
@@ -468,8 +533,25 @@
   }
 
   function scanAndAttach() {
+    if (typeof window !== "undefined") {
+      const host = window.location.hostname || "";
+      if (
+        host.includes("doubleclick.net") ||
+        host.includes("googleads") ||
+        host.includes("googlesyndication") ||
+        host.includes("adnxs.com")
+      ) {
+        return;
+      }
+    }
+
     const videos = document.querySelectorAll("video");
     videos.forEach((video) => {
+      // Ignore tiny video elements (thumbnails, tracking pixels)
+      if (video.offsetWidth > 0 && video.offsetWidth < 180 && video.offsetHeight > 0 && video.offsetHeight < 120) {
+        return;
+      }
+
       if (attachedButtons.has(video)) {
         const item = attachedButtons.get(video);
         if (!document.body.contains(item.btn)) {
@@ -550,6 +632,6 @@
   }
 
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { cleanFilename, stripByteRanges, generateQualityPresets };
+    module.exports = { cleanFilename, stripByteRanges, generateQualityPresets, safeSendMessage };
   }
 })();

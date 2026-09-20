@@ -1,7 +1,69 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // @ts-expect-error CommonJS import in ESM
 import content from './content.js';
-const { cleanFilename, stripByteRanges, generateQualityPresets } = content;
+const { cleanFilename, stripByteRanges, generateQualityPresets, safeSendMessage } = content;
+
+describe('safeSendMessage', () => {
+  const originalChrome = globalThis.chrome;
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.chrome = originalChrome;
+    globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  it('safely handles undefined chrome without throwing', async () => {
+    globalThis.chrome = undefined;
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true });
+
+    const result = await safeSendMessage({
+      action: 'send-download',
+      url: 'https://example.com/video.mp4',
+      filename: 'video.mp4'
+    });
+
+    expect(result).toEqual({ status: 'ok' });
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:18888/download',
+      expect.objectContaining({ method: 'POST' })
+    );
+  });
+
+  it('sends via chrome.runtime.sendMessage when available', async () => {
+    const mockSendMessage = vi.fn((_payload, callback) => {
+      callback({ status: 'ok' });
+    });
+    globalThis.chrome = {
+      runtime: {
+        sendMessage: mockSendMessage
+      }
+    };
+
+    const result = await safeSendMessage({ action: 'test' });
+    expect(result).toEqual({ status: 'ok' });
+    expect(mockSendMessage).toHaveBeenCalled();
+  });
+
+  it('handles chrome.runtime.lastError gracefully', async () => {
+    const mockSendMessage = vi.fn((_payload, callback) => {
+      globalThis.chrome.runtime.lastError = {
+        message: 'Could not establish connection. Receiving end does not exist.'
+      };
+      callback(undefined);
+    });
+
+    globalThis.chrome = {
+      runtime: {
+        sendMessage: mockSendMessage,
+        lastError: undefined
+      }
+    };
+
+    const result = await safeSendMessage({ action: 'get-detected-media' });
+    expect(result).toBeNull();
+  });
+});
 
 describe('generateQualityPresets', () => {
   it('generates 5 distinct quality presets for detected media', () => {
