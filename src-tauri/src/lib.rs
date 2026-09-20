@@ -72,7 +72,9 @@ pub fn run() {
             commands::open_file,
             commands::open_log_folder,
             commands::get_recent_logs,
-            commands::move_downloaded_file
+            commands::move_downloaded_file,
+            commands::open_external_url,
+            commands::refresh_download_url
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

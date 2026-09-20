@@ -14,15 +14,51 @@
     Folder,
     Zap,
     ArrowUpDown,
-    LayoutGrid,
-    List,
     AlertCircle,
     CheckCircle2,
-    Info
+    Info,
+    RotateCw,
+    Copy,
+    Check,
+    LayoutGrid,
+    List
   } from '@lucide/svelte';
 
   const tasks = $derived(store.filteredTasks);
   const viewMode = $derived(store.viewMode);
+
+  let isContextMenuOpen = $state(false);
+  let contextMenuX = $state(0);
+  let contextMenuY = $state(0);
+  let contextTaskId = $state<string | null>(null);
+  let copiedContextUrl = $state(false);
+
+  const contextTask = $derived(tasks.find((t) => t.id === contextTaskId) || null);
+
+  function handleContextMenu(e: MouseEvent, task: DownloadTask) {
+    e.preventDefault();
+    contextTaskId = task.id;
+    // Keep context menu on screen
+    contextMenuX = Math.min(e.clientX, window.innerWidth - 230);
+    contextMenuY = Math.min(e.clientY, window.innerHeight - 270);
+    isContextMenuOpen = true;
+    store.selectedTaskId = task.id;
+  }
+
+  function closeContextMenu() {
+    isContextMenuOpen = false;
+    contextTaskId = null;
+    copiedContextUrl = false;
+  }
+
+  function copyContextUrl() {
+    if (!contextTask) return;
+    navigator.clipboard.writeText(contextTask.url);
+    copiedContextUrl = true;
+    setTimeout(() => {
+      closeContextMenu();
+    }, 600);
+  }
 
   function getFileIcon(category: string) {
     switch (category) {
@@ -70,6 +106,8 @@
     else store.sortBy = 'date';
   }
 </script>
+
+<svelte:window onclick={closeContextMenu} onkeydown={(e) => e.key === 'Escape' && closeContextMenu()} />
 
 <div class="flex-1 flex flex-col min-w-0 overflow-y-auto select-none bg-[#0f141c] pr-1">
   <!-- Control & Filter Header Bar -->
@@ -168,6 +206,7 @@
         <article
           onclick={() => handleTaskClick(task)}
           ondblclick={() => handleTaskDoubleClick(task)}
+          oncontextmenu={(e) => handleContextMenu(e, task)}
           class="p-3 sm:p-3.5 rounded-xl bg-[#171c24] hover:bg-[#1b2028] transition-all border {isSelected ? 'border-[#00e5ff] shadow-[0_0_12px_rgba(0,229,255,0.25)]' : 'border-[#252a33]'} shadow-md flex flex-col gap-2 group cursor-pointer"
         >
           <!-- Top Row: Icon + Meta + Actions -->
@@ -244,6 +283,13 @@
                 >
                   <Play class="w-3.5 h-3.5 fill-[#dee2ee]" />
                 </button>
+                <button
+                  onclick={(e) => { e.stopPropagation(); store.startRefreshLink(task.id); }}
+                  class="w-7 h-7 rounded-lg bg-[#252a33] text-[#00e5ff] hover:bg-[#00e5ff]/20 flex items-center justify-center transition-colors cursor-pointer"
+                  title="Perbarui Tautan Unduhan (Refresh Link)"
+                >
+                  <RotateCw class="w-3.5 h-3.5" />
+                </button>
               {/if}
 
               <button
@@ -282,23 +328,11 @@
 
           <!-- Segmented Multi-Thread Parallel Buffer Bar -->
           <div class="flex flex-col gap-1 pt-1">
-            <div class="h-2 w-full bg-[#090e16] rounded-full overflow-hidden flex gap-[2px] p-[1px] border border-[#252a33]">
-              {#if task.segments && task.segments.length > 0}
-                {#each task.segments as seg}
-                  {@const segTotal = seg.end_byte - seg.start_byte + 1}
-                  {@const segDone = segTotal > 0 ? (seg.downloaded_bytes / segTotal) : 0}
-                  <div
-                    class="h-full rounded-sm transition-all {seg.is_finished ? 'bg-[#10b981]' : isDownloading && segDone > 0 ? 'bg-[#00e5ff] shadow-[0_0_8px_rgba(0,229,255,0.4)]' : 'bg-[#252a33]'}"
-                    style="flex: 1;"
-                    title="Bagian #{seg.index + 1}: {(segDone * 100).toFixed(0)}%"
-                  ></div>
-                {/each}
-              {:else}
-                <div
-                  class="h-full rounded-full transition-all duration-300 {isCompleted ? 'bg-[#10b981]' : isDownloading ? 'bg-[#00e5ff] shadow-glow-cyan' : 'bg-[#252a33]'}"
-                  style="width: {pct}%"
-                ></div>
-              {/if}
+            <div class="w-full bg-[#090e16] rounded-full h-2 overflow-hidden border border-[#252a33]/60 relative">
+              <div
+                class="h-full rounded-full transition-all duration-300 {isCompleted ? 'bg-[#10b981]' : isDownloading ? 'bg-gradient-to-r from-[#00e5ff] to-[#4d8eff]' : 'bg-[#30353e]'}"
+                style="width: {pct}%"
+              ></div>
             </div>
 
             <div class="flex items-center justify-between text-[10px] text-[#8c909f] px-0.5">
@@ -327,7 +361,7 @@
             <th class="py-2.5 px-3 w-24">Kecepatan</th>
             <th class="py-2.5 px-3 w-20">Sisa Waktu</th>
             <th class="py-2.5 px-3 w-24">Status</th>
-            <th class="py-2.5 px-3 w-24 text-right">Aksi</th>
+            <th class="py-2.5 px-3 w-32 text-right">Aksi</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-[#252a33]/60 font-sans">
@@ -338,6 +372,7 @@
             <tr
               onclick={() => handleTaskClick(task)}
               ondblclick={() => handleTaskDoubleClick(task)}
+              oncontextmenu={(e) => handleContextMenu(e, task)}
               class="group transition-colors cursor-pointer {isSelected ? 'bg-[#00e5ff]/10 text-[#dee2ee] border-l-2 border-l-[#00e5ff]' : 'hover:bg-[#1b2028] text-[#c2c6d6]'}"
             >
               <td class="py-2 px-3 text-center text-[#8c909f] font-mono text-[11px]">{index + 1}</td>
@@ -378,6 +413,16 @@
               </td>
               <td class="py-2 px-3 text-right">
                 <div class="flex items-center justify-end gap-1">
+                  {#if task.status !== 'completed'}
+                    <button
+                      onclick={(e) => { e.stopPropagation(); store.startRefreshLink(task.id); }}
+                      class="px-2 py-0.5 rounded bg-[#00e5ff]/15 hover:bg-[#00e5ff]/25 text-[#00e5ff] text-[10px] font-semibold cursor-pointer flex items-center gap-1"
+                      title="Perbarui Tautan Unduhan"
+                    >
+                      <RotateCw class="w-3 h-3" />
+                      <span>Refresh</span>
+                    </button>
+                  {/if}
                   <button
                     onclick={(e) => { e.stopPropagation(); store.openPropertiesModal(task.id); }}
                     class="px-2 py-0.5 rounded bg-[#252a33] text-slate-300 hover:text-[#00e5ff] hover:bg-[#343942] text-[10px] font-semibold cursor-pointer"
@@ -397,6 +442,106 @@
           {/each}
         </tbody>
       </table>
+    </div>
+  {/if}
+
+  <!-- Context Menu (Obsidian & Cyan Floating Shell) -->
+  {#if isContextMenuOpen && contextTask}
+    <div
+      class="fixed z-50 w-56 bg-[#171c24] border border-[#30353e] rounded-xl shadow-2xl shadow-black/90 p-1 text-xs text-slate-200 animate-in fade-in zoom-in-95 duration-100 select-none"
+      style="top: {contextMenuY}px; left: {contextMenuX}px;"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => { if (e.key === 'Escape') closeContextMenu(); }}
+      role="menu"
+      tabindex="-1"
+    >
+      <div class="px-3 py-1.5 border-b border-[#252a33] mb-1">
+        <p class="font-mono text-[11px] font-semibold text-white truncate">{contextTask.filename}</p>
+        <p class="text-[10px] text-slate-400 font-mono capitalize">
+          Status: {typeof contextTask.status === 'string' ? contextTask.status : 'Gagal'}
+        </p>
+      </div>
+
+      {#if contextTask.status === 'downloading'}
+        <button
+          onclick={() => { store.pauseTask(contextTask.id); closeContextMenu(); }}
+          class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-[#252a33] text-amber-300 transition text-left cursor-pointer"
+          role="menuitem"
+        >
+          <Pause class="w-3.5 h-3.5" />
+          <span>Jeda Unduhan</span>
+        </button>
+      {:else if contextTask.status !== 'completed'}
+        <button
+          onclick={() => { store.resumeTask(contextTask.id); closeContextMenu(); }}
+          class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-[#252a33] text-emerald-400 transition text-left cursor-pointer"
+          role="menuitem"
+        >
+          <Play class="w-3.5 h-3.5" />
+          <span>Lanjutkan Unduhan</span>
+        </button>
+        <button
+          onclick={() => { store.startRefreshLink(contextTask.id); closeContextMenu(); }}
+          class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-[#00e5ff]/15 text-[#00e5ff] font-semibold transition text-left cursor-pointer"
+          role="menuitem"
+        >
+          <RotateCw class="w-3.5 h-3.5 text-[#00e5ff]" />
+          <span>Perbarui Tautan Unduhan...</span>
+        </button>
+      {/if}
+
+      {#if contextTask.status === 'completed'}
+        <button
+          onclick={() => { store.openFile(contextTask.file_path); closeContextMenu(); }}
+          class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-[#252a33] text-white transition text-left cursor-pointer"
+          role="menuitem"
+        >
+          <Play class="w-3.5 h-3.5 text-[#00e5ff]" />
+          <span>Buka Berkas</span>
+        </button>
+        <button
+          onclick={() => { store.openFolder(contextTask.file_path); closeContextMenu(); }}
+          class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-[#252a33] text-slate-200 transition text-left cursor-pointer"
+          role="menuitem"
+        >
+          <FolderOpen class="w-3.5 h-3.5 text-blue-400" />
+          <span>Buka Folder</span>
+        </button>
+      {/if}
+
+      <button
+        onclick={copyContextUrl}
+        class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-[#252a33] text-slate-300 transition text-left cursor-pointer"
+        role="menuitem"
+      >
+        {#if copiedContextUrl}
+          <Check class="w-3.5 h-3.5 text-emerald-400" />
+          <span class="text-emerald-400">Tautan Tersalin!</span>
+        {:else}
+          <Copy class="w-3.5 h-3.5 text-slate-400" />
+          <span>Salin Tautan Unduhan</span>
+        {/if}
+      </button>
+
+      <div class="h-px bg-[#252a33] my-1"></div>
+
+      <button
+        onclick={() => { store.openPropertiesModal(contextTask.id); closeContextMenu(); }}
+        class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-[#252a33] text-slate-300 transition text-left cursor-pointer"
+        role="menuitem"
+      >
+        <Info class="w-3.5 h-3.5 text-cyan-400" />
+        <span>Properti Berkas</span>
+      </button>
+
+      <button
+        onclick={() => { store.cancelTask(contextTask.id, false); closeContextMenu(); }}
+        class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-red-500/20 text-red-400 transition text-left cursor-pointer"
+        role="menuitem"
+      >
+        <Trash2 class="w-3.5 h-3.5 text-red-400" />
+        <span>Hapus dari Antrean</span>
+      </button>
     </div>
   {/if}
 </div>

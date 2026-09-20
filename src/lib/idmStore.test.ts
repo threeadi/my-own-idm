@@ -5,9 +5,11 @@ import type { DownloadTask, SpeedMetrics } from './types';
 const mockInvoke = vi.fn();
 const eventListeners = new Map<string, (event: { payload: any }) => void>();
 
+let mockIsTauriReturn = true;
+
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: (...args: any[]) => mockInvoke(...args),
-  isTauri: () => true,
+  isTauri: () => mockIsTauriReturn,
 }));
 
 vi.mock('@tauri-apps/api/event', () => ({
@@ -201,7 +203,7 @@ describe('IdmStore State & Filtering', () => {
     delete (globalThis as any).window;
     const store = new IdmStore();
     await store.init(); // Should log info and load preview mock tasks
-    expect(store.tasks.length).toBe(3);
+    expect(store.tasks.length).toBe(4);
     expect(store.tasks[0].id).toBe('mock-1');
   });
 
@@ -529,7 +531,134 @@ describe('IdmStore State & Filtering', () => {
     failedHandler!({ payload: 't-prefailed' });
     expect(store.outcomeErrorMessage).toBe('Server dropped stream');
   });
+
+  it('handles startRefreshLink and cancelRefreshLink', () => {
+    const store = new IdmStore();
+    const task = makeTask({
+      id: 'refresh-1',
+      url: 'https://example.com/file.zip',
+      referer: 'https://example.com/page',
+    });
+    store.tasks = [task];
+    store.isOutcomeModalOpen = true;
+    store.isPropertiesModalOpen = true;
+    store.isProgressModalOpen = true;
+
+    const openSpy = vi.spyOn(store, 'openExternalUrl').mockImplementation(async () => {});
+
+    // Task not found
+    store.startRefreshLink('non-existent');
+    expect(store.isRefreshModalOpen).toBe(false);
+
+    // Task found
+    store.startRefreshLink('refresh-1');
+    expect(store.isRefreshModalOpen).toBe(true);
+    expect(store.refreshTaskId).toBe('refresh-1');
+    expect(store.refreshDetectedUrl).toBeNull();
+    expect(store.refreshError).toBeNull();
+    expect(store.refreshCountdown).toBe(3);
+    expect(store.refreshTask?.id).toBe('refresh-1');
+    expect(store.isOutcomeModalOpen).toBe(false);
+    expect(store.isPropertiesModalOpen).toBe(false);
+    expect(store.isProgressModalOpen).toBe(false);
+    expect(openSpy).toHaveBeenCalledWith('https://example.com/page');
+
+    // cancel
+    store.cancelRefreshLink();
+    expect(store.isRefreshModalOpen).toBe(false);
+    expect(store.refreshTaskId).toBeNull();
+    expect(store.refreshDetectedUrl).toBeNull();
+    expect(store.refreshError).toBeNull();
+  });
+
+  it('routes browser-download-requested to refreshDetectedUrl when refresh modal is active', async () => {
+    const store = new IdmStore();
+    await store.setupEventListeners();
+    const handler = eventListeners.get('browser-download-requested');
+    expect(handler).toBeDefined();
+
+    store.isRefreshModalOpen = true;
+    store.refreshTaskId = 'refresh-active';
+
+    handler!({
+      payload: {
+        url: 'https://cdn.example.com/refreshed-link.mp4',
+        filename: 'video.mp4',
+        headers: {},
+      },
+    });
+
+    expect(store.refreshDetectedUrl).toBe('https://cdn.example.com/refreshed-link.mp4');
+    expect(store.isAddModalOpen).toBe(false);
+  });
+
+  it('applies refreshed URL successfully', async () => {
+    const store = new IdmStore();
+    const task = makeTask({
+      id: 'task-refresh-apply',
+      url: 'https://old.com/expired.iso',
+      status: { failed: 'Expired token' } as any,
+    });
+    store.tasks = [task];
+    store.refreshTaskId = 'task-refresh-apply';
+    store.isRefreshModalOpen = true;
+
+    mockInvoke.mockResolvedValue(undefined);
+    const resumeSpy = vi.spyOn(store, 'resumeTask').mockResolvedValue();
+
+    await store.applyRefreshedUrl('https://new.com/fresh.iso');
+
+    expect(mockInvoke).toHaveBeenCalledWith('refresh_download_url', {
+      taskId: 'task-refresh-apply',
+      newUrl: 'https://new.com/fresh.iso',
+    });
+    expect(store.tasks[0].url).toBe('https://new.com/fresh.iso');
+    expect(store.tasks[0].error_message).toBeNull();
+    expect(store.tasks[0].status).toBe('paused');
+    expect(store.isRefreshModalOpen).toBe(false);
+    expect(resumeSpy).toHaveBeenCalledWith('task-refresh-apply');
+
+    // Early return if no refreshTaskId
+    store.refreshTaskId = null;
+    await store.applyRefreshedUrl('https://another.com/file');
+  });
+
+  it('handles error in applyRefreshedUrl', async () => {
+    const store = new IdmStore();
+    store.tasks = [makeTask({ id: 'task-refresh-err' })];
+    store.refreshTaskId = 'task-refresh-err';
+
+    mockInvoke.mockRejectedValueOnce(new Error('URL size mismatch'));
+
+    await expect(store.applyRefreshedUrl('https://bad.com/file')).rejects.toThrow(
+      'URL size mismatch'
+    );
+    expect(store.refreshError).toBe('URL size mismatch');
+  });
+
+  it('handles openExternalUrl in Tauri and browser fallback', async () => {
+    const store = new IdmStore();
+    mockInvoke.mockResolvedValue(undefined);
+
+    await store.openExternalUrl('https://google.com');
+    expect(mockInvoke).toHaveBeenCalledWith('open_external_url', { url: 'https://google.com' });
+
+    // IPC error branch
+    mockInvoke.mockRejectedValueOnce(new Error('Shell error'));
+    await store.openExternalUrl('https://error.com'); // should not throw
+
+    // Non-Tauri fallback branch
+    mockIsTauriReturn = false;
+    const windowOpenMock = vi.fn();
+    (globalThis as any).window = { open: windowOpenMock };
+
+    await store.openExternalUrl('https://browser.com');
+    expect(windowOpenMock).toHaveBeenCalledWith('https://browser.com', '_blank');
+
+    mockIsTauriReturn = true;
+  });
 });
+
 
 
 

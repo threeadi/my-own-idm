@@ -101,7 +101,20 @@ d:/Development/my-own-idm/
   - **Tutup** -> calls `store.closeOutcomeModal()`
 - Modals use clean translucent overlays (`bg-black/40 backdrop-blur-[2px]`) and draggable headers (`data-tauri-drag-region`), avoiding heavy blackout backdrops.
 
+### D. Refresh Download Address Flow (Expiring URLs & Resumption)
+- **Problem**: Temporary CDN tokens, signed URLs (YouTube, GDrive, video hosts), or long pauses can cause URL expiration (`HTTP 403`, `HTTP 410`, or timeout).
+- **Core Invariant**: A download must NEVER lose partially downloaded bytes when its URL expires or times out.
+- **Interaction Points**:
+  1. In [DownloadOutcomeModal.svelte](file:///d:/Development/my-own-idm/src/components/DownloadOutcomeModal.svelte): Provide a "Perbarui Tautan" (Refresh Link) action when a download fails due to auth/expiration/timeout.
+  2. In [DownloadTable.svelte](file:///d:/Development/my-own-idm/src/components/DownloadTable.svelte): Add "Perbarui Tautan Unduhan..." in the contextual right-click menu and action bar for `paused` and `failed` tasks.
+- **Workflow**:
+  1. Triggering "Refresh Link" opens the original `referer` or source URL in the user's default browser and opens [RefreshLinkModal.svelte](file:///d:/Development/my-own-idm/src/components/RefreshLinkModal.svelte) ("Menunggu Tautan Baru dari Browser...").
+  2. When the user re-initiates the download on the webpage, the browser extension captures the fresh URL/cookies and emits `browser-download-requested`.
+  3. The desktop core performs a fast probe to validate `supports_range` and `total_bytes` parity, then updates `task.url` in SQLite and in-memory engine, keeping existing `.part` files, downloaded byte counts, and segment checkpoints intact.
+  4. The download immediately resumes from the existing byte offset.
+
 ---
+
 
 ## 4. Design System Tokens (Stitch "Kinetic Telemetry")
 

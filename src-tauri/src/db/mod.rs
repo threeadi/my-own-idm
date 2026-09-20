@@ -16,6 +16,7 @@ impl Database {
         }
         let conn = Connection::open(db_path)?;
         conn.execute_batch(schema::CREATE_TABLES)?;
+        let _ = conn.execute("ALTER TABLE downloads ADD COLUMN referer TEXT", []);
         Ok(Self {
             conn: Mutex::new(conn),
         })
@@ -24,6 +25,7 @@ impl Database {
     pub fn open_in_memory() -> Result<Self> {
         let conn = Connection::open_in_memory()?;
         conn.execute_batch(schema::CREATE_TABLES)?;
+        let _ = conn.execute("ALTER TABLE downloads ADD COLUMN referer TEXT", []);
         Ok(Self {
             conn: Mutex::new(conn),
         })
@@ -38,8 +40,8 @@ impl Database {
             r#"INSERT OR REPLACE INTO downloads (
                 id, url, filename, save_dir, file_path, total_bytes, downloaded_bytes,
                 category, status, connections, supports_range, is_hls, created_at,
-                completed_at, error_message
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)"#,
+                completed_at, error_message, referer
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)"#,
             params![
                 task.id,
                 task.url,
@@ -55,7 +57,8 @@ impl Database {
                 if task.is_hls { 1 } else { 0 },
                 task.created_at,
                 task.completed_at,
-                task.error_message
+                task.error_message,
+                task.referer
             ],
         )?;
 
@@ -140,7 +143,7 @@ impl Database {
             r#"SELECT 
                 id, url, filename, save_dir, file_path, total_bytes, downloaded_bytes,
                 category, status, connections, supports_range, is_hls, created_at,
-                completed_at, error_message
+                completed_at, error_message, referer
             FROM downloads ORDER BY created_at DESC"#,
         )?;
 
@@ -161,6 +164,7 @@ impl Database {
             let created_at: String = row.get(12)?;
             let completed_at: Option<String> = row.get(13)?;
             let error_message: Option<String> = row.get(14)?;
+            let referer: Option<String> = row.get(15)?;
 
             let category: DownloadCategory = serde_json::from_str(&category_str).unwrap_or(DownloadCategory::General);
             let mut status: TaskStatus = serde_json::from_str(&status_str).unwrap_or(TaskStatus::Queued);
@@ -187,6 +191,7 @@ impl Database {
                 completed_at,
                 error_message,
                 segments: Vec::new(),
+                referer,
             })
         })?;
 
@@ -220,6 +225,24 @@ impl Database {
         }
 
         Ok(tasks)
+    }
+
+    pub fn update_task_url(&self, task_id: &str, new_url: &str) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE downloads SET url = ?1 WHERE id = ?2",
+            params![new_url, task_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_task_referer(&self, task_id: &str, referer: &str) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE downloads SET referer = ?1 WHERE id = ?2",
+            params![referer, task_id],
+        )?;
+        Ok(())
     }
 
     pub fn get_setting(&self, key: &str) -> Result<Option<String>> {
@@ -277,6 +300,7 @@ mod tests {
                     is_finished: false,
                 },
             ],
+            referer: Some("https://example.com/download-page".to_string()),
         }
     }
 
@@ -405,5 +429,20 @@ mod tests {
         let loaded = db.load_all_tasks().expect("load");
         assert_eq!(loaded[0].save_dir, "D:\\NewFolder");
         assert_eq!(loaded[0].file_path, "D:\\NewFolder\\test.mp4");
+    }
+
+    #[test]
+    fn test_db_update_task_url_and_referer() {
+        let db = Database::open_in_memory().expect("open in-memory db");
+        let task = create_sample_task("task-ref-1", TaskStatus::Paused);
+        db.insert_task(&task).expect("insert");
+
+        db.update_task_url("task-ref-1", "https://new-cdn.example.com/test.zip").expect("update url");
+        db.update_task_referer("task-ref-1", "https://example.com/fresh-page").expect("update referer");
+
+        let loaded = db.load_all_tasks().expect("load");
+        assert_eq!(loaded[0].url, "https://new-cdn.example.com/test.zip");
+        assert_eq!(loaded[0].referer, Some("https://example.com/fresh-page".to_string()));
+        assert_eq!(loaded[0].downloaded_bytes, 200); // Bytes preserved
     }
 }

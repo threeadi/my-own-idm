@@ -11,6 +11,7 @@
   import DownloadOutcomeModal from '../components/DownloadOutcomeModal.svelte';
   import FilePropertiesModal from '../components/FilePropertiesModal.svelte';
   import SettingsModal from '../components/SettingsModal.svelte';
+  import RefreshLinkModal from '../components/RefreshLinkModal.svelte';
 
   onMount(() => {
     store.init();
@@ -25,6 +26,12 @@
           'failed',
           'HTTP 504 Gateway Timeout / Sambungan Ditolak oleh Host Server'
         );
+      } else if (urlParams.get('test_refresh') === 'listening') {
+        store.startRefreshLink('mock-4');
+      } else if (urlParams.get('test_refresh') === 'detected') {
+        store.startRefreshLink('mock-4');
+        store.refreshDetectedUrl =
+          'https://instagram.fsrg2-1.fna.fbcdn.net/v/t50.2886-16/fresh_token_video_1080p.mp4';
       }
     }
   });
@@ -57,6 +64,7 @@
   <DownloadProgressModal />
   <DownloadOutcomeModal />
   <FilePropertiesModal />
+  <RefreshLinkModal />
   <SettingsModal />
 </div>
 

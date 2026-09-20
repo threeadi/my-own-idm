@@ -90,6 +90,8 @@ pub struct DownloadTask {
     pub completed_at: Option<String>,
     pub error_message: Option<String>,
     pub segments: Vec<Segment>,
+    #[serde(default)]
+    pub referer: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -255,6 +257,7 @@ mod tests {
                     is_finished: false,
                 },
             ],
+            referer: Some("https://example.com/download-page".to_string()),
         };
 
         let json = serde_json::to_string(&task).expect("serialize task");

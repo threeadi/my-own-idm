@@ -11,7 +11,7 @@ use crate::db::Database;
 use crate::engine::hls::HlsDownloader;
 use crate::engine::probe::Prober;
 use crate::engine::types::{
-    DownloadCategory, DownloadTask, Segment, SpeedMetrics, TaskStatus,
+    DownloadCategory, DownloadTask, ProbeResult, Segment, SpeedMetrics, TaskStatus,
 };
 use crate::engine::worker::SegmentWorker;
 use crate::engine::writer::FileWriter;
@@ -72,6 +72,49 @@ impl DownloadManager {
         }
     }
 
+    pub async fn refresh_task_url(
+        &self,
+        task_id: &str,
+        new_url: &str,
+    ) -> Result<ProbeResult, String> {
+        let clean_url = crate::engine::probe::clean_stream_url(new_url);
+
+        // 1. Probe the new URL
+        let probe = Prober::probe(&self.client, &clean_url, None).await?;
+
+        // 2. Validate with existing task
+        {
+            let mut tasks = self.tasks.write().await;
+            if let Some(task) = tasks.get_mut(task_id) {
+                // Parity check: if old task had known total_bytes, ensure new_url matches
+                if let (Some(old_size), Some(new_size)) = (task.total_bytes, probe.total_bytes) {
+                    if old_size != new_size {
+                        return Err(format!(
+                            "Ukuran berkas baru ({} bytes) tidak sesuai dengan unduhan sebelumnya ({} bytes)",
+                            new_size, old_size
+                        ));
+                    }
+                }
+                if task.downloaded_bytes > 0 && !probe.supports_range && !probe.is_hls {
+                    return Err("Server URL baru tidak mendukung Range (resume byte offset)".to_string());
+                }
+
+                // Update task URL in memory
+                task.url = clean_url.clone();
+                task.error_message = None;
+            } else {
+                return Err("Task not found".to_string());
+            }
+        }
+
+        // 3. Update DB
+        self.db
+            .update_task_url(task_id, &clean_url)
+            .map_err(|e| format!("Database error: {}", e))?;
+
+        Ok(probe)
+    }
+
     pub async fn prepare_download_task(
         &self,
         url: &str,
@@ -81,6 +124,11 @@ impl DownloadManager {
         custom_headers: Option<HashMap<String, String>>,
     ) -> Result<(DownloadTask, Arc<AtomicBool>), String> {
         let clean_url = crate::engine::probe::clean_stream_url(url);
+
+        let referer = custom_headers
+            .as_ref()
+            .and_then(|h| h.get("Referer").or_else(|| h.get("referer")))
+            .cloned();
 
         // 1. Probe URL to detect range support, actual size and HLS
         let probe = Prober::probe(&self.client, &clean_url, custom_headers).await?;
@@ -154,6 +202,7 @@ impl DownloadManager {
             completed_at: None,
             error_message: None,
             segments,
+            referer,
         };
 
         // Save to DB and Memory
@@ -777,6 +826,7 @@ mod tests {
             completed_at: None,
             error_message: None,
             segments: vec![],
+            referer: None,
         };
         db.insert_task(&task1).unwrap();
 
@@ -818,6 +868,7 @@ mod tests {
             completed_at: None,
             error_message: None,
             segments: vec![],
+            referer: None,
         };
         db.insert_task(&task2).unwrap();
         manager.tasks.write().await.insert("task-mgr-2".to_string(), task2);
@@ -850,6 +901,7 @@ mod tests {
             completed_at: None,
             error_message: None,
             segments: vec![],
+            referer: None,
         };
         manager.tasks.write().await.insert("task-mgr-3".to_string(), task3);
         let del_res = manager.cancel_download("task-mgr-3", true).await;
@@ -1055,6 +1107,7 @@ mod tests {
                 downloaded_bytes: 0,
                 is_finished: false,
             }],
+            referer: None,
         };
         db.insert_task(&task).unwrap();
 
@@ -1101,6 +1154,7 @@ mod tests {
             completed_at: None,
             error_message: None,
             segments: vec![],
+            referer: None,
         };
         db.insert_task(&task).unwrap();
 
@@ -1153,6 +1207,7 @@ mod tests {
             completed_at: None,
             error_message: None,
             segments: vec![],
+            referer: None,
         };
         db.insert_task(&task).unwrap();
 
@@ -1205,6 +1260,7 @@ mod tests {
             completed_at: None,
             error_message: None,
             segments: vec![],
+            referer: None,
         };
         db.insert_task(&task).unwrap();
 
@@ -1228,6 +1284,132 @@ mod tests {
 
         let evs = events.lock().unwrap();
         assert!(evs.iter().any(|(name, _)| name == "download-paused"));
+    }
+
+    #[tokio::test]
+    async fn test_manager_refresh_task_url_success_and_parity() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        tokio::spawn(async move {
+            while let Ok((mut socket, _)) = listener.accept().await {
+                tokio::spawn(async move {
+                    let mut buf = [0u8; 1024];
+                    let _ = socket.read(&mut buf).await;
+                    let resp = "HTTP/1.1 200 OK\r\n\
+                                Content-Length: 100\r\n\
+                                Accept-Ranges: bytes\r\n\
+                                Connection: close\r\n\r\n";
+                    let _ = socket.write_all(resp.as_bytes()).await;
+                    let _ = socket.flush().await;
+                });
+            }
+        });
+
+        let db = Arc::new(Database::open_in_memory().unwrap());
+        let manager = DownloadManager::new(db.clone());
+
+        let initial_task = DownloadTask {
+            id: "task-refresh-1".to_string(),
+            url: "http://expired-url.example.com/file.bin".to_string(),
+            filename: "file.bin".to_string(),
+            save_dir: "C:\\Downloads".to_string(),
+            file_path: "C:\\Downloads\\file.bin".to_string(),
+            total_bytes: Some(100),
+            downloaded_bytes: 40,
+            category: DownloadCategory::General,
+            status: TaskStatus::Paused,
+            connections: 4,
+            supports_range: true,
+            is_hls: false,
+            created_at: "2026-09-20 12:00:00".to_string(),
+            completed_at: None,
+            error_message: Some("Connection timeout".to_string()),
+            segments: vec![],
+            referer: Some("https://example.com/download".to_string()),
+        };
+        db.insert_task(&initial_task).unwrap();
+        manager.tasks.write().await.insert("task-refresh-1".to_string(), initial_task);
+
+        let fresh_url = format!("http://{}/fresh_file.bin", addr);
+        let result = manager.refresh_task_url("task-refresh-1", &fresh_url).await;
+        assert!(result.is_ok(), "Expected refresh_task_url to succeed: {:?}", result.err());
+
+        // Verify task updated in memory
+        let tasks = manager.tasks.read().await;
+        let updated = tasks.get("task-refresh-1").unwrap();
+        assert_eq!(updated.url, fresh_url);
+        assert_eq!(updated.downloaded_bytes, 40); // Preserved byte progress
+        assert_eq!(updated.error_message, None);
+
+        // Verify task updated in DB
+        let db_tasks = db.load_all_tasks().unwrap();
+        assert_eq!(db_tasks[0].url, fresh_url);
+    }
+
+    #[tokio::test]
+    async fn test_manager_refresh_task_url_size_mismatch() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        tokio::spawn(async move {
+            while let Ok((mut socket, _)) = listener.accept().await {
+                tokio::spawn(async move {
+                    let mut buf = [0u8; 1024];
+                    let _ = socket.read(&mut buf).await;
+                    let resp = "HTTP/1.1 200 OK\r\n\
+                                Content-Length: 9999\r\n\
+                                Accept-Ranges: bytes\r\n\
+                                Connection: close\r\n\r\n";
+                    let _ = socket.write_all(resp.as_bytes()).await;
+                    let _ = socket.flush().await;
+                });
+            }
+        });
+
+        let db = Arc::new(Database::open_in_memory().unwrap());
+        let manager = DownloadManager::new(db.clone());
+
+        let initial_task = DownloadTask {
+            id: "task-refresh-mismatch".to_string(),
+            url: "http://expired.example.com/file.bin".to_string(),
+            filename: "file.bin".to_string(),
+            save_dir: "C:\\Downloads".to_string(),
+            file_path: "C:\\Downloads\\file.bin".to_string(),
+            total_bytes: Some(100), // Old size 100 vs New size 9999
+            downloaded_bytes: 20,
+            category: DownloadCategory::General,
+            status: TaskStatus::Paused,
+            connections: 4,
+            supports_range: true,
+            is_hls: false,
+            created_at: "2026-09-20 12:00:00".to_string(),
+            completed_at: None,
+            error_message: None,
+            segments: vec![],
+            referer: None,
+        };
+        db.insert_task(&initial_task).unwrap();
+        manager.tasks.write().await.insert("task-refresh-mismatch".to_string(), initial_task);
+
+        let fresh_url = format!("http://{}/different_size.bin", addr);
+        let result = manager.refresh_task_url("task-refresh-mismatch", &fresh_url).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("tidak sesuai"));
+    }
+
+    #[tokio::test]
+    async fn test_manager_refresh_task_not_found() {
+        let db = Arc::new(Database::open_in_memory().unwrap());
+        let manager = DownloadManager::new(db.clone());
+        let result = manager.refresh_task_url("non-existent-task", "http://127.0.0.1:9999/test.bin").await;
+        assert!(result.is_err());
     }
 
     #[tokio::test]

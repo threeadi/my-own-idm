@@ -9,3 +9,5 @@ See the complete developer and agent context guide in [AGENTS.md](file:///d:/Dev
 - **Test Coverage Requirement**: Minimum **> 80% coverage** on both Frontend (`npm run test:coverage`) and Backend (`npm run test:backend:coverage`).
 - **Modal Lifecycle**: Progress dialog auto-closes upon completion or failure, displaying `DownloadOutcomeModal` with direct file & folder opening triggers.
 - **Window Styling**: Modals use lightweight translucent overlays (`bg-black/40 backdrop-blur-[2px]`) with draggable headers (`data-tauri-drag-region`).
+- **URL Expiration & Refresh Link**: Supports IDM-style "Perbarui Tautan" (Refresh Download Address) via context menu on paused/failed tasks or failure modal; preserves existing downloaded byte progress when replacing expired URLs.
+

@@ -23,6 +23,7 @@
     Terminal,
     CloudOff,
     CheckCircle,
+    RotateCw,
   } from "@lucide/svelte";
 
   const task = $derived(store.outcomeTask);
@@ -576,12 +577,21 @@
               Batal & Simpan
             </button>
             <button
+              onclick={() => task && store.startRefreshLink(task.id)}
+              class="px-3.5 py-2 rounded-xl text-xs font-bold text-[#00e5ff] bg-[#00e5ff]/15 hover:bg-[#00e5ff]/25 border border-[#00e5ff]/35 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
+              type="button"
+              title="Perbarui link unduhan dari browser atau URL baru"
+            >
+              <RotateCw class="w-3.5 h-3.5 text-[#00e5ff]" />
+              <span>Perbarui Tautan</span>
+            </button>
+            <button
               onclick={handleRetry}
-              class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-[#2563eb] to-[#0053db] hover:brightness-110 shadow-[0_4px_16px_rgba(37,99,235,0.35)] transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+              class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-[#2563eb] to-[#0053db] hover:brightness-110 shadow-[0_4px_16px_rgba(37,99,235,0.35)] transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
               type="button"
             >
               <RotateCcw class="w-3.5 h-3.5" />
-              <span>Coba Lagi Sekarang</span>
+              <span>Coba Lagi</span>
             </button>
           </div>
         {/if}

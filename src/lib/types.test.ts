@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatBytes, formatSpeed, formatEta } from './types';
+import { formatBytes, formatSpeed, formatEta, getPercent } from './types';
 
 describe('formatBytes', () => {
   it('handles null and undefined', () => {
@@ -54,3 +54,21 @@ describe('formatEta', () => {
     expect(formatEta(7300)).toBe('2h 1m');
   });
 });
+
+describe('getPercent', () => {
+  it('calculates percentage accurately and respects completed state', () => {
+    expect(
+      getPercent({ status: 'completed', downloaded_bytes: 100, total_bytes: 200 } as any)
+    ).toBe(100.0);
+    expect(
+      getPercent({ status: 'downloading', downloaded_bytes: 50, total_bytes: 200 } as any)
+    ).toBe(25.0);
+    expect(
+      getPercent({ status: 'downloading', downloaded_bytes: 0, total_bytes: null } as any)
+    ).toBe(0.0);
+    expect(
+      getPercent({ status: 'downloading', downloaded_bytes: 0, total_bytes: 0 } as any)
+    ).toBe(0.0);
+  });
+});
+

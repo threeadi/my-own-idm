@@ -203,6 +203,41 @@ pub async fn move_downloaded_file(
         .await
 }
 
+pub fn build_open_url_command(url: &str) -> std::process::Command {
+    #[cfg(target_os = "windows")]
+    {
+        let mut cmd = std::process::Command::new("cmd");
+        cmd.args(["/C", "start", "", url]);
+        cmd
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let mut cmd = std::process::Command::new("xdg-open");
+        cmd.arg(url);
+        cmd
+    }
+}
+
+#[tauri::command]
+pub fn open_external_url(url: String) -> Result<(), String> {
+    if !url.starts_with("http://") && !url.starts_with("https://") {
+        return Err("URL harus diawali dengan http:// atau https://".to_string());
+    }
+    build_open_url_command(&url)
+        .spawn()
+        .map_err(|e| format!("Failed to open browser URL: {}", e))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn refresh_download_url(
+    state: State<'_, AppState>,
+    task_id: String,
+    new_url: String,
+) -> Result<ProbeResult, String> {
+    state.manager.refresh_task_url(&task_id, &new_url).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -243,7 +278,6 @@ mod tests {
 
     #[test]
     fn test_build_open_in_folder_command() {
-
         let cmd = build_open_in_folder_command("C:\\Downloads\\file.mp4");
         let program = cmd.get_program().to_string_lossy();
         assert!(program.contains("explorer") || program.contains("xdg-open"));
@@ -262,5 +296,18 @@ mod tests {
         let program = cmd.get_program().to_string_lossy();
         assert!(program.contains("explorer") || program.contains("xdg-open"));
     }
-}
 
+    #[test]
+    fn test_build_open_url_command() {
+        let cmd = build_open_url_command("https://example.com/page");
+        let program = cmd.get_program().to_string_lossy();
+        assert!(program.contains("cmd") || program.contains("xdg-open"));
+    }
+
+    #[test]
+    fn test_open_external_url_invalid_protocol() {
+        let res = open_external_url("javascript:alert(1)".to_string());
+        assert!(res.is_err());
+        assert!(res.unwrap_err().contains("http://"));
+    }
+}

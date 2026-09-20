@@ -40,6 +40,7 @@ export interface DownloadTask {
   completed_at: string | null;
   error_message: string | null;
   segments: Segment[];
+  referer?: string | null;
   // Computed in frontend
   speed_bps?: number;
   eta_seconds?: number | null;
@@ -91,3 +92,10 @@ export function formatEta(seconds: number | null | undefined): string {
   const remM = m % 60;
   return `${h}h ${remM}m`;
 }
+
+export function getPercent(task: DownloadTask): number {
+  if (task.status === 'completed') return 100.0;
+  if (!task.total_bytes || task.total_bytes <= 0) return 0.0;
+  return Math.min(100.0, (task.downloaded_bytes / task.total_bytes) * 100);
+}
+

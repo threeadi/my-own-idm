@@ -31,6 +31,12 @@ export class IdmStore {
   isPropertiesModalOpen = $state<boolean>(false);
   propertiesTaskId = $state<string | null>(null);
 
+  isRefreshModalOpen = $state<boolean>(false);
+  refreshTaskId = $state<string | null>(null);
+  refreshDetectedUrl = $state<string | null>(null);
+  refreshError = $state<string | null>(null);
+  refreshCountdown = $state<number>(3);
+
   selectedTask = $derived<DownloadTask | null>(
     this.tasks.find((t) => t.id === this.selectedTaskId) || null
   );
@@ -45,6 +51,10 @@ export class IdmStore {
 
   propertiesTask = $derived<DownloadTask | null>(
     this.tasks.find((t) => t.id === this.propertiesTaskId) || null
+  );
+
+  refreshTask = $derived<DownloadTask | null>(
+    this.tasks.find((t) => t.id === this.refreshTaskId) || null
   );
 
 
@@ -128,8 +138,11 @@ export class IdmStore {
             is_hls: true,
             created_at: "2026-09-20 14:32:00",
             completed_at: "2026-09-20 14:32:11",
+            error_message: null,
+            segments: [],
             speed_bps: 0,
             eta_seconds: 0,
+            referer: "https://x.com/lusthunter/status/18800000",
           },
           {
             id: 'mock-2',
@@ -145,12 +158,16 @@ export class IdmStore {
             supports_range: true,
             is_hls: false,
             created_at: "2026-09-20 14:40:00",
+            completed_at: null,
+            error_message: null,
+            segments: [],
             speed_bps: 12500000,
             eta_seconds: 103,
+            referer: "https://releases.ubuntu.com/22.04/",
           },
           {
             id: 'mock-3',
-            url: "https://example.com/interrupted-archive.zip",
+            url: "https://expired-cdn.example.com/interrupted-archive.zip",
             filename: "interrupted-archive.zip",
             save_dir: "D:\\IDM_Downloads\\Compressed",
             file_path: "D:\\IDM_Downloads\\Compressed\\interrupted-archive.zip",
@@ -162,9 +179,33 @@ export class IdmStore {
             supports_range: true,
             is_hls: false,
             created_at: "2026-09-20 14:10:00",
+            completed_at: null,
             error_message: "HTTP 504 Gateway Timeout / Sambungan Ditolak oleh Host Server",
+            segments: [],
             speed_bps: 0,
             eta_seconds: 0,
+            referer: "https://example.com/download-archive-page",
+          },
+          {
+            id: 'mock-4',
+            url: "https://cdn.example.com/dataset-large.tar.gz?token=exp123",
+            filename: "dataset-large.tar.gz",
+            save_dir: "D:\\IDM_Downloads\\Compressed",
+            file_path: "D:\\IDM_Downloads\\Compressed\\dataset-large.tar.gz",
+            total_bytes: 1073741824,
+            downloaded_bytes: 536870912,
+            category: "compressed",
+            status: "paused",
+            connections: 8,
+            supports_range: true,
+            is_hls: false,
+            created_at: "2026-09-20 13:00:00",
+            completed_at: null,
+            error_message: null,
+            segments: [],
+            speed_bps: 0,
+            eta_seconds: 0,
+            referer: "https://example.com/datasets",
           },
         ];
         this.selectedTaskId = 'mock-1';
@@ -260,7 +301,11 @@ export class IdmStore {
       console.log('browser-download-requested received:', event.payload);
       const p = event.payload;
       if (p && p.url) {
-        this.openAddModal(p.url, p.filename, p.headers);
+        if (this.isRefreshModalOpen && this.refreshTaskId) {
+          this.refreshDetectedUrl = p.url;
+        } else {
+          this.openAddModal(p.url, p.filename, p.headers);
+        }
       }
     });
   }
@@ -375,6 +420,75 @@ export class IdmStore {
     } catch (e) {
       console.error('Move file failed:', e);
       throw e;
+    }
+  }
+
+  startRefreshLink(taskId: string) {
+    const task = this.tasks.find((t) => t.id === taskId);
+    if (!task) return;
+
+    this.refreshTaskId = taskId;
+    this.refreshDetectedUrl = null;
+    this.refreshError = null;
+    this.refreshCountdown = 3;
+    this.isRefreshModalOpen = true;
+
+    // Close other modals if open
+    this.isOutcomeModalOpen = false;
+    this.isPropertiesModalOpen = false;
+    this.isProgressModalOpen = false;
+
+    // Open source web page in browser if referer or url exists
+    const targetUrl = task.referer || task.url;
+    if (targetUrl && (targetUrl.startsWith('http://') || targetUrl.startsWith('https://'))) {
+      this.openExternalUrl(targetUrl);
+    }
+  }
+
+  cancelRefreshLink() {
+    this.isRefreshModalOpen = false;
+    this.refreshTaskId = null;
+    this.refreshDetectedUrl = null;
+    this.refreshError = null;
+  }
+
+  async applyRefreshedUrl(newUrl: string) {
+    if (!this.refreshTaskId) return;
+    const taskId = this.refreshTaskId;
+    this.refreshError = null;
+
+    try {
+      if (isTauri()) {
+        await invoke('refresh_download_url', { taskId, newUrl });
+      }
+
+      const idx = this.tasks.findIndex((t) => t.id === taskId);
+      if (idx !== -1) {
+        this.tasks[idx].url = newUrl;
+        this.tasks[idx].error_message = null;
+        if (typeof this.tasks[idx].status === 'object' && 'failed' in this.tasks[idx].status) {
+          this.tasks[idx].status = 'paused';
+        }
+      }
+
+      this.cancelRefreshLink();
+      await this.resumeTask(taskId);
+    } catch (e: any) {
+      console.error('Failed to refresh download URL:', e);
+      this.refreshError = typeof e === 'string' ? e : (e?.message || 'Gagal memperbarui URL');
+      throw e;
+    }
+  }
+
+  async openExternalUrl(url: string) {
+    try {
+      if (isTauri()) {
+        await invoke('open_external_url', { url });
+      } else {
+        window.open(url, '_blank');
+      }
+    } catch (e) {
+      console.warn('Failed to open external URL:', e);
     }
   }
 

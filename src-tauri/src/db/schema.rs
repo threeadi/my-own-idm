@@ -14,7 +14,8 @@ CREATE TABLE IF NOT EXISTS downloads (
     is_hls INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     completed_at TEXT,
-    error_message TEXT
+    error_message TEXT,
+    referer TEXT
 );
 
 CREATE TABLE IF NOT EXISTS segments (
