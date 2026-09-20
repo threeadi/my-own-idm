@@ -98,6 +98,15 @@ impl Database {
         Ok(())
     }
 
+    pub fn update_task_file_path(&self, task_id: &str, new_save_dir: &str, new_file_path: &str) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE downloads SET save_dir = ?1, file_path = ?2 WHERE id = ?3",
+            params![new_save_dir, new_file_path, task_id],
+        )?;
+        Ok(())
+    }
+
     pub fn mark_task_completed(&self, task_id: &str, completed_at: &str, final_bytes: u64) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         let status_str = serde_json::to_string(&TaskStatus::Completed).unwrap();
@@ -382,5 +391,19 @@ mod tests {
 
         let loaded = db.load_all_tasks().expect("load");
         assert_eq!(loaded[0].status, TaskStatus::Paused);
+    }
+
+    #[test]
+    fn test_db_update_task_file_path() {
+        let db = Database::open_in_memory().expect("open in-memory db");
+        let task = create_sample_task("task-move", TaskStatus::Completed);
+        db.insert_task(&task).expect("insert");
+
+        db.update_task_file_path("task-move", "D:\\NewFolder", "D:\\NewFolder\\test.mp4")
+            .expect("update path");
+
+        let loaded = db.load_all_tasks().expect("load");
+        assert_eq!(loaded[0].save_dir, "D:\\NewFolder");
+        assert_eq!(loaded[0].file_path, "D:\\NewFolder\\test.mp4");
     }
 }

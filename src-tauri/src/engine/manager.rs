@@ -52,6 +52,26 @@ impl DownloadManager {
         list
     }
 
+    pub async fn update_task_path(
+        &self,
+        task_id: &str,
+        new_save_dir: &str,
+        new_file_path: &str,
+    ) -> Result<DownloadTask, String> {
+        self.db
+            .update_task_file_path(task_id, new_save_dir, new_file_path)
+            .map_err(|e| format!("Database error: {}", e))?;
+
+        let mut tasks = self.tasks.write().await;
+        if let Some(task) = tasks.get_mut(task_id) {
+            task.save_dir = new_save_dir.to_string();
+            task.file_path = new_file_path.to_string();
+            Ok(task.clone())
+        } else {
+            Err("Task not found".to_string())
+        }
+    }
+
     pub async fn prepare_download_task(
         &self,
         url: &str,

@@ -28,6 +28,9 @@ export class IdmStore {
   outcomeType = $state<'completed' | 'failed'>('completed');
   outcomeErrorMessage = $state<string | null>(null);
 
+  isPropertiesModalOpen = $state<boolean>(false);
+  propertiesTaskId = $state<string | null>(null);
+
   selectedTask = $derived<DownloadTask | null>(
     this.tasks.find((t) => t.id === this.selectedTaskId) || null
   );
@@ -38,6 +41,10 @@ export class IdmStore {
 
   outcomeTask = $derived<DownloadTask | null>(
     this.tasks.find((t) => t.id === this.outcomeTaskId) || null
+  );
+
+  propertiesTask = $derived<DownloadTask | null>(
+    this.tasks.find((t) => t.id === this.propertiesTaskId) || null
   );
 
 
@@ -104,6 +111,64 @@ export class IdmStore {
   async init() {
     if (!isTauri()) {
       console.info('Running in browser preview mode (Tauri IPC inactive).');
+      if (this.tasks.length === 0) {
+        this.tasks = [
+          {
+            id: 'mock-1',
+            url: "https://video.twimg.com/amplify_video/2079553321615118336/pl/avc1/1920x1080/m3u8_stream_v7.mp4",
+            filename: "Lust Hunter di X - 'Dispatch - NTR final project'.mp4",
+            save_dir: "D:\\IDM_Downloads\\Videos",
+            file_path: "D:\\IDM_Downloads\\Videos\\Lust Hunter di X - 'Dispatch - NTR final project'.mp4",
+            total_bytes: 46497792,
+            downloaded_bytes: 46497792,
+            category: "video",
+            status: "completed",
+            connections: 16,
+            supports_range: true,
+            is_hls: true,
+            created_at: "2026-09-20 14:32:00",
+            completed_at: "2026-09-20 14:32:11",
+            speed_bps: 0,
+            eta_seconds: 0,
+          },
+          {
+            id: 'mock-2',
+            url: "https://releases.ubuntu.com/22.04/ubuntu-22.04.4-desktop-amd64.iso",
+            filename: "ubuntu-22.04.4-desktop-amd64.iso",
+            save_dir: "D:\\IDM_Downloads\\Programs",
+            file_path: "D:\\IDM_Downloads\\Programs\\ubuntu-22.04.4-desktop-amd64.iso",
+            total_bytes: 4975600000,
+            downloaded_bytes: 3680000000,
+            category: "programs",
+            status: "downloading",
+            connections: 16,
+            supports_range: true,
+            is_hls: false,
+            created_at: "2026-09-20 14:40:00",
+            speed_bps: 12500000,
+            eta_seconds: 103,
+          },
+          {
+            id: 'mock-3',
+            url: "https://example.com/interrupted-archive.zip",
+            filename: "interrupted-archive.zip",
+            save_dir: "D:\\IDM_Downloads\\Compressed",
+            file_path: "D:\\IDM_Downloads\\Compressed\\interrupted-archive.zip",
+            total_bytes: 524288000,
+            downloaded_bytes: 388000000,
+            category: "compressed",
+            status: { failed: "HTTP 504 Gateway Timeout" },
+            connections: 8,
+            supports_range: true,
+            is_hls: false,
+            created_at: "2026-09-20 14:10:00",
+            error_message: "HTTP 504 Gateway Timeout / Sambungan Ditolak oleh Host Server",
+            speed_bps: 0,
+            eta_seconds: 0,
+          },
+        ];
+        this.selectedTaskId = 'mock-1';
+      }
       return;
     }
     await this.refreshTasks();
@@ -284,6 +349,43 @@ export class IdmStore {
     this.isOutcomeModalOpen = false;
     this.outcomeTaskId = null;
     this.outcomeErrorMessage = null;
+  }
+
+  openPropertiesModal(taskId: string) {
+    this.propertiesTaskId = taskId;
+    this.isPropertiesModalOpen = true;
+  }
+
+  closePropertiesModal() {
+    this.isPropertiesModalOpen = false;
+    this.propertiesTaskId = null;
+  }
+
+  async moveTaskFile(taskId: string, newDir: string) {
+    if (!isTauri()) return;
+    try {
+      const updatedTask = await invoke<DownloadTask>('move_downloaded_file', {
+        taskId,
+        newDir,
+      });
+      const idx = this.tasks.findIndex((t) => t.id === taskId);
+      if (idx !== -1) {
+        this.tasks[idx] = updatedTask;
+      }
+    } catch (e) {
+      console.error('Move file failed:', e);
+      throw e;
+    }
+  }
+
+  async getRecentLogs(maxLines: number = 100): Promise<string[]> {
+    if (!isTauri()) return ['[Preview Mode] No active Tauri logger.'];
+    try {
+      return await invoke<string[]>('get_recent_logs', { maxLines });
+    } catch (e) {
+      console.error('Failed to get logs:', e);
+      return [];
+    }
   }
 
   async resumeAll() {

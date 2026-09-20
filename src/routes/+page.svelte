@@ -9,10 +9,24 @@
   import AddDownloadModal from '../components/AddDownloadModal.svelte';
   import DownloadProgressModal from '../components/DownloadProgressModal.svelte';
   import DownloadOutcomeModal from '../components/DownloadOutcomeModal.svelte';
+  import FilePropertiesModal from '../components/FilePropertiesModal.svelte';
   import SettingsModal from '../components/SettingsModal.svelte';
 
   onMount(() => {
     store.init();
+    if (typeof window !== 'undefined') {
+      (window as any).__store = store;
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('test_outcome') === 'completed') {
+        store.openOutcomeModal('mock-1', 'completed');
+      } else if (urlParams.get('test_outcome') === 'failed') {
+        store.openOutcomeModal(
+          'mock-3',
+          'failed',
+          'HTTP 504 Gateway Timeout / Sambungan Ditolak oleh Host Server'
+        );
+      }
+    }
   });
 </script>
 
@@ -42,6 +56,7 @@
   <AddDownloadModal />
   <DownloadProgressModal />
   <DownloadOutcomeModal />
+  <FilePropertiesModal />
   <SettingsModal />
 </div>
 

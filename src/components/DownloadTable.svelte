@@ -17,7 +17,8 @@
     LayoutGrid,
     List,
     AlertCircle,
-    CheckCircle2
+    CheckCircle2,
+    Info
   } from '@lucide/svelte';
 
   const tasks = $derived(store.filteredTasks);
@@ -56,7 +57,11 @@
   }
 
   function handleTaskDoubleClick(task: DownloadTask) {
-    store.openProgressModal(task.id);
+    if (task.status === 'downloading') {
+      store.openProgressModal(task.id);
+    } else {
+      store.openPropertiesModal(task.id);
+    }
   }
 
   function cycleSort() {
@@ -250,6 +255,14 @@
               </button>
 
               <button
+                onclick={(e) => { e.stopPropagation(); store.openPropertiesModal(task.id); }}
+                class="w-7 h-7 rounded-lg bg-[#252a33] text-[#8c909f] hover:text-[#00e5ff] hover:bg-[#343942] flex items-center justify-center transition-colors cursor-pointer"
+                title="Buka Properti Berkas"
+              >
+                <Info class="w-3.5 h-3.5" />
+              </button>
+
+              <button
                 onclick={(e) => { e.stopPropagation(); store.openFolder(task.file_path); }}
                 class="w-7 h-7 rounded-lg bg-[#252a33] text-[#dee2ee] hover:text-[#4cd7f6] hover:bg-[#343942] flex items-center justify-center transition-colors cursor-pointer"
                 title="Buka Folder Penyimpanan"
@@ -364,12 +377,21 @@
                 </span>
               </td>
               <td class="py-2 px-3 text-right">
-                <button
-                  onclick={(e) => { e.stopPropagation(); store.openProgressModal(task.id); }}
-                  class="px-2 py-0.5 rounded bg-[#252a33] text-[#4cd7f6] hover:bg-[#343942] text-[10px] font-semibold cursor-pointer"
-                >
-                  Detail
-                </button>
+                <div class="flex items-center justify-end gap-1">
+                  <button
+                    onclick={(e) => { e.stopPropagation(); store.openPropertiesModal(task.id); }}
+                    class="px-2 py-0.5 rounded bg-[#252a33] text-slate-300 hover:text-[#00e5ff] hover:bg-[#343942] text-[10px] font-semibold cursor-pointer"
+                    title="Properti Berkas"
+                  >
+                    Properti
+                  </button>
+                  <button
+                    onclick={(e) => { e.stopPropagation(); store.openProgressModal(task.id); }}
+                    class="px-2 py-0.5 rounded bg-[#252a33] text-[#4cd7f6] hover:bg-[#343942] text-[10px] font-semibold cursor-pointer"
+                  >
+                    Detail
+                  </button>
+                </div>
               </td>
             </tr>
           {/each}

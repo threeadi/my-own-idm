@@ -200,8 +200,9 @@ describe('IdmStore State & Filtering', () => {
   it('handles init in non-Tauri preview environment', async () => {
     delete (globalThis as any).window;
     const store = new IdmStore();
-    await store.init(); // Should log info and return early without throwing
-    expect(store.tasks.length).toBe(0);
+    await store.init(); // Should log info and load preview mock tasks
+    expect(store.tasks.length).toBe(3);
+    expect(store.tasks[0].id).toBe('mock-1');
   });
 
   it('updates task on download-progress event', async () => {
@@ -219,6 +220,7 @@ describe('IdmStore State & Filtering', () => {
       total_bytes: 1000000,
       speed_bps: 250000,
       eta_seconds: 2,
+      percent: 50.0,
       status: 'downloading',
       segments: [],
     };
@@ -227,6 +229,21 @@ describe('IdmStore State & Filtering', () => {
     expect(store.tasks[0].downloaded_bytes).toBe(500000);
     expect(store.tasks[0].speed_bps).toBe(250000);
     expect(store.tasks[0].eta_seconds).toBe(2);
+
+    // Test progress when status becomes completed
+    const completedProgressPayload: SpeedMetrics = {
+      task_id: 'task-prog',
+      downloaded_bytes: 1000000,
+      total_bytes: 1000000,
+      speed_bps: 0,
+      eta_seconds: 0,
+      percent: 100.0,
+      status: 'completed',
+      segments: [],
+    };
+    progressHandler!({ payload: completedProgressPayload });
+    expect(store.tasks[0].status).toBe('completed');
+    expect(store.tasks[0].downloaded_bytes).toBe(1000000);
   });
 
   it('updates task on download-completed event and triggers outcome modal', async () => {
@@ -407,8 +424,10 @@ describe('IdmStore State & Filtering', () => {
     expect(store.viewMode).toBe('table');
 
     expect(store.sortBy).toBe('date');
-    store.sortBy = 'speed';
-    expect(store.sortBy).toBe('speed');
+    store.sortBy = 'size';
+    expect(store.sortBy).toBe('size');
+    store.sortBy = 'name';
+    expect(store.sortBy).toBe('name');
 
     expect(store.speedLimiterEnabled).toBe(false);
     store.speedLimiterEnabled = true;
@@ -435,6 +454,80 @@ describe('IdmStore State & Filtering', () => {
     expect(store.isOutcomeModalOpen).toBe(false);
     expect(store.outcomeTaskId).toBeNull();
     expect(store.outcomeErrorMessage).toBeNull();
+  });
+
+  it('manages properties modal open and close methods', () => {
+    const store = new IdmStore();
+    expect(store.isPropertiesModalOpen).toBe(false);
+    expect(store.propertiesTaskId).toBeNull();
+    expect(store.propertiesTask).toBeNull();
+
+    const t = makeTask({ id: 'prop-1', filename: 'movie.mp4' });
+    store.tasks = [t];
+
+    store.openPropertiesModal('prop-1');
+    expect(store.isPropertiesModalOpen).toBe(true);
+    expect(store.propertiesTaskId).toBe('prop-1');
+    expect(store.propertiesTask?.filename).toBe('movie.mp4');
+
+    store.closePropertiesModal();
+    expect(store.isPropertiesModalOpen).toBe(false);
+    expect(store.propertiesTaskId).toBeNull();
+    expect(store.propertiesTask).toBeNull();
+  });
+
+  it('handles moveTaskFile and getRecentLogs successfully and with errors', async () => {
+    const store = new IdmStore();
+    const t = makeTask({ id: 'task-move-1', file_path: 'C:\\old\\file.mp4' });
+    store.tasks = [t];
+
+    const updated = { ...t, file_path: 'D:\\new\\file.mp4', save_dir: 'D:\\new' };
+    mockInvoke.mockResolvedValueOnce(updated);
+
+    await store.moveTaskFile('task-move-1', 'D:\\new');
+    expect(mockInvoke).toHaveBeenCalledWith('move_downloaded_file', {
+      taskId: 'task-move-1',
+      newDir: 'D:\\new',
+    });
+    expect(store.tasks[0].file_path).toBe('D:\\new\\file.mp4');
+
+    // Move task not present in local array
+    mockInvoke.mockResolvedValueOnce({ ...t, id: 'unlisted-task' });
+    await store.moveTaskFile('unlisted-task', 'E:\\other');
+
+    // Error case
+    mockInvoke.mockRejectedValueOnce(new Error('OS move error'));
+    await expect(store.moveTaskFile('task-move-1', 'Z:\\invalid')).rejects.toThrow('OS move error');
+
+    // getRecentLogs
+    mockInvoke.mockResolvedValueOnce(['[INFO] Log 1', '[INFO] Log 2']);
+    const logs = await store.getRecentLogs(50);
+    expect(mockInvoke).toHaveBeenCalledWith('get_recent_logs', { maxLines: 50 });
+    expect(logs).toEqual(['[INFO] Log 1', '[INFO] Log 2']);
+
+    // getRecentLogs error fallback
+    mockInvoke.mockRejectedValueOnce(new Error('Log read failure'));
+    const emptyLogs = await store.getRecentLogs();
+    expect(emptyLogs).toEqual([]);
+
+    // Non-Tauri fallback branch
+    const savedWindow = (globalThis as any).window;
+    delete (globalThis as any).window;
+    await store.moveTaskFile('dummy', 'dummy');
+    const previewLogs = await store.getRecentLogs();
+    expect(previewLogs[0]).toContain('[Preview Mode]');
+    (globalThis as any).window = savedWindow;
+  });
+
+  it('handles failed event when task already has error object', async () => {
+    const store = new IdmStore();
+    await store.setupEventListeners();
+    const failedHandler = eventListeners.get('download-failed');
+    expect(failedHandler).toBeDefined();
+
+    store.tasks = [makeTask({ id: 't-prefailed', status: { failed: 'Server dropped stream' } })];
+    failedHandler!({ payload: 't-prefailed' });
+    expect(store.outcomeErrorMessage).toBe('Server dropped stream');
   });
 });
 

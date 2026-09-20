@@ -163,6 +163,46 @@ pub fn get_recent_logs(max_lines: Option<usize>) -> Vec<String> {
     crate::logger::AppLogger::get().get_recent_lines(max_lines.unwrap_or(100))
 }
 
+#[tauri::command]
+pub async fn move_downloaded_file(
+    state: State<'_, AppState>,
+    task_id: String,
+    new_dir: String,
+) -> Result<DownloadTask, String> {
+    let tasks = state.manager.tasks.read().await;
+    let task = tasks.get(&task_id).ok_or("Task not found")?.clone();
+    drop(tasks);
+
+    let old_path = Path::new(&task.file_path);
+    if !old_path.exists() {
+        return Err(format!("File not found at: {}", task.file_path));
+    }
+
+    let new_dir_path = Path::new(&new_dir);
+    if !new_dir_path.exists() {
+        std::fs::create_dir_all(new_dir_path)
+            .map_err(|e| format!("Failed to create destination directory: {}", e))?;
+    }
+
+    let filename = old_path
+        .file_name()
+        .ok_or("Invalid file name")?
+        .to_string_lossy();
+    let new_file_path = new_dir_path.join(filename.as_ref());
+
+    if let Err(_) = std::fs::rename(old_path, &new_file_path) {
+        std::fs::copy(old_path, &new_file_path)
+            .map_err(|e| format!("Failed to copy file to new directory: {}", e))?;
+        let _ = std::fs::remove_file(old_path);
+    }
+
+    let new_path_str = new_file_path.to_string_lossy().to_string();
+    state
+        .manager
+        .update_task_path(&task_id, &new_dir, &new_path_str)
+        .await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

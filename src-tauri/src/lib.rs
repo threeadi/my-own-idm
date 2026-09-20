@@ -71,7 +71,8 @@ pub fn run() {
             commands::open_file_in_folder,
             commands::open_file,
             commands::open_log_folder,
-            commands::get_recent_logs
+            commands::get_recent_logs,
+            commands::move_downloaded_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
