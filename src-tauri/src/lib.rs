@@ -83,7 +83,10 @@ pub fn run() {
             commands::open_transfer_window,
             commands::close_current_window,
             commands::minimize_current_window,
-            commands::start_dragging_window
+            commands::start_dragging_window,
+            commands::get_app_settings,
+            commands::save_app_settings,
+            commands::register_native_host_manifest
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

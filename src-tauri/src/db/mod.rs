@@ -1,5 +1,6 @@
 pub mod schema;
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use rusqlite::{params, Connection, Result};
@@ -275,6 +276,36 @@ impl Database {
         conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?1, ?2)", params![key, value])?;
         Ok(())
     }
+
+    pub fn get_all_settings(&self) -> Result<HashMap<String, String>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare("SELECT key, value FROM settings")?;
+        let rows = stmt.query_map([], |row| {
+            let k: String = row.get(0)?;
+            let v: String = row.get(1)?;
+            Ok((k, v))
+        })?;
+        let mut map = HashMap::new();
+        for r in rows {
+            if let Ok((k, v)) = r {
+                map.insert(k, v);
+            }
+        }
+        Ok(map)
+    }
+
+    pub fn set_multiple_settings(&self, settings: &HashMap<String, String>) -> Result<()> {
+        let mut conn = self.conn.lock().unwrap();
+        let tx = conn.transaction()?;
+        {
+            let mut stmt = tx.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?1, ?2)")?;
+            for (k, v) in settings {
+                stmt.execute(params![k, v])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -475,5 +506,24 @@ mod tests {
         db.update_task_speed_limit("task-spd-1", None).expect("clear speed limit");
         let loaded_cleared = db.load_all_tasks().expect("load");
         assert_eq!(loaded_cleared[0].speed_limit_bps, None);
+    }
+
+    #[test]
+    fn test_db_settings_crud_and_bulk() {
+        let db = Database::open_in_memory().expect("open in-memory db");
+        assert_eq!(db.get_setting("test_key").expect("get"), None);
+
+        db.set_setting("test_key", "test_value").expect("set");
+        assert_eq!(db.get_setting("test_key").expect("get"), Some("test_value".to_string()));
+
+        let mut bulk = HashMap::new();
+        bulk.insert("k1".to_string(), "v1".to_string());
+        bulk.insert("k2".to_string(), "v2".to_string());
+        db.set_multiple_settings(&bulk).expect("set multiple");
+
+        let all = db.get_all_settings().expect("get all");
+        assert_eq!(all.get("k1"), Some(&"v1".to_string()));
+        assert_eq!(all.get("k2"), Some(&"v2".to_string()));
+        assert_eq!(all.get("test_key"), Some(&"test_value".to_string()));
     }
 }

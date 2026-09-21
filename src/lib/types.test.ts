@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatBytes, formatSpeed, formatEta, getPercent, unitToBps, bpsToUnit, formatDisplayVersion } from './types';
+import { formatBytes, formatSpeed, formatEta, getPercent, unitToBps, bpsToUnit, formatDisplayVersion, matchesDownloadExtension } from './types';
 
 describe('formatBytes', () => {
   it('handles null and undefined', () => {
@@ -121,6 +121,29 @@ describe('formatDisplayVersion', () => {
     expect(formatDisplayVersion(undefined)).toBe('v0.1.0-dev');
     expect(formatDisplayVersion('')).toBe('v0.1.0-dev');
     expect(formatDisplayVersion('   ')).toBe('v0.1.0-dev');
+  });
+});
+
+describe('matchesDownloadExtension', () => {
+  it('identifies matching file extensions', () => {
+    expect(matchesDownloadExtension('https://example.com/archive.zip')).toBe(true);
+    expect(matchesDownloadExtension('http://site.com/image.iso?token=123')).toBe(true);
+    expect(matchesDownloadExtension('https://files.com/package.tar.gz')).toBe(true);
+    expect(matchesDownloadExtension('https://archive.org/part.r01')).toBe(true);
+  });
+
+  it('identifies streaming media and video URLs', () => {
+    expect(matchesDownloadExtension('https://stream.net/master.m3u8')).toBe(true);
+    expect(matchesDownloadExtension('https://youtube.com/watch?v=12345')).toBe(true);
+    expect(matchesDownloadExtension('https://youtu.be/abcdef')).toBe(true);
+  });
+
+  it('rejects ordinary html, non-urls, or unsupported extensions', () => {
+    expect(matchesDownloadExtension('not a url')).toBe(false);
+    expect(matchesDownloadExtension('')).toBe(false);
+    expect(matchesDownloadExtension('https://google.com')).toBe(false);
+    expect(matchesDownloadExtension('https://example.com/index.html')).toBe(false);
+    expect(matchesDownloadExtension('https://example.com/script.js')).toBe(false);
   });
 });
 

@@ -134,3 +134,76 @@ export function formatDisplayVersion(version?: string | null, prefix = 'v'): str
   return `${prefix}${clean}`;
 }
 
+export interface AppSettings {
+  autoStartWindows: boolean;
+  mediaPanelOverlay: boolean;
+  clipboardAutoCapture: boolean;
+  notifyOnComplete: boolean;
+  connectionType: string;
+  defaultConnections: number;
+  tcpWindowAutoTuning: boolean;
+  browserChrome: boolean;
+  browserEdge: boolean;
+  browserFirefox: boolean;
+  browserBrave: boolean;
+  defaultDownloadDir: string;
+  categorySubfolders: boolean;
+  tempDir: string;
+  autoCaptureExtensions: string;
+  excludedSites: string;
+  connectionTimeoutSec: number;
+  maxRetries: number;
+}
+
+export const DEFAULT_APP_SETTINGS: AppSettings = {
+  autoStartWindows: true,
+  mediaPanelOverlay: true,
+  clipboardAutoCapture: true,
+  notifyOnComplete: true,
+  connectionType: 'broadband',
+  defaultConnections: 16,
+  tcpWindowAutoTuning: true,
+  browserChrome: true,
+  browserEdge: true,
+  browserFirefox: true,
+  browserBrave: true,
+  defaultDownloadDir: '',
+  categorySubfolders: true,
+  tempDir: '',
+  autoCaptureExtensions: '3GP 7Z AAC ACE AIF APK ARJ ASF AVI BIN BZ2 EXE GZ GZIP IMG ISO LZH M4A M4V MKV MOV MP3 MP4 MPA MPE MPEG MPG MSI MSU OGG OGV PDF PLJ PPS PPT PPTX QT R0* R1* RA RAR RM RMVB SEA SIT SITX TAR TIF TIFF TS WAV WMA WMV Z ZIP',
+  excludedSites: '',
+  connectionTimeoutSec: 60,
+  maxRetries: 5,
+};
+
+export function matchesDownloadExtension(url: string, extensionsStr?: string): boolean {
+  if (!url || typeof url !== 'string') return false;
+  const cleanUrl = url.trim().toLowerCase();
+  if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) return false;
+
+  // Always consider streaming media manifests or direct video/audio urls as download matches
+  if (cleanUrl.includes('.m3u8') || cleanUrl.includes('.mpd') || cleanUrl.includes('youtube.com/watch') || cleanUrl.includes('youtu.be/')) {
+    return true;
+  }
+
+  const rawPath = cleanUrl.split('?')[0].split('#')[0];
+  const lastDotIndex = rawPath.lastIndexOf('.');
+  if (lastDotIndex === -1) return false;
+  const ext = rawPath.substring(lastDotIndex + 1);
+  if (!ext || ext.length > 8) return false;
+
+  const exts = (extensionsStr || DEFAULT_APP_SETTINGS.autoCaptureExtensions)
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  return exts.some((e) => {
+    if (e.endsWith('*')) {
+      const prefix = e.replace(/\*+$/, '');
+      return ext.startsWith(prefix);
+    }
+    return ext === e;
+  });
+}
+
+

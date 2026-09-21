@@ -1,7 +1,7 @@
 import { invoke, isTauri as coreIsTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import type { DownloadCategory, DownloadTask, SpeedMetrics, SpeedLimitUnit, GlobalSpeedLimitConfig } from './types';
-import { unitToBps, bpsToUnit } from './types';
+import type { DownloadCategory, DownloadTask, SpeedMetrics, SpeedLimitUnit, GlobalSpeedLimitConfig, AppSettings } from './types';
+import { unitToBps, bpsToUnit, DEFAULT_APP_SETTINGS, matchesDownloadExtension } from './types';
 import { getCompileTimeVersion, fetchRuntimeAppVersion } from './version';
 
 export function isTauri(): boolean {
@@ -11,6 +11,8 @@ export function isTauri(): boolean {
 
 export class IdmStore {
   appVersion = $state<string>(getCompileTimeVersion());
+  settings = $state<AppSettings>({ ...DEFAULT_APP_SETTINGS });
+  lastCheckedClipboard = $state<string>('');
   tasks = $state<DownloadTask[]>([]);
   selectedTaskId = $state<string | null>(null);
   activeCategory = $state<string>('all');
@@ -134,6 +136,8 @@ export class IdmStore {
     } catch {
       // fallback to compile time version
     }
+
+    await this.loadAppSettings();
 
     if (!isTauri()) {
       console.info('Running in browser preview mode (Tauri IPC inactive).');
@@ -298,6 +302,20 @@ export class IdmStore {
         this.closeProgressModal();
       }
       this.openOutcomeModal(id, 'completed');
+
+      if (this.settings.notifyOnComplete && typeof Notification !== 'undefined') {
+        try {
+          if (Notification.permission === 'granted') {
+            const finishedTask = this.tasks[idx];
+            new Notification('Unduhan Selesai - IDM Turbo', {
+              body: finishedTask ? finishedTask.filename : 'Berkas berhasil diunduh.',
+              icon: '/favicon.png',
+            });
+          }
+        } catch {
+          // Notification failed
+        }
+      }
     });
 
     // 3. Paused event
@@ -341,6 +359,13 @@ export class IdmStore {
         }
       }
     });
+
+    // 6. Clipboard watcher on window focus
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('focus', () => {
+        this.checkClipboardForUrl();
+      });
+    }
   }
 
   async pauseTask(taskId: string) {
@@ -608,6 +633,133 @@ export class IdmStore {
       } catch (e) {
         console.error('Failed to set task speed limit:', e);
       }
+    }
+  }
+
+  applyRawSettings(raw: Record<string, string>) {
+    const s = { ...this.settings };
+    if ('autoStartWindows' in raw) s.autoStartWindows = raw.autoStartWindows === 'true';
+    if ('mediaPanelOverlay' in raw) s.mediaPanelOverlay = raw.mediaPanelOverlay === 'true';
+    if ('clipboardAutoCapture' in raw) s.clipboardAutoCapture = raw.clipboardAutoCapture === 'true';
+    if ('notifyOnComplete' in raw) s.notifyOnComplete = raw.notifyOnComplete === 'true';
+    if ('connectionType' in raw && raw.connectionType) s.connectionType = raw.connectionType;
+    if ('defaultConnections' in raw) {
+      const num = parseInt(raw.defaultConnections, 10);
+      if (!isNaN(num) && num > 0) s.defaultConnections = num;
+    }
+    if ('tcpWindowAutoTuning' in raw) s.tcpWindowAutoTuning = raw.tcpWindowAutoTuning === 'true';
+    if ('browserChrome' in raw) s.browserChrome = raw.browserChrome === 'true';
+    if ('browserEdge' in raw) s.browserEdge = raw.browserEdge === 'true';
+    if ('browserFirefox' in raw) s.browserFirefox = raw.browserFirefox === 'true';
+    if ('browserBrave' in raw) s.browserBrave = raw.browserBrave === 'true';
+    if ('defaultDownloadDir' in raw) s.defaultDownloadDir = raw.defaultDownloadDir;
+    if ('categorySubfolders' in raw) s.categorySubfolders = raw.categorySubfolders === 'true';
+    if ('tempDir' in raw) s.tempDir = raw.tempDir;
+    if ('autoCaptureExtensions' in raw) s.autoCaptureExtensions = raw.autoCaptureExtensions;
+    if ('excludedSites' in raw) s.excludedSites = raw.excludedSites;
+    if ('connectionTimeoutSec' in raw) {
+      const num = parseInt(raw.connectionTimeoutSec, 10);
+      if (!isNaN(num) && num > 0) s.connectionTimeoutSec = num;
+    }
+    if ('maxRetries' in raw) {
+      const num = parseInt(raw.maxRetries, 10);
+      if (!isNaN(num) && num >= 0) s.maxRetries = num;
+    }
+    this.settings = s;
+  }
+
+  settingsToRaw(s: AppSettings): Record<string, string> {
+    return {
+      autoStartWindows: String(s.autoStartWindows),
+      mediaPanelOverlay: String(s.mediaPanelOverlay),
+      clipboardAutoCapture: String(s.clipboardAutoCapture),
+      notifyOnComplete: String(s.notifyOnComplete),
+      connectionType: s.connectionType,
+      defaultConnections: String(s.defaultConnections),
+      tcpWindowAutoTuning: String(s.tcpWindowAutoTuning),
+      browserChrome: String(s.browserChrome),
+      browserEdge: String(s.browserEdge),
+      browserFirefox: String(s.browserFirefox),
+      browserBrave: String(s.browserBrave),
+      defaultDownloadDir: s.defaultDownloadDir || '',
+      categorySubfolders: String(s.categorySubfolders),
+      tempDir: s.tempDir || '',
+      autoCaptureExtensions: s.autoCaptureExtensions,
+      excludedSites: s.excludedSites || '',
+      connectionTimeoutSec: String(s.connectionTimeoutSec),
+      maxRetries: String(s.maxRetries),
+    };
+  }
+
+  async loadAppSettings() {
+    try {
+      if (isTauri()) {
+        const raw = await invoke<Record<string, string>>('get_app_settings');
+        if (raw && Object.keys(raw).length > 0) {
+          this.applyRawSettings(raw);
+        }
+        if (!this.settings.defaultDownloadDir) {
+          try {
+            const defDir = await invoke<string>('get_default_download_dir');
+            if (defDir) this.settings.defaultDownloadDir = defDir;
+          } catch {}
+        }
+      } else if (typeof window !== 'undefined' && window.localStorage) {
+        const saved = window.localStorage.getItem('myownidm_settings');
+        if (saved) {
+          this.settings = { ...DEFAULT_APP_SETTINGS, ...JSON.parse(saved) };
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load settings:', e);
+    }
+  }
+
+  async saveAppSettings(newSettings: Partial<AppSettings>) {
+    this.settings = { ...this.settings, ...newSettings };
+    if (isTauri()) {
+      try {
+        const raw = this.settingsToRaw(this.settings);
+        await invoke('save_app_settings', { settings: raw });
+      } catch (e) {
+        console.error('Failed to save settings to DB:', e);
+      }
+    } else if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.setItem('myownidm_settings', JSON.stringify(this.settings));
+      } catch {}
+    }
+  }
+
+  async resetAppSettings() {
+    let defDir = this.settings.defaultDownloadDir;
+    if (!defDir && isTauri()) {
+      try {
+        defDir = await invoke<string>('get_default_download_dir');
+      } catch {}
+    }
+    const defaults: AppSettings = {
+      ...DEFAULT_APP_SETTINGS,
+      defaultDownloadDir: defDir || DEFAULT_APP_SETTINGS.defaultDownloadDir,
+    };
+    await this.saveAppSettings(defaults);
+  }
+
+  async checkClipboardForUrl() {
+    if (!this.settings.clipboardAutoCapture) return;
+    if (this.isAddModalOpen) return;
+    if (typeof navigator === 'undefined' || !navigator.clipboard || !navigator.clipboard.readText) return;
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text || typeof text !== 'string') return;
+      const trimmed = text.trim();
+      if (trimmed === this.lastCheckedClipboard) return;
+      this.lastCheckedClipboard = trimmed;
+      if (matchesDownloadExtension(trimmed, this.settings.autoCaptureExtensions)) {
+        this.openAddModal(trimmed);
+      }
+    } catch {
+      // Clipboard read denied or unavailable
     }
   }
 }

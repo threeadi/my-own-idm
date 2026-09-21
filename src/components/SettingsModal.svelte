@@ -2,136 +2,849 @@
   import { store } from '$lib/idmStore.svelte';
   import { invoke } from '@tauri-apps/api/core';
   import { open } from '@tauri-apps/plugin-dialog';
-  import { X, Settings, FolderOpen, Save, FileText } from '@lucide/svelte';
+  import { formatDisplayVersion, type AppSettings } from '$lib/types';
+  import {
+    X,
+    Minus,
+    Sliders,
+    Monitor,
+    Zap,
+    FileText,
+    FolderOpen,
+    Globe,
+    Check,
+    RotateCcw,
+    Folder,
+    HardDrive,
+    ShieldCheck,
+    ExternalLink,
+    RefreshCw,
+    Layers,
+    Clock,
+    Flame
+  } from '@lucide/svelte';
 
-  let defaultDir = $state('');
-  let defaultConnections = $state(8);
+  type SettingsTab = 'general' | 'connection' | 'filetypes' | 'saveto' | 'extensions';
+  let activeTab = $state<SettingsTab>('general');
+
+  // Draft local copy of settings to allow Apply, OK, Cancel, and Reset
+  let draft = $state<AppSettings>({ ...store.settings });
+  let isSaving = $state(false);
+  let saveSuccessMessage = $state<string | null>(null);
+  let nativeHostRegisterStatus = $state<string | null>(null);
 
   $effect(() => {
     if (store.isSettingsModalOpen) {
-      invoke<string>('get_default_download_dir').then((dir) => {
-        defaultDir = dir;
-      });
+      draft = { ...store.settings };
+      saveSuccessMessage = null;
+      nativeHostRegisterStatus = null;
     }
   });
 
-  async function browseDefaultFolder() {
+  async function browseFolder(target: 'default' | 'temp') {
     try {
       const selected = await open({
         directory: true,
         multiple: false,
-        defaultPath: defaultDir || undefined,
-        title: 'Select Default Downloads Folder',
+        defaultPath: (target === 'default' ? draft.defaultDownloadDir : draft.tempDir) || undefined,
+        title: target === 'default' ? 'Pilih Folder Unduhan Utama' : 'Pilih Folder Berkas Sementara (.part)',
       });
       if (selected && typeof selected === 'string') {
-        defaultDir = selected;
+        if (target === 'default') {
+          draft.defaultDownloadDir = selected;
+        } else {
+          draft.tempDir = selected;
+        }
       }
     } catch (e) {
       console.error('Folder selection error:', e);
     }
   }
 
-  function saveSettings() {
+  async function handleApply() {
+    isSaving = true;
+    try {
+      await store.saveAppSettings(draft);
+      saveSuccessMessage = 'Pengaturan berhasil diterapkan!';
+      setTimeout(() => {
+        saveSuccessMessage = null;
+      }, 3000);
+    } finally {
+      isSaving = false;
+    }
+  }
+
+  async function handleOk() {
+    isSaving = true;
+    try {
+      await store.saveAppSettings(draft);
+      store.isSettingsModalOpen = false;
+    } finally {
+      isSaving = false;
+    }
+  }
+
+  function handleCancel() {
     store.isSettingsModalOpen = false;
   }
+
+  async function handleResetDefaults() {
+    if (confirm('Kembalikan seluruh preferensi ke pengaturan bawaan standar pabrik?')) {
+      await store.resetAppSettings();
+      draft = { ...store.settings };
+      saveSuccessMessage = 'Preferensi dikembalikan ke standar!';
+      setTimeout(() => {
+        saveSuccessMessage = null;
+      }, 3000);
+    }
+  }
+
+  async function registerNativeHost() {
+    nativeHostRegisterStatus = 'Mendaftarkan...';
+    try {
+      await invoke('register_native_host_manifest');
+      nativeHostRegisterStatus = 'Host Native Berhasil Didaftarkan!';
+      setTimeout(() => {
+        nativeHostRegisterStatus = null;
+      }, 4000);
+    } catch (e) {
+      nativeHostRegisterStatus = `Gagal: ${e}`;
+      setTimeout(() => {
+        nativeHostRegisterStatus = null;
+      }, 4000);
+    }
+  }
+
+  const connectionSpeeds = [
+    { label: 'Koneksi Cepat / Broadband (Fiber / 4G / 5G / LAN)', value: 'broadband' },
+    { label: 'Koneksi Standar / Wi-Fi Rumah (ADSL / 3G)', value: 'standard' },
+    { label: 'Jaringan Terbatas / Kuota Data Hemat', value: 'metered' },
+  ];
 </script>
 
 {#if store.isSettingsModalOpen}
-  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 select-none animate-in fade-in duration-150">
-    <div class="w-full max-w-md bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl shadow-cyan-500/10 overflow-hidden flex flex-col">
-      <!-- Modal Header -->
-      <div class="px-5 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/50">
-        <div class="flex items-center gap-2.5">
-          <div class="w-8 h-8 rounded-lg bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
-            <Settings class="w-4 h-4" />
-          </div>
-          <div>
-            <h3 class="font-bold text-sm text-slate-100">Preferences</h3>
-            <p class="text-[11px] text-slate-400">Configure default download behavior</p>
-          </div>
-        </div>
-        <button
-          onclick={() => (store.isSettingsModalOpen = false)}
-          class="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors cursor-pointer"
-        >
-          <X class="w-4 h-4" />
-        </button>
-      </div>
+  <div class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/50 backdrop-blur-[3px] select-none animate-in fade-in duration-150">
+    <!-- Acrylic Glass Container -->
+    <div
+      class="relative w-full max-w-4xl max-h-[92vh] bg-[#171c24]/95 backdrop-blur-2xl rounded-xl shadow-2xl border border-[#30353e] overflow-hidden flex flex-col transition-all duration-200"
+      id="settings-options-modal"
+    >
+      <!-- Top Cyan Shimmer Bar -->
+      <div class="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-[#00e5ff]/70 to-transparent"></div>
 
-      <!-- Modal Body -->
-      <div class="p-5 space-y-4 text-xs">
-        <div>
-          <label for="default-dir-input" class="block text-slate-300 font-medium mb-1">Default Downloads Directory</label>
-          <div class="flex gap-2">
-            <input
-              id="default-dir-input"
-              type="text"
-              bind:value={defaultDir}
-              class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 text-xs focus:outline-none focus:border-cyan-500"
-            />
-            <button
-              type="button"
-              onclick={browseDefaultFolder}
-              class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium text-xs flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
-            >
-              <FolderOpen class="w-3.5 h-3.5" />
-              <span>Browse...</span>
-            </button>
-          </div>
+      <!-- Window Title Bar -->
+      <div data-tauri-drag-region class="px-4 py-2.5 bg-[#252a33]/90 flex items-center justify-between border-b border-[#30353e]/80 cursor-move">
+        <div class="flex items-center gap-2">
+          <img
+            src="/favicon.png"
+            alt="IDM Turbo"
+            class="w-5 h-5 rounded-md object-contain shadow-[0_0_8px_rgba(0,229,255,0.3)]"
+          />
+          <span class="font-sans text-xs sm:text-sm font-semibold text-[#dee2ee]">
+            IDM Turbo Desktop - Opsi & Pengaturan
+          </span>
         </div>
-
-        <div>
-          <label for="default-connections-select" class="block text-slate-300 font-medium mb-1">Default Connection Threads</label>
-          <select
-            id="default-connections-select"
-            bind:value={defaultConnections}
-            class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-2 text-slate-200 text-xs focus:outline-none focus:border-cyan-500"
-          >
-            <option value={4}>4 connections</option>
-            <option value={8}>8 connections (Recommended)</option>
-            <option value={16}>16 connections (High Speed)</option>
-            <option value={32}>32 connections (Max Throughput)</option>
-          </select>
-        </div>
-
-        <div class="p-3 bg-slate-950/60 rounded-xl border border-slate-800 space-y-1.5">
-          <span class="font-semibold text-slate-300 text-xs block">System Tray Behavior</span>
-          <p class="text-[11px] text-slate-400">
-            Closing the window automatically minimizes to the Windows System Tray so active downloads continue without interruption.
-          </p>
-        </div>
-
-        <div class="p-3 bg-slate-950/60 rounded-xl border border-slate-800 flex items-center justify-between">
-          <div>
-            <span class="font-semibold text-slate-300 text-xs block">Diagnostics & Application Logs</span>
-            <p class="text-[11px] text-slate-400">Inspect download probe, network headers, and error logs</p>
-          </div>
+        <div class="flex items-center gap-1">
           <button
+            onclick={() => (store.isSettingsModalOpen = false)}
+            class="w-6 h-6 rounded flex items-center justify-center text-[#8c909f] hover:bg-[#30353e] hover:text-[#dee2ee] transition-colors cursor-pointer"
+            title="Minimalkan"
             type="button"
-            onclick={() => invoke('open_log_folder')}
-            class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-400 font-medium text-xs flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
           >
-            <FileText class="w-3.5 h-3.5" />
-            <span>Open Logs</span>
+            <Minus class="w-3.5 h-3.5" />
+          </button>
+          <button
+            onclick={handleCancel}
+            class="w-6 h-6 rounded flex items-center justify-center text-[#8c909f] hover:bg-[#93000a] hover:text-white transition-colors cursor-pointer"
+            title="Tutup"
+            type="button"
+          >
+            <X class="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
-      <!-- Modal Footer -->
-      <div class="px-5 py-4 border-t border-slate-800 bg-slate-900/50 flex items-center justify-end gap-2">
+      <!-- Subheader with Badge & Status -->
+      <div class="px-6 py-3.5 bg-[#171c24] border-b border-[#252a33] flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-lg bg-[#090e16] border border-[#30353e] flex items-center justify-center text-[#00e5ff] shadow-[0_0_12px_rgba(0,229,255,0.2)]">
+            <Sliders class="w-4 h-4" />
+          </div>
+          <div>
+            <h2 class="text-sm font-bold text-[#dee2ee] tracking-tight">Pengaturan & Opsi Konfigurasi</h2>
+            <p class="text-[11px] text-[#8c909f]">Sesuaikan kapabilitas unduhan, modul peramban, dan jalur paralel jaringan.</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <span class="px-2 py-0.5 rounded bg-[#090e16] text-[#4edea3] font-mono text-[11px] font-semibold flex items-center gap-1.5 border border-[#4edea3]/20 shadow-[0_0_8px_rgba(78,222,163,0.15)]">
+            <span class="w-1.5 h-1.5 rounded-full bg-[#4edea3] animate-pulse"></span>
+            {formatDisplayVersion(store.appVersion)} Aktif
+          </span>
+          <span class="px-2 py-0.5 rounded bg-[#252a33] text-[#bac9cc] font-mono text-[11px] border border-[#30353e]">
+            Build 2026.09
+          </span>
+        </div>
+      </div>
+
+      <!-- 5-Tab Bar -->
+      <div class="px-6 pt-3 bg-[#11161f] border-b border-[#252a33] flex items-center gap-2 overflow-x-auto no-scrollbar">
         <button
-          onclick={() => (store.isSettingsModalOpen = false)}
-          class="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs transition-colors cursor-pointer"
+          type="button"
+          onclick={() => (activeTab = 'general')}
+          class={`px-3.5 py-2 rounded-t-lg text-xs font-medium flex items-center gap-2 transition-all cursor-pointer ${
+            activeTab === 'general'
+              ? 'bg-[#171c24] text-[#00e5ff] border-t-2 border-t-[#00e5ff] border-x border-[#30353e] shadow-[0_-2px_8px_rgba(0,229,255,0.1)]'
+              : 'text-[#8c909f] hover:text-[#dee2ee] hover:bg-[#171c24]/50'
+          }`}
         >
-          Cancel
+          <Monitor class="w-3.5 h-3.5" />
+          <span>Umum (General)</span>
         </button>
+
         <button
-          onclick={saveSettings}
-          class="px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-cyan-500/20 active:scale-95 cursor-pointer"
+          type="button"
+          onclick={() => (activeTab = 'connection')}
+          class={`px-3.5 py-2 rounded-t-lg text-xs font-medium flex items-center gap-2 transition-all cursor-pointer ${
+            activeTab === 'connection'
+              ? 'bg-[#171c24] text-[#00e5ff] border-t-2 border-t-[#00e5ff] border-x border-[#30353e] shadow-[0_-2px_8px_rgba(0,229,255,0.1)]'
+              : 'text-[#8c909f] hover:text-[#dee2ee] hover:bg-[#171c24]/50'
+          }`}
         >
-          <Save class="w-3.5 h-3.5" />
-          <span>Save Changes</span>
+          <Zap class="w-3.5 h-3.5" />
+          <span>Sambungan (Connection)</span>
         </button>
+
+        <button
+          type="button"
+          onclick={() => (activeTab = 'filetypes')}
+          class={`px-3.5 py-2 rounded-t-lg text-xs font-medium flex items-center gap-2 transition-all cursor-pointer ${
+            activeTab === 'filetypes'
+              ? 'bg-[#171c24] text-[#00e5ff] border-t-2 border-t-[#00e5ff] border-x border-[#30353e] shadow-[0_-2px_8px_rgba(0,229,255,0.1)]'
+              : 'text-[#8c909f] hover:text-[#dee2ee] hover:bg-[#171c24]/50'
+          }`}
+        >
+          <FileText class="w-3.5 h-3.5" />
+          <span>Jenis Berkas (File Types)</span>
+        </button>
+
+        <button
+          type="button"
+          onclick={() => (activeTab = 'saveto')}
+          class={`px-3.5 py-2 rounded-t-lg text-xs font-medium flex items-center gap-2 transition-all cursor-pointer ${
+            activeTab === 'saveto'
+              ? 'bg-[#171c24] text-[#00e5ff] border-t-2 border-t-[#00e5ff] border-x border-[#30353e] shadow-[0_-2px_8px_rgba(0,229,255,0.1)]'
+              : 'text-[#8c909f] hover:text-[#dee2ee] hover:bg-[#171c24]/50'
+          }`}
+        >
+          <FolderOpen class="w-3.5 h-3.5" />
+          <span>Lokasi Simpan (Save To)</span>
+        </button>
+
+        <button
+          type="button"
+          onclick={() => (activeTab = 'extensions')}
+          class={`px-3.5 py-2 rounded-t-lg text-xs font-medium flex items-center gap-2 transition-all cursor-pointer ${
+            activeTab === 'extensions'
+              ? 'bg-[#171c24] text-[#00e5ff] border-t-2 border-t-[#00e5ff] border-x border-[#30353e] shadow-[0_-2px_8px_rgba(0,229,255,0.1)]'
+              : 'text-[#8c909f] hover:text-[#dee2ee] hover:bg-[#171c24]/50'
+          }`}
+        >
+          <Globe class="w-3.5 h-3.5" />
+          <span>Ekstensi (Extensions)</span>
+        </button>
+      </div>
+
+      <!-- Tab Content (Scrollable Viewport) -->
+      <div class="p-6 overflow-y-auto flex-1 text-xs space-y-6 max-h-[60vh]">
+        <!-- Success Alert Bar -->
+        {#if saveSuccessMessage}
+          <div class="p-3 bg-[#00e5ff]/10 border border-[#00e5ff]/30 text-[#00e5ff] rounded-lg flex items-center gap-2 font-medium">
+            <Check class="w-4 h-4 shrink-0" />
+            <span>{saveSuccessMessage}</span>
+          </div>
+        {/if}
+
+        <!-- TAB 1: UMUM (GENERAL) -->
+        {#if activeTab === 'general'}
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Left: Integrasi Sistem & Startup -->
+            <div class="space-y-6">
+              <div class="bg-[#1b2028] p-4 rounded-xl border border-[#30353e]/80 space-y-4">
+                <div class="flex items-center gap-2 pb-2 border-b border-[#252a33]">
+                  <Monitor class="w-4 h-4 text-[#00e5ff]" />
+                  <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">Integrasi Sistem & Startup</h3>
+                </div>
+
+                <div class="space-y-3">
+                  <label class="flex items-start gap-3 cursor-pointer group">
+                    <input
+                      type="checkbox"
+                      bind:checked={draft.autoStartWindows}
+                      class="mt-0.5 rounded border-[#30353e] text-[#00e5ff] focus:ring-0 focus:ring-offset-0 bg-[#090e16]"
+                    />
+                    <div>
+                      <span class="text-xs font-semibold text-[#dee2ee] group-hover:text-[#00e5ff] transition-colors">
+                        Jalankan IDM Turbo saat Windows dinyalakan
+                      </span>
+                      <p class="text-[11px] text-[#8c909f] leading-snug">
+                        Memuat layanan background optimizer dan tray monitor secara lekas.
+                      </p>
+                    </div>
+                  </label>
+
+                  <label class="flex items-start gap-3 cursor-pointer group">
+                    <input
+                      type="checkbox"
+                      bind:checked={draft.mediaPanelOverlay}
+                      class="mt-0.5 rounded border-[#30353e] text-[#00e5ff] focus:ring-0 focus:ring-offset-0 bg-[#090e16]"
+                    />
+                    <div>
+                      <span class="text-xs font-semibold text-[#dee2ee] group-hover:text-[#00e5ff] transition-colors">
+                        Tampilkan panel download melayang pada pemutar media
+                      </span>
+                      <p class="text-[11px] text-[#8c909f] leading-snug">
+                        Otomatis deteksi format m3u8, MP4, MKV, dan audio resolusi tinggi.
+                      </p>
+                    </div>
+                  </label>
+
+                  <label class="flex items-start gap-3 cursor-pointer group">
+                    <input
+                      type="checkbox"
+                      bind:checked={draft.clipboardAutoCapture}
+                      class="mt-0.5 rounded border-[#30353e] text-[#00e5ff] focus:ring-0 focus:ring-offset-0 bg-[#090e16]"
+                    />
+                    <div>
+                      <span class="text-xs font-semibold text-[#dee2ee] group-hover:text-[#00e5ff] transition-colors">
+                        Tangkap unduhan dari Clipboard secara otomatis
+                      </span>
+                      <p class="text-[11px] text-[#8c909f] leading-snug">
+                        Buka dialog tambah tautan otomatis saat menyalin URL tautan valid.
+                      </p>
+                    </div>
+                  </label>
+
+                  <label class="flex items-start gap-3 cursor-pointer group">
+                    <input
+                      type="checkbox"
+                      bind:checked={draft.notifyOnComplete}
+                      class="mt-0.5 rounded border-[#30353e] text-[#00e5ff] focus:ring-0 focus:ring-offset-0 bg-[#090e16]"
+                    />
+                    <div>
+                      <span class="text-xs font-semibold text-[#dee2ee] group-hover:text-[#00e5ff] transition-colors">
+                        Putar audio lonceng notifikasi saat unduhan tuntas
+                      </span>
+                      <p class="text-[11px] text-[#8c909f] leading-snug">
+                        Kirim notifikasi sistem operasi saat berkas selesai diunduh.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Integrasi Peramban Web -->
+              <div class="bg-[#1b2028] p-4 rounded-xl border border-[#30353e]/80 space-y-4">
+                <div class="flex items-center justify-between pb-2 border-b border-[#252a33]">
+                  <div class="flex items-center gap-2">
+                    <Globe class="w-4 h-4 text-[#00e5ff]" />
+                    <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">Integrasi Peramban Web</h3>
+                  </div>
+                  <span class="px-1.5 py-0.5 rounded bg-[#00e5ff]/10 text-[#00e5ff] font-mono text-[10px] font-semibold border border-[#00e5ff]/30">
+                    Native Messaging Host
+                  </span>
+                </div>
+
+                <p class="text-[11px] text-[#8c909f]">
+                  Pilih peramban web yang diizinkan untuk mengalihkan tautan unduhan langsung ke IDM Turbo Engine berkecepatan multi-channel.
+                </p>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <!-- Chrome -->
+                  <div class="p-2.5 bg-[#090e16] border border-[#30353e] rounded-lg flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                      <div class="w-2 h-2 rounded-full bg-[#10b981]"></div>
+                      <div>
+                        <span class="font-semibold text-xs text-[#dee2ee] block">Google Chrome</span>
+                        <span class="text-[10px] text-[#4edea3] font-mono">Terhubung</span>
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      bind:checked={draft.browserChrome}
+                      class="rounded border-[#30353e] text-[#00e5ff] focus:ring-0 focus:ring-offset-0 bg-[#171c24]"
+                    />
+                  </div>
+
+                  <!-- Edge -->
+                  <div class="p-2.5 bg-[#090e16] border border-[#30353e] rounded-lg flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                      <div class="w-2 h-2 rounded-full bg-[#10b981]"></div>
+                      <div>
+                        <span class="font-semibold text-xs text-[#dee2ee] block">Microsoft Edge</span>
+                        <span class="text-[10px] text-[#4edea3] font-mono">Terhubung</span>
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      bind:checked={draft.browserEdge}
+                      class="rounded border-[#30353e] text-[#00e5ff] focus:ring-0 focus:ring-offset-0 bg-[#171c24]"
+                    />
+                  </div>
+
+                  <!-- Firefox -->
+                  <div class="p-2.5 bg-[#090e16] border border-[#30353e] rounded-lg flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                      <div class="w-2 h-2 rounded-full bg-[#10b981]"></div>
+                      <div>
+                        <span class="font-semibold text-xs text-[#dee2ee] block">Mozilla Firefox</span>
+                        <span class="text-[10px] text-[#4edea3] font-mono">Terpasang Aktif</span>
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      bind:checked={draft.browserFirefox}
+                      class="rounded border-[#30353e] text-[#00e5ff] focus:ring-0 focus:ring-offset-0 bg-[#171c24]"
+                    />
+                  </div>
+
+                  <!-- Brave -->
+                  <div class="p-2.5 bg-[#090e16] border border-[#30353e] rounded-lg flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                      <div class="w-2 h-2 rounded-full bg-[#10b981]"></div>
+                      <div>
+                        <span class="font-semibold text-xs text-[#dee2ee] block">Brave Browser</span>
+                        <span class="text-[10px] text-[#4edea3] font-mono">Terhubung</span>
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      bind:checked={draft.browserBrave}
+                      class="rounded border-[#30353e] text-[#00e5ff] focus:ring-0 focus:ring-offset-0 bg-[#171c24]"
+                    />
+                  </div>
+                </div>
+
+                <div class="flex items-center justify-between pt-1">
+                  <button
+                    type="button"
+                    onclick={registerNativeHost}
+                    class="px-2.5 py-1.5 rounded bg-[#252a33] hover:bg-[#30353e] text-[#4cd7f6] font-medium text-[11px] flex items-center gap-1.5 transition-colors cursor-pointer border border-[#4cd7f6]/20"
+                  >
+                    <RefreshCw class="w-3 h-3" />
+                    <span>Periksa Pembaruan Ekstensi</span>
+                  </button>
+                  {#if nativeHostRegisterStatus}
+                    <span class="text-[11px] font-mono text-[#4edea3]">{nativeHostRegisterStatus}</span>
+                  {/if}
+                </div>
+              </div>
+            </div>
+
+            <!-- Right: Jalur Paralel & Jaringan + Kunci Tombol Cepat -->
+            <div class="space-y-6">
+              <div class="bg-[#1b2028] p-4 rounded-xl border border-[#30353e]/80 space-y-4">
+                <div class="flex items-center gap-2 pb-2 border-b border-[#252a33]">
+                  <Zap class="w-4 h-4 text-[#00e5ff]" />
+                  <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">Jalur Paralel & Jaringan</h3>
+                </div>
+
+                <div class="space-y-3">
+                  <div>
+                    <label for="connection-type-select" class="block text-xs font-semibold text-[#dee2ee] mb-1">
+                      Jenis Tipe Sambungan Jaringan:
+                    </label>
+                    <select
+                      id="connection-type-select"
+                      bind:value={draft.connectionType}
+                      class="w-full bg-[#090e16] border border-[#30353e] rounded-lg px-3 py-2 text-xs text-[#dee2ee] focus:outline-none focus:border-[#00e5ff]"
+                    >
+                      {#each connectionSpeeds as sp}
+                        <option value={sp.value}>{sp.label}</option>
+                      {/each}
+                    </select>
+                  </div>
+
+                  <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                      <span class="text-xs font-semibold text-[#dee2ee]">Maksimal Sambungan:</span>
+                      <span class="px-2 py-0.5 rounded bg-[#00e5ff]/15 text-[#00e5ff] font-mono text-xs font-bold border border-[#00e5ff]/30">
+                        {draft.defaultConnections} Jalur Turbo
+                      </span>
+                    </div>
+                    <p class="text-[11px] text-[#8c909f] mb-2">Jumlah segmentasi paket paralel simultan per berkas.</p>
+
+                    <input
+                      type="range"
+                      min="4"
+                      max="32"
+                      step="4"
+                      bind:value={draft.defaultConnections}
+                      class="w-full accent-[#00e5ff] cursor-pointer"
+                    />
+                    <div class="flex justify-between text-[10px] font-mono text-[#8c909f] px-1 mt-1">
+                      <span>4</span>
+                      <span>8</span>
+                      <span class="text-[#00e5ff] font-bold">16 (Turbo)</span>
+                      <span>24</span>
+                      <span>32</span>
+                    </div>
+                  </div>
+
+                  <label class="flex items-start gap-3 cursor-pointer group pt-1">
+                    <input
+                      type="checkbox"
+                      bind:checked={draft.tcpWindowAutoTuning}
+                      class="mt-0.5 rounded border-[#30353e] text-[#00e5ff] focus:ring-0 focus:ring-offset-0 bg-[#090e16]"
+                    />
+                    <div>
+                      <span class="text-xs font-semibold text-[#dee2ee] group-hover:text-[#00e5ff] transition-colors">
+                        Optimasi buffer TCP window auto-tuning
+                      </span>
+                      <p class="text-[11px] text-[#8c909f] leading-snug">
+                        Mengurangi bottleneck latency round-trip pada throughput gigabit.
+                      </p>
+                    </div>
+                  </label>
+
+                  <div class="p-2.5 rounded-lg bg-[#090e16] border border-[#30353e] flex items-center justify-between">
+                    <span class="text-xs text-[#8c909f]">Estimasi Batas Puncak:</span>
+                    <span class="text-xs font-mono font-bold text-[#4edea3]">Tak Terbatas (Uncapped)</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Kunci Tombol Cepat -->
+              <div class="bg-[#1b2028] p-4 rounded-xl border border-[#30353e]/80 space-y-3">
+                <div class="flex items-center gap-2 pb-2 border-b border-[#252a33]">
+                  <Layers class="w-4 h-4 text-[#00e5ff]" />
+                  <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">Kunci Tombol Cepat</h3>
+                </div>
+
+                <div class="space-y-2">
+                  <div class="flex items-center justify-between p-2 rounded-lg bg-[#090e16] border border-[#252a33]">
+                    <span class="text-xs text-[#dee2ee]">Cegah unduhan IDM saat klik tautan:</span>
+                    <kbd class="px-2 py-0.5 rounded bg-[#252a33] text-[#4cd7f6] font-mono text-[11px] font-bold border border-[#30353e]">
+                      Alt
+                    </kbd>
+                  </div>
+                  <div class="flex items-center justify-between p-2 rounded-lg bg-[#090e16] border border-[#252a33]">
+                    <span class="text-xs text-[#dee2ee]">Paksa tangkap unduhan secara langsung:</span>
+                    <kbd class="px-2 py-0.5 rounded bg-[#252a33] text-[#4cd7f6] font-mono text-[11px] font-bold border border-[#30353e]">
+                      Insert
+                    </kbd>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        {/if}
+
+        <!-- TAB 2: SAMBUNGAN (CONNECTION) -->
+        {#if activeTab === 'connection'}
+          <div class="space-y-6 max-w-2xl">
+            <div class="bg-[#1b2028] p-4 rounded-xl border border-[#30353e]/80 space-y-4">
+              <div class="flex items-center gap-2 pb-2 border-b border-[#252a33]">
+                <Zap class="w-4 h-4 text-[#00e5ff]" />
+                <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">Batas Kecepatan & Pengendali Bandwidth</h3>
+              </div>
+
+              <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <span class="text-xs font-semibold text-[#dee2ee]">Aktifkan Pembatas Kecepatan Global</span>
+                    <p class="text-[11px] text-[#8c909f]">Batasi total bandwidth unduhan agar tidak mengganggu aktivitas browsing lain.</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    bind:checked={store.speedLimiterEnabled}
+                    class="rounded border-[#30353e] text-[#00e5ff] focus:ring-0 focus:ring-offset-0 bg-[#090e16]"
+                  />
+                </div>
+
+                {#if store.speedLimiterEnabled}
+                  <div class="flex items-center gap-3 p-3 bg-[#090e16] rounded-lg border border-[#30353e]">
+                    <label for="speed-limit-val" class="text-xs font-medium text-[#dee2ee]">Batas Maksimal:</label>
+                    <input
+                      id="speed-limit-val"
+                      type="number"
+                      min="1"
+                      bind:value={store.globalSpeedLimitValue}
+                      class="w-24 bg-[#171c24] border border-[#30353e] rounded px-2.5 py-1 text-xs text-[#dee2ee] focus:outline-none focus:border-[#00e5ff]"
+                    />
+                    <select
+                      bind:value={store.globalSpeedLimitUnit}
+                      class="bg-[#171c24] border border-[#30353e] rounded px-2.5 py-1 text-xs text-[#dee2ee] focus:outline-none focus:border-[#00e5ff]"
+                    >
+                      <option value="KB/s">KB/s</option>
+                      <option value="MB/s">MB/s</option>
+                    </select>
+                  </div>
+                {/if}
+              </div>
+            </div>
+
+            <div class="bg-[#1b2028] p-4 rounded-xl border border-[#30353e]/80 space-y-4">
+              <div class="flex items-center gap-2 pb-2 border-b border-[#252a33]">
+                <Clock class="w-4 h-4 text-[#00e5ff]" />
+                <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">Timeout Jaringan & Percobaan Ulang</h3>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label for="timeout-input" class="block text-xs font-semibold text-[#dee2ee] mb-1">
+                    Waktu Tunggu Sambungan (Detik):
+                  </label>
+                  <input
+                    id="timeout-input"
+                    type="number"
+                    min="5"
+                    max="300"
+                    bind:value={draft.connectionTimeoutSec}
+                    class="w-full bg-[#090e16] border border-[#30353e] rounded-lg px-3 py-2 text-xs text-[#dee2ee] focus:outline-none focus:border-[#00e5ff]"
+                  />
+                  <p class="text-[10px] text-[#8c909f] mt-1">Batas waktu sebelum thread dianggap timeout (Default: 60s).</p>
+                </div>
+
+                <div>
+                  <label for="retries-input" class="block text-xs font-semibold text-[#dee2ee] mb-1">
+                    Maksimal Percobaan Ulang Otomatis:
+                  </label>
+                  <input
+                    id="retries-input"
+                    type="number"
+                    min="0"
+                    max="50"
+                    bind:value={draft.maxRetries}
+                    class="w-full bg-[#090e16] border border-[#30353e] rounded-lg px-3 py-2 text-xs text-[#dee2ee] focus:outline-none focus:border-[#00e5ff]"
+                  />
+                  <p class="text-[10px] text-[#8c909f] mt-1">Jumlah retry saat socket error atau gagal koneksi.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        {/if}
+
+        <!-- TAB 3: JENIS BERKAS (FILE TYPES) -->
+        {#if activeTab === 'filetypes'}
+          <div class="space-y-6 max-w-2xl">
+            <div class="bg-[#1b2028] p-4 rounded-xl border border-[#30353e]/80 space-y-3">
+              <div class="flex items-center gap-2 pb-2 border-b border-[#252a33]">
+                <FileText class="w-4 h-4 text-[#00e5ff]" />
+                <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">Ekstensi Berkas Otomatis Ditangkap</h3>
+              </div>
+              <p class="text-[11px] text-[#8c909f]">
+                Tautan unduhan dengan ekstensi di bawah ini akan dialihkan secara otomatis ke IDM Turbo saat Anda mengekliknya di peramban atau menyalinnya ke clipboard:
+              </p>
+
+              <textarea
+                rows="4"
+                bind:value={draft.autoCaptureExtensions}
+                class="w-full bg-[#090e16] border border-[#30353e] rounded-lg p-3 text-xs font-mono text-[#00e5ff] focus:outline-none focus:border-[#00e5ff] leading-relaxed resize-y"
+                placeholder="ZIP RAR 7Z EXE ISO MP4 MKV ..."
+              ></textarea>
+              <p class="text-[10px] text-[#8c909f]">Pisahkan masing-masing ekstensi dengan spasi. Contoh: <code>ZIP RAR ISO MP4 MKV PDF EXE</code></p>
+            </div>
+
+            <div class="bg-[#1b2028] p-4 rounded-xl border border-[#30353e]/80 space-y-3">
+              <div class="flex items-center gap-2 pb-2 border-b border-[#252a33]">
+                <ShieldCheck class="w-4 h-4 text-[#ffb4ab]" />
+                <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">Daftar Situs Web yang Dikecualikan</h3>
+              </div>
+              <p class="text-[11px] text-[#8c909f]">
+                IDM Turbo tidak akan menangkap unduhan otomatis dari situs-situs berikut (misal situs perbankan atau intranet lokal):
+              </p>
+
+              <textarea
+                rows="3"
+                bind:value={draft.excludedSites}
+                class="w-full bg-[#090e16] border border-[#30353e] rounded-lg p-3 text-xs font-mono text-[#bac9cc] focus:outline-none focus:border-[#00e5ff] leading-relaxed resize-y"
+                placeholder="*.bank.co.id intranet.local example.org"
+              ></textarea>
+              <p class="text-[10px] text-[#8c909f]">Pisahkan masing-masing domain dengan spasi atau baris baru.</p>
+            </div>
+          </div>
+        {/if}
+
+        <!-- TAB 4: LOKASI SIMPAN (SAVE TO) -->
+        {#if activeTab === 'saveto'}
+          <div class="space-y-6 max-w-2xl">
+            <div class="bg-[#1b2028] p-4 rounded-xl border border-[#30353e]/80 space-y-4">
+              <div class="flex items-center gap-2 pb-2 border-b border-[#252a33]">
+                <FolderOpen class="w-4 h-4 text-[#00e5ff]" />
+                <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">Direktori Unduhan Utama</h3>
+              </div>
+
+              <div>
+                <label for="primary-save-dir" class="block text-xs font-semibold text-[#dee2ee] mb-1">
+                  Folder Penyimpanan Default:
+                </label>
+                <div class="flex gap-2">
+                  <input
+                    id="primary-save-dir"
+                    type="text"
+                    bind:value={draft.defaultDownloadDir}
+                    placeholder="Contoh: C:\Users\Username\Downloads"
+                    class="flex-1 bg-[#090e16] border border-[#30353e] rounded-lg px-3 py-2 text-xs font-mono text-[#dee2ee] focus:outline-none focus:border-[#00e5ff]"
+                  />
+                  <button
+                    type="button"
+                    onclick={() => browseFolder('default')}
+                    class="px-3 py-2 rounded-lg bg-[#252a33] hover:bg-[#30353e] text-[#dee2ee] font-medium text-xs flex items-center gap-1.5 transition-colors cursor-pointer border border-[#30353e]"
+                  >
+                    <Folder class="w-3.5 h-3.5 text-[#00e5ff]" />
+                    <span>Pilih Folder...</span>
+                  </button>
+                </div>
+              </div>
+
+              <label class="flex items-start gap-3 cursor-pointer group pt-1">
+                <input
+                  type="checkbox"
+                  bind:checked={draft.categorySubfolders}
+                  class="mt-0.5 rounded border-[#30353e] text-[#00e5ff] focus:ring-0 focus:ring-offset-0 bg-[#090e16]"
+                />
+                <div>
+                  <span class="text-xs font-semibold text-[#dee2ee] group-hover:text-[#00e5ff] transition-colors">
+                    Atur subfolder otomatis berdasarkan kategori berkas
+                  </span>
+                  <p class="text-[11px] text-[#8c909f] leading-snug">
+                    Otomatis membuat folder terpisah (Documents, Video, Music, Programs, Compressed) di dalam folder utama.
+                  </p>
+                </div>
+              </label>
+            </div>
+
+            <div class="bg-[#1b2028] p-4 rounded-xl border border-[#30353e]/80 space-y-4">
+              <div class="flex items-center gap-2 pb-2 border-b border-[#252a33]">
+                <HardDrive class="w-4 h-4 text-[#00e5ff]" />
+                <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">Direktori Berkas Sementara (.part)</h3>
+              </div>
+
+              <div>
+                <label for="temp-save-dir" class="block text-xs font-semibold text-[#dee2ee] mb-1">
+                  Folder Temporary Segmen Multi-Jalur:
+                </label>
+                <div class="flex gap-2">
+                  <input
+                    id="temp-save-dir"
+                    type="text"
+                    bind:value={draft.tempDir}
+                    placeholder="Kosongkan untuk menggunakan folder sistem sementara bawaan"
+                    class="flex-1 bg-[#090e16] border border-[#30353e] rounded-lg px-3 py-2 text-xs font-mono text-[#dee2ee] focus:outline-none focus:border-[#00e5ff]"
+                  />
+                  <button
+                    type="button"
+                    onclick={() => browseFolder('temp')}
+                    class="px-3 py-2 rounded-lg bg-[#252a33] hover:bg-[#30353e] text-[#dee2ee] font-medium text-xs flex items-center gap-1.5 transition-colors cursor-pointer border border-[#30353e]"
+                  >
+                    <Folder class="w-3.5 h-3.5 text-[#00e5ff]" />
+                    <span>Pilih Folder...</span>
+                  </button>
+                </div>
+                <p class="text-[10px] text-[#8c909f] mt-1.5">
+                  Bagian berkas yang sedang diunduh akan disimpan di sini sebelum digabungkan menjadi berkas final.
+                </p>
+              </div>
+            </div>
+          </div>
+        {/if}
+
+        <!-- TAB 5: EKSTENSI (EXTENSIONS) -->
+        {#if activeTab === 'extensions'}
+          <div class="space-y-6 max-w-2xl">
+            <div class="bg-[#1b2028] p-4 rounded-xl border border-[#30353e]/80 space-y-4">
+              <div class="flex items-center justify-between pb-2 border-b border-[#252a33]">
+                <div class="flex items-center gap-2">
+                  <Globe class="w-4 h-4 text-[#00e5ff]" />
+                  <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">Integrasi Ekstensi Peramban</h3>
+                </div>
+                <span class="px-2 py-0.5 rounded bg-[#10b981]/15 text-[#10b981] font-mono text-[10px] font-bold border border-[#10b981]/30">
+                  IPC Pipe Aktif
+                </span>
+              </div>
+
+              <p class="text-[11px] text-[#8c909f] leading-relaxed">
+                Ekstensi browser IDM Turbo Desktop mendeteksi tautan unduhan dan aliran video secara otomatis di Google Chrome, Microsoft Edge, Mozilla Firefox, dan Brave Browser.
+              </p>
+
+              <div class="p-3 bg-[#090e16] rounded-lg border border-[#30353e] space-y-2 text-xs font-mono">
+                <div class="flex justify-between">
+                  <span class="text-[#8c909f]">Host Name:</span>
+                  <span class="text-[#00e5ff]">com.myownidm.host</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-[#8c909f]">Windows Named Pipe:</span>
+                  <span class="text-[#dee2ee]">\\.\pipe\myownidm-ipc</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-[#8c909f]">Localhost Fallback Port:</span>
+                  <span class="text-[#4edea3]">127.0.0.1:17890</span>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onclick={registerNativeHost}
+                  class="px-3 py-2 rounded-lg bg-[#00e5ff]/15 hover:bg-[#00e5ff]/25 text-[#00e5ff] font-semibold text-xs flex items-center gap-2 transition-all cursor-pointer border border-[#00e5ff]/40 shadow-[0_0_12px_rgba(0,229,255,0.15)]"
+                >
+                  <RefreshCw class="w-3.5 h-3.5" />
+                  <span>Registrasikan Ulang Native Host Manifest</span>
+                </button>
+                {#if nativeHostRegisterStatus}
+                  <span class="text-xs font-mono text-[#4edea3]">{nativeHostRegisterStatus}</span>
+                {/if}
+              </div>
+            </div>
+
+            <div class="bg-[#1b2028] p-4 rounded-xl border border-[#30353e]/80 space-y-2">
+              <span class="font-bold text-xs text-[#dee2ee] block">Panduan Instalasi Manual Ekstensi:</span>
+              <p class="text-[11px] text-[#8c909f] leading-relaxed">
+                Buka <code>chrome://extensions</code> di browser Chromium Anda, aktifkan <strong>Developer Mode</strong>, lalu klik <strong>Load unpacked</strong> dan pilih direktori <code>extension/</code> pada folder instalasi IDM Turbo.
+              </p>
+            </div>
+          </div>
+        {/if}
+      </div>
+
+      <!-- Footer Action Bar -->
+      <div class="px-6 py-3.5 bg-[#171c24] border-t border-[#252a33] flex items-center justify-between">
+        <button
+          type="button"
+          onclick={handleResetDefaults}
+          class="px-3 py-1.5 rounded-lg bg-[#252a33] hover:bg-[#30353e] text-[#8c909f] hover:text-[#dee2ee] font-medium text-xs flex items-center gap-1.5 transition-colors cursor-pointer border border-[#30353e]"
+        >
+          <RotateCcw class="w-3.5 h-3.5" />
+          <span>Atur Ulang Default</span>
+        </button>
+
+        <div class="flex items-center gap-2.5">
+          <button
+            type="button"
+            onclick={handleCancel}
+            class="px-4 py-1.5 rounded-lg bg-[#252a33] hover:bg-[#30353e] text-[#dee2ee] font-medium text-xs transition-colors cursor-pointer border border-[#30353e]"
+          >
+            Batal
+          </button>
+          <button
+            type="button"
+            onclick={handleApply}
+            disabled={isSaving}
+            class="px-4 py-1.5 rounded-lg bg-[#252a33] hover:bg-[#30353e] text-[#00e5ff] hover:text-[#4cd7f6] font-semibold text-xs transition-colors cursor-pointer border border-[#00e5ff]/30 shadow-sm"
+          >
+            Terapkan
+          </button>
+          <button
+            type="button"
+            onclick={handleOk}
+            disabled={isSaving}
+            class="px-5 py-1.5 rounded-lg bg-[#00e5ff] hover:bg-[#4cd7f6] text-[#090e16] font-bold text-xs flex items-center gap-1.5 transition-all shadow-[0_0_12px_rgba(0,229,255,0.3)] cursor-pointer active:scale-95"
+          >
+            <Check class="w-3.5 h-3.5 stroke-[2.5]" />
+            <span>Oke</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>

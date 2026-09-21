@@ -51,6 +51,7 @@ describe('IdmStore State & Filtering', () => {
     (globalThis as any).window = {
       __TAURI_INTERNALS__: {},
       isTauri: true,
+      addEventListener: vi.fn(),
     };
     mockInvoke.mockReset();
     eventListeners.clear();
@@ -760,6 +761,135 @@ describe('IdmStore State & Filtering', () => {
     await store.init();
     expect(store.appVersion).toBeDefined();
     expect(store.appVersion).toBe('0.1.0-dev');
+  });
+
+  it('handles settings lifecycle: load, apply, save, reset, and localStorage fallback', async () => {
+    mockIsTauriReturn = true;
+    mockInvoke.mockImplementation((cmd: string, args?: any) => {
+      if (cmd === 'get_app_settings') {
+        return Promise.resolve({
+          autoStartWindows: 'false',
+          defaultConnections: '32',
+          connectionType: 'broadband',
+          defaultDownloadDir: 'D:\\Downloads',
+        });
+      }
+      if (cmd === 'save_app_settings') {
+        return Promise.resolve();
+      }
+      if (cmd === 'get_default_download_dir') {
+        return Promise.resolve('C:\\Users\\Test\\Downloads');
+      }
+      return Promise.resolve(undefined);
+    });
+
+    const store = new IdmStore();
+    await store.loadAppSettings();
+
+    expect(store.settings.autoStartWindows).toBe(false);
+    expect(store.settings.defaultConnections).toBe(32);
+    expect(store.settings.defaultDownloadDir).toBe('D:\\Downloads');
+
+    // Save partial update
+    await store.saveAppSettings({ defaultConnections: 24, autoStartWindows: true });
+    expect(store.settings.defaultConnections).toBe(24);
+    expect(store.settings.autoStartWindows).toBe(true);
+    expect(mockInvoke).toHaveBeenCalledWith('save_app_settings', {
+      settings: expect.objectContaining({
+        defaultConnections: '24',
+        autoStartWindows: 'true',
+      }),
+    });
+
+    // Reset settings
+    await store.resetAppSettings();
+    expect(store.settings.defaultConnections).toBe(16);
+
+    // Browser mode fallback with localStorage
+    mockIsTauriReturn = false;
+    const localStorageMock: Record<string, string> = {};
+    (globalThis as any).window = {
+      localStorage: {
+        getItem: (k: string) => localStorageMock[k] || null,
+        setItem: (k: string, v: string) => {
+          localStorageMock[k] = v;
+        },
+      },
+    };
+
+    const webStore = new IdmStore();
+    await webStore.saveAppSettings({ maxRetries: 10 });
+    expect(localStorageMock['myownidm_settings']).toBeDefined();
+
+    const restoredStore = new IdmStore();
+    await restoredStore.loadAppSettings();
+    expect(restoredStore.settings.maxRetries).toBe(10);
+  });
+
+  it('handles clipboard monitoring selectively', async () => {
+    const store = new IdmStore();
+    store.settings.clipboardAutoCapture = true;
+    store.isAddModalOpen = false;
+
+    let clipboardText = 'https://example.com/software.zip';
+    const mockClipboard = {
+      readText: vi.fn().mockImplementation(() => Promise.resolve(clipboardText)),
+    };
+    try {
+      Object.defineProperty(globalThis, 'navigator', {
+        value: { clipboard: mockClipboard },
+        configurable: true,
+        writable: true,
+      });
+    } catch {
+      Object.defineProperty(globalThis.navigator, 'clipboard', {
+        value: mockClipboard,
+        configurable: true,
+        writable: true,
+      });
+    }
+
+    // First check should detect zip file and open add modal
+    await store.checkClipboardForUrl();
+    expect(store.isAddModalOpen).toBe(true);
+    expect(store.initialAddUrl).toBe('https://example.com/software.zip');
+
+    // Close modal and re-check same clipboard text: should not duplicate
+    store.isAddModalOpen = false;
+    await store.checkClipboardForUrl();
+    expect(store.isAddModalOpen).toBe(false);
+
+    // Unrelated text or non-download url should be ignored
+    clipboardText = 'Hello World this is just normal text';
+    await store.checkClipboardForUrl();
+    expect(store.isAddModalOpen).toBe(false);
+
+    // Disabled setting should not read clipboard
+    store.settings.clipboardAutoCapture = false;
+    clipboardText = 'https://example.com/another.mp4';
+    await store.checkClipboardForUrl();
+    expect(store.isAddModalOpen).toBe(false);
+  });
+
+  it('triggers OS notification on download-completed when enabled', async () => {
+    const notificationMock = vi.fn();
+    (globalThis as any).Notification = Object.assign(notificationMock, {
+      permission: 'granted',
+    });
+
+    const store = new IdmStore();
+    store.settings.notifyOnComplete = true;
+    store.tasks = [makeTask({ id: 'task-notif-1', filename: 'clip.mp4' })];
+
+    await store.setupEventListeners();
+    const completedListener = eventListeners.get('download-completed');
+    expect(completedListener).toBeDefined();
+
+    completedListener!({ payload: 'task-notif-1' });
+    expect(notificationMock).toHaveBeenCalledWith('Unduhan Selesai - IDM Turbo', {
+      body: 'clip.mp4',
+      icon: '/favicon.png',
+    });
   });
 });
 

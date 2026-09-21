@@ -263,6 +263,27 @@ pub async fn set_task_speed_limit(
     state.manager.set_task_speed_limit(&task_id, limit_bps).await
 }
 
+#[tauri::command]
+pub async fn get_app_settings(
+    state: State<'_, AppState>,
+) -> Result<HashMap<String, String>, String> {
+    state.manager.db.get_all_settings().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn save_app_settings(
+    state: State<'_, AppState>,
+    settings: HashMap<String, String>,
+) -> Result<(), String> {
+    state.manager.db.set_multiple_settings(&settings).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn register_native_host_manifest() -> Result<(), String> {
+    let current_exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    crate::native_messaging::register_native_messaging_manifests(&current_exe)
+}
+
 pub fn sanitize_window_label(task_id: &str) -> String {
     let sanitized: String = task_id
         .chars()
@@ -412,5 +433,22 @@ mod tests {
         assert_eq!(sanitize_window_label("abc-123"), "transfer-abc-123");
         assert_eq!(sanitize_window_label("task with spaces!@#"), "transfer-task_with_spaces___");
         assert_eq!(sanitize_window_label("uuid-v4_1234"), "transfer-uuid-v4_1234");
+    }
+
+    #[tokio::test]
+    async fn test_settings_commands_flow() {
+        let db = Arc::new(crate::db::Database::open_in_memory().unwrap());
+        let _manager = Arc::new(DownloadManager::new(db.clone()));
+
+        let mut sample = HashMap::new();
+        sample.insert("default_connections".to_string(), "16".to_string());
+        sample.insert("notify_on_complete".to_string(), "true".to_string());
+
+        let res_save = db.set_multiple_settings(&sample);
+        assert!(res_save.is_ok());
+
+        let loaded = db.get_all_settings().unwrap();
+        assert_eq!(loaded.get("default_connections"), Some(&"16".to_string()));
+        assert_eq!(loaded.get("notify_on_complete"), Some(&"true".to_string()));
     }
 }
