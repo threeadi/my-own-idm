@@ -313,6 +313,7 @@ mod tests {
             segments: vec![],
             referer: None,
             speed_limit_bps: None,
+            quality: None,
         };
 
         let res = report_download_failure(&task, "HTTP 403 Forbidden", &["Sample log line".to_string()]);

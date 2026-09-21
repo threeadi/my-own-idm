@@ -39,10 +39,11 @@ pub async fn start_download(
     save_dir: String,
     connections: usize,
     headers: Option<HashMap<String, String>>,
+    quality: Option<String>,
 ) -> Result<DownloadTask, String> {
     state
         .manager
-        .start_download(app, url, filename, save_dir, connections, headers)
+        .start_download(app, url, filename, save_dir, connections, headers, quality)
         .await
 }
 
@@ -539,6 +540,7 @@ mod tests {
             segments: vec![],
             referer: None,
             speed_limit_bps: None,
+            quality: None,
         };
         db.insert_task(&task).unwrap();
         manager.tasks.write().await.insert(task.id.clone(), task);
@@ -580,6 +582,7 @@ mod tests {
             segments: vec![],
             referer: None,
             speed_limit_bps: None,
+            quality: None,
         };
         db.insert_task(&task).unwrap();
         manager.tasks.write().await.insert(task.id.clone(), task.clone());

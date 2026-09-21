@@ -187,6 +187,46 @@ impl YtDlpRunner {
         }
     }
 
+    pub fn build_format_selector(quality: Option<&str>, filename: &str) -> String {
+        let q_str = quality
+            .filter(|q| !q.trim().is_empty())
+            .map(|q| q.to_ascii_lowercase())
+            .unwrap_or_else(|| {
+                let fn_lower = filename.to_ascii_lowercase();
+                if fn_lower.contains("2160p") || fn_lower.contains("4k") {
+                    "2160p".to_string()
+                } else if fn_lower.contains("1080p") {
+                    "1080p".to_string()
+                } else if fn_lower.contains("720p") {
+                    "720p".to_string()
+                } else if fn_lower.contains("480p") {
+                    "480p".to_string()
+                } else if fn_lower.contains("360p") {
+                    "360p".to_string()
+                } else if fn_lower.contains("audio") {
+                    "audio".to_string()
+                } else {
+                    String::new()
+                }
+            });
+
+        if q_str.contains("2160") || q_str.contains("4k") {
+            "bv*[height<=2160]+ba/b[height<=2160]/best".to_string()
+        } else if q_str.contains("1080") {
+            "bv*[height<=1080]+ba/b[height<=1080]/best".to_string()
+        } else if q_str.contains("720") {
+            "bv*[height<=720]+ba/b[height<=720]/best".to_string()
+        } else if q_str.contains("480") {
+            "bv*[height<=480]+ba/b[height<=480]/best".to_string()
+        } else if q_str.contains("360") {
+            "bv*[height<=360]+ba/b[height<=360]/best".to_string()
+        } else if q_str.contains("audio") {
+            "ba/b".to_string()
+        } else {
+            "bv*+ba/b/best".to_string()
+        }
+    }
+
     pub async fn run_download(
         url: String,
         output_file: String,
@@ -195,10 +235,12 @@ impl YtDlpRunner {
         progress_tx: Sender<(usize, u64)>,
         task_limiter: Option<Arc<TokenBucketRateLimiter>>,
         global_limiter: Option<Arc<TokenBucketRateLimiter>>,
+        quality: Option<String>,
     ) -> Result<(), String> {
         let yt_dlp_exe = Self::find_yt_dlp()?;
         let mut last_bytes: u64 = 0;
         let mut current_rate = Self::compute_effective_limit(&task_limiter, &global_limiter);
+        let format_selector = Self::build_format_selector(quality.as_deref(), &output_file);
 
         loop {
             if cancel_flag.load(Ordering::Relaxed) {
@@ -209,16 +251,20 @@ impl YtDlpRunner {
             #[cfg(windows)]
             cmd.creation_flags(CREATE_NO_WINDOW);
 
+            cmd.env("PYTHONUNBUFFERED", "1");
+
             cmd.arg("--no-warnings")
                 .arg("--no-playlist")
                 .arg("--newline")
                 .arg("-c") // --continue: resume partially downloaded video files
                 .arg("-f")
-                .arg("bv*+ba/b/best")
+                .arg(&format_selector)
                 .arg("--merge-output-format")
                 .arg("mp4")
                 .arg("--concurrent-fragments")
                 .arg("4")
+                .arg("--progress-delta")
+                .arg("0.2")
                 .arg("--progress-template")
                 .arg("IDM_PROGRESS:%(progress.downloaded_bytes)s")
                 .arg("-o")
@@ -277,6 +323,7 @@ impl YtDlpRunner {
 
             let stream_outcome = Self::process_progress_stream_with_rate_check(
                 reader,
+                &output_file,
                 cancel_flag.clone(),
                 progress_tx.clone(),
                 &mut last_bytes,
@@ -329,6 +376,7 @@ impl YtDlpRunner {
 
     pub async fn process_progress_stream_with_rate_check<R: tokio::io::AsyncBufRead + Unpin>(
         mut reader: tokio::io::Lines<R>,
+        output_file: &str,
         cancel_flag: Arc<AtomicBool>,
         progress_tx: Sender<(usize, u64)>,
         last_bytes: &mut u64,
@@ -338,6 +386,13 @@ impl YtDlpRunner {
         task_notify: Option<Arc<tokio::sync::Notify>>,
         global_notify: Option<Arc<tokio::sync::Notify>>,
     ) -> StreamOutcome {
+        let part_path = if !output_file.is_empty() {
+            format!("{}.part", output_file)
+        } else {
+            String::new()
+        };
+        let out_path = output_file.to_string();
+
         loop {
             if cancel_flag.load(Ordering::Relaxed) {
                 return StreamOutcome::Cancelled;
@@ -365,27 +420,8 @@ impl YtDlpRunner {
             };
 
             tokio::select! {
-                _ = tokio::time::sleep(std::time::Duration::from_millis(100)) => {
-                    if cancel_flag.load(Ordering::Relaxed) {
-                        return StreamOutcome::Cancelled;
-                    }
-                    let check_rate = Self::compute_effective_limit(task_limiter, global_limiter);
-                    if check_rate != current_rate {
-                        return StreamOutcome::RateChanged(check_rate);
-                    }
-                }
-                _ = task_fut => {
-                    let check_rate = Self::compute_effective_limit(task_limiter, global_limiter);
-                    if check_rate != current_rate {
-                        return StreamOutcome::RateChanged(check_rate);
-                    }
-                }
-                _ = global_fut => {
-                    let check_rate = Self::compute_effective_limit(task_limiter, global_limiter);
-                    if check_rate != current_rate {
-                        return StreamOutcome::RateChanged(check_rate);
-                    }
-                }
+                biased;
+
                 line_res = reader.next_line() => {
                     match line_res {
                         Ok(Some(line)) => {
@@ -400,12 +436,65 @@ impl YtDlpRunner {
                                 }
                             }
                         }
-                        Ok(None) => return StreamOutcome::Completed,
-                        Err(_) => return StreamOutcome::Completed,
+                        Ok(None) => break,
+                        Err(_) => break,
+                    }
+                }
+                _ = task_fut => {
+                    let check_rate = Self::compute_effective_limit(task_limiter, global_limiter);
+                    if check_rate != current_rate {
+                        return StreamOutcome::RateChanged(check_rate);
+                    }
+                }
+                _ = global_fut => {
+                    let check_rate = Self::compute_effective_limit(task_limiter, global_limiter);
+                    if check_rate != current_rate {
+                        return StreamOutcome::RateChanged(check_rate);
+                    }
+                }
+                _ = tokio::time::sleep(std::time::Duration::from_millis(200)) => {
+                    if cancel_flag.load(Ordering::Relaxed) {
+                        return StreamOutcome::Cancelled;
+                    }
+                    let check_rate = Self::compute_effective_limit(task_limiter, global_limiter);
+                    if check_rate != current_rate {
+                        return StreamOutcome::RateChanged(check_rate);
+                    }
+
+                    if !output_file.is_empty() {
+                        let disk_len = if let Ok(m) = tokio::fs::metadata(&part_path).await {
+                            m.len()
+                        } else if let Ok(m) = tokio::fs::metadata(&out_path).await {
+                            m.len()
+                        } else {
+                            0
+                        };
+                        if disk_len > *last_bytes {
+                            let delta = disk_len - *last_bytes;
+                            *last_bytes = disk_len;
+                            let _ = progress_tx.send((0, delta)).await;
+                        }
                     }
                 }
             }
         }
+
+        if !output_file.is_empty() {
+            let disk_len = if let Ok(m) = tokio::fs::metadata(&part_path).await {
+                m.len()
+            } else if let Ok(m) = tokio::fs::metadata(&out_path).await {
+                m.len()
+            } else {
+                0
+            };
+            if disk_len > *last_bytes {
+                let delta = disk_len - *last_bytes;
+                *last_bytes = disk_len;
+                let _ = progress_tx.send((0, delta)).await;
+            }
+        }
+
+        StreamOutcome::Completed
     }
 
     pub async fn process_progress_stream<R: tokio::io::AsyncBufRead + Unpin>(
@@ -416,6 +505,7 @@ impl YtDlpRunner {
         let mut last_bytes = 0;
         let outcome = Self::process_progress_stream_with_rate_check(
             reader,
+            "",
             cancel_flag,
             progress_tx,
             &mut last_bytes,
@@ -599,6 +689,7 @@ mod tests {
 
         let outcome = YtDlpRunner::process_progress_stream_with_rate_check(
             reader,
+            "",
             cancel,
             tx,
             &mut last_bytes,
@@ -622,6 +713,7 @@ mod tests {
 
         let outcome = YtDlpRunner::process_progress_stream_with_rate_check(
             reader,
+            "",
             cancel,
             tx,
             &mut last_bytes,
@@ -656,8 +748,66 @@ mod tests {
             tx,
             Some(Arc::new(TokenBucketRateLimiter::new(500_000))),
             None,
+            Some("720p".to_string()),
         ).await;
         assert!(res.is_ok());
+    }
+
+    #[test]
+    fn test_build_format_selector() {
+        // Explicit quality preset
+        assert_eq!(
+            YtDlpRunner::build_format_selector(Some("720p"), "video.mp4"),
+            "bv*[height<=720]+ba/b[height<=720]/best"
+        );
+        assert_eq!(
+            YtDlpRunner::build_format_selector(Some("1080p"), "video.mp4"),
+            "bv*[height<=1080]+ba/b[height<=1080]/best"
+        );
+        assert_eq!(
+            YtDlpRunner::build_format_selector(Some("480p"), "video.mp4"),
+            "bv*[height<=480]+ba/b[height<=480]/best"
+        );
+        assert_eq!(
+            YtDlpRunner::build_format_selector(Some("360p"), "video.mp4"),
+            "bv*[height<=360]+ba/b[height<=360]/best"
+        );
+        assert_eq!(
+            YtDlpRunner::build_format_selector(Some("2160p"), "video.mp4"),
+            "bv*[height<=2160]+ba/b[height<=2160]/best"
+        );
+        assert_eq!(
+            YtDlpRunner::build_format_selector(Some("4k"), "video.mp4"),
+            "bv*[height<=2160]+ba/b[height<=2160]/best"
+        );
+        assert_eq!(
+            YtDlpRunner::build_format_selector(Some("audio"), "song.mp4"),
+            "ba/b"
+        );
+
+        // Quality inferred from filename when quality is None or empty
+        assert_eq!(
+            YtDlpRunner::build_format_selector(None, "Embed_720p.mp4"),
+            "bv*[height<=720]+ba/b[height<=720]/best"
+        );
+        assert_eq!(
+            YtDlpRunner::build_format_selector(Some(""), "Movie_1080p.mkv"),
+            "bv*[height<=1080]+ba/b[height<=1080]/best"
+        );
+        assert_eq!(
+            YtDlpRunner::build_format_selector(None, "Stream_480p.mp4"),
+            "bv*[height<=480]+ba/b[height<=480]/best"
+        );
+        assert_eq!(
+            YtDlpRunner::build_format_selector(None, "Podcast_audio.mp3"),
+            "ba/b"
+        );
+
+        // Fallback default
+        assert_eq!(
+            YtDlpRunner::build_format_selector(None, "regular_download.mp4"),
+            "bv*+ba/b/best"
+        );
     }
 }
 

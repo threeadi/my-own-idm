@@ -182,6 +182,7 @@
         saveDir: saveDir.trim(),
         connections: connections,
         headers: store.initialHeaders || null,
+        quality: store.initialQuality || null,
       });
 
       if (!downloadNow) {

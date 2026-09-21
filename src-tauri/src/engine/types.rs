@@ -94,6 +94,8 @@ pub struct DownloadTask {
     pub referer: Option<String>,
     #[serde(default)]
     pub speed_limit_bps: Option<u64>,
+    #[serde(default)]
+    pub quality: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -282,6 +284,7 @@ mod tests {
             ],
             referer: Some("https://example.com/download-page".to_string()),
             speed_limit_bps: Some(1024 * 1024),
+            quality: Some("720p".to_string()),
         };
 
         let json = serde_json::to_string(&task).expect("serialize task");
@@ -291,6 +294,7 @@ mod tests {
         assert_eq!(decoded.segments.len(), 2);
         assert_eq!(decoded.referer, Some("https://example.com/download-page".to_string()));
         assert_eq!(decoded.speed_limit_bps, Some(1024 * 1024));
+        assert_eq!(decoded.quality, Some("720p".to_string()));
     }
 
     #[test]

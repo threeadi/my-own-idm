@@ -19,6 +19,7 @@ impl Database {
         conn.execute_batch(schema::CREATE_TABLES)?;
         let _ = conn.execute("ALTER TABLE downloads ADD COLUMN referer TEXT", []);
         let _ = conn.execute("ALTER TABLE downloads ADD COLUMN speed_limit_bps INTEGER", []);
+        let _ = conn.execute("ALTER TABLE downloads ADD COLUMN quality TEXT", []);
         Ok(Self {
             conn: Mutex::new(conn),
         })
@@ -29,6 +30,7 @@ impl Database {
         conn.execute_batch(schema::CREATE_TABLES)?;
         let _ = conn.execute("ALTER TABLE downloads ADD COLUMN referer TEXT", []);
         let _ = conn.execute("ALTER TABLE downloads ADD COLUMN speed_limit_bps INTEGER", []);
+        let _ = conn.execute("ALTER TABLE downloads ADD COLUMN quality TEXT", []);
         Ok(Self {
             conn: Mutex::new(conn),
         })
@@ -43,8 +45,8 @@ impl Database {
             r#"INSERT OR REPLACE INTO downloads (
                 id, url, filename, save_dir, file_path, total_bytes, downloaded_bytes,
                 category, status, connections, supports_range, is_hls, created_at,
-                completed_at, error_message, referer, speed_limit_bps
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)"#,
+                completed_at, error_message, referer, speed_limit_bps, quality
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)"#,
             params![
                 task.id,
                 task.url,
@@ -62,7 +64,8 @@ impl Database {
                 task.completed_at,
                 task.error_message,
                 task.referer,
-                task.speed_limit_bps.map(|b| b as i64)
+                task.speed_limit_bps.map(|b| b as i64),
+                task.quality
             ],
         )?;
 
@@ -147,7 +150,7 @@ impl Database {
             r#"SELECT 
                 id, url, filename, save_dir, file_path, total_bytes, downloaded_bytes,
                 category, status, connections, supports_range, is_hls, created_at,
-                completed_at, error_message, referer, speed_limit_bps
+                completed_at, error_message, referer, speed_limit_bps, quality
             FROM downloads ORDER BY created_at DESC"#,
         )?;
 
@@ -170,6 +173,7 @@ impl Database {
             let error_message: Option<String> = row.get(14)?;
             let referer: Option<String> = row.get(15)?;
             let speed_limit_bps: Option<i64> = row.get(16)?;
+            let quality: Option<String> = row.get(17).unwrap_or(None);
 
             let category: DownloadCategory = serde_json::from_str(&category_str).unwrap_or(DownloadCategory::General);
             let mut status: TaskStatus = serde_json::from_str(&status_str).unwrap_or(TaskStatus::Queued);
@@ -198,6 +202,7 @@ impl Database {
                 segments: Vec::new(),
                 referer,
                 speed_limit_bps: speed_limit_bps.map(|b| b as u64),
+                quality,
             })
         })?;
 
@@ -347,6 +352,7 @@ mod tests {
             ],
             referer: Some("https://example.com/download-page".to_string()),
             speed_limit_bps: None,
+            quality: Some("720p".to_string()),
         }
     }
 
@@ -364,6 +370,7 @@ mod tests {
         assert_eq!(loaded.filename, "test.zip");
         assert_eq!(loaded.total_bytes, Some(1000));
         assert_eq!(loaded.downloaded_bytes, 200);
+        assert_eq!(loaded.quality, Some("720p".to_string()));
         assert_eq!(loaded.segments.len(), 2);
         assert_eq!(loaded.segments[0].start_byte, 0);
         assert_eq!(loaded.segments[1].end_byte, 999);

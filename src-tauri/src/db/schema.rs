@@ -16,7 +16,8 @@ CREATE TABLE IF NOT EXISTS downloads (
     completed_at TEXT,
     error_message TEXT,
     referer TEXT,
-    speed_limit_bps INTEGER
+    speed_limit_bps INTEGER,
+    quality TEXT
 );
 
 CREATE TABLE IF NOT EXISTS segments (

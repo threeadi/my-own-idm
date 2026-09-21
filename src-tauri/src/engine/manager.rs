@@ -370,6 +370,7 @@ impl DownloadManager {
         save_dir: &str,
         connections: usize,
         custom_headers: Option<HashMap<String, String>>,
+        quality: Option<String>,
     ) -> Result<(DownloadTask, Arc<AtomicBool>), String> {
         let clean_url = crate::engine::probe::clean_stream_url(url);
 
@@ -436,6 +437,7 @@ impl DownloadManager {
             segments,
             referer,
             speed_limit_bps: None,
+            quality,
         };
 
         // Save to DB and Memory
@@ -462,9 +464,10 @@ impl DownloadManager {
         save_dir: String,
         connections: usize,
         custom_headers: Option<HashMap<String, String>>,
+        quality: Option<String>,
     ) -> Result<DownloadTask, String> {
         let (task, cancel_flag) = self
-            .prepare_download_task(&url, &filename, &save_dir, connections, custom_headers.clone())
+            .prepare_download_task(&url, &filename, &save_dir, connections, custom_headers.clone(), quality)
             .await?;
 
         // Extract rate limiters: always pass global_limiter and task_limiter so running workers dynamically throttle
@@ -687,6 +690,7 @@ impl DownloadManager {
 
             let (stream_err_tx, err_rx) = tokio::sync::oneshot::channel();
             stream_err_rx = Some(err_rx);
+            let quality_clone = task.quality.clone();
 
             tauri::async_runtime::spawn(async move {
                 let res = crate::engine::ytdlp::YtDlpRunner::run_download(
@@ -697,6 +701,7 @@ impl DownloadManager {
                     tx_clone,
                     task_limiter_clone,
                     global_limiter_clone,
+                    quality_clone,
                 )
                 .await;
                 let _ = stream_err_tx.send(res);
@@ -1156,6 +1161,7 @@ mod tests {
             segments: vec![],
             referer: None,
             speed_limit_bps: None,
+            quality: None,
         };
         db.insert_task(&task1).unwrap();
 
@@ -1199,6 +1205,7 @@ mod tests {
             segments: vec![],
             referer: None,
             speed_limit_bps: None,
+            quality: None,
         };
         db.insert_task(&task2).unwrap();
         manager.tasks.write().await.insert("task-mgr-2".to_string(), task2);
@@ -1233,6 +1240,7 @@ mod tests {
             segments: vec![],
             referer: None,
             speed_limit_bps: None,
+            quality: None,
         };
         manager.tasks.write().await.insert("task-mgr-3".to_string(), task3);
         let del_res = manager.cancel_download("task-mgr-3", true).await;
@@ -1406,12 +1414,14 @@ mod tests {
                 temp.path().to_str().unwrap(),
                 4,
                 None,
+                Some("720p".to_string()),
             )
             .await
             .unwrap();
 
         assert_eq!(task.filename, "my_clip.mp4");
         assert_eq!(task.category, DownloadCategory::Video);
+        assert_eq!(task.quality, Some("720p".to_string()));
         assert_eq!(task.connections, 4);
         assert_eq!(task.segments.len(), 4);
         assert_eq!(task.total_bytes, Some(1048576));
@@ -1488,6 +1498,7 @@ mod tests {
             }],
             referer: None,
             speed_limit_bps: None,
+            quality: None,
         };
         db.insert_task(&task).unwrap();
 
@@ -1538,6 +1549,7 @@ mod tests {
             segments: vec![],
             referer: None,
             speed_limit_bps: None,
+            quality: None,
         };
         db.insert_task(&task).unwrap();
 
@@ -1594,6 +1606,7 @@ mod tests {
             segments: vec![],
             referer: None,
             speed_limit_bps: None,
+            quality: None,
         };
         db.insert_task(&task).unwrap();
 
@@ -1650,6 +1663,7 @@ mod tests {
             segments: vec![],
             referer: None,
             speed_limit_bps: None,
+            quality: Some("720p".to_string()),
         };
         db.insert_task(&task).unwrap();
 
@@ -1722,6 +1736,7 @@ mod tests {
             segments: vec![],
             referer: Some("https://example.com/download".to_string()),
             speed_limit_bps: None,
+            quality: None,
         };
         db.insert_task(&initial_task).unwrap();
         manager.tasks.write().await.insert("task-refresh-1".to_string(), initial_task);
@@ -1787,6 +1802,7 @@ mod tests {
             segments: vec![],
             referer: None,
             speed_limit_bps: None,
+            quality: None,
         };
         db.insert_task(&initial_task).unwrap();
         manager.tasks.write().await.insert("task-refresh-mismatch".to_string(), initial_task);
@@ -1838,6 +1854,7 @@ mod tests {
                 "", // empty candidate filename
                 temp.path().to_str().unwrap(),
                 8,
+                None,
                 None,
             )
             .await
@@ -1898,6 +1915,7 @@ mod tests {
             segments: vec![],
             referer: None,
             speed_limit_bps: None,
+            quality: None,
         };
         db.insert_task(&task).unwrap();
         manager.tasks.write().await.insert(task.id.clone(), task.clone());
@@ -1982,6 +2000,7 @@ mod tests {
             segments: vec![],
             referer: None,
             speed_limit_bps: None,
+            quality: None,
         };
         manager.tasks.write().await.insert(active_task.id.clone(), active_task.clone());
 
@@ -2021,6 +2040,7 @@ mod tests {
             segments: vec![],
             referer: None,
             speed_limit_bps: None,
+            quality: None,
         };
         db.insert_task(&completed_task).unwrap();
 

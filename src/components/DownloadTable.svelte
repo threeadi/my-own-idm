@@ -275,6 +275,12 @@
                       {limitParsed.value} {limitParsed.unit}
                     </span>
                   {/if}
+
+                  {#if task.quality}
+                    <span class="shrink-0 px-2 py-0.2 rounded-full bg-[#4cd7f6]/10 text-[#4cd7f6] font-mono text-[10px] font-semibold border border-[#4cd7f6]/30 uppercase">
+                      {task.quality}
+                    </span>
+                  {/if}
                 </div>
 
                 <!-- Telemetry Row -->
@@ -285,7 +291,14 @@
                       <span class="text-[#8c909f]/60">/ {formatBytes(task.total_bytes)}</span>
                     {/if}
                   </span>
-                  <span class="text-[#4cd7f6] font-bold">{pct.toFixed(1)}%</span>
+                  {#if task.total_bytes}
+                    <span class="text-[#4cd7f6] font-bold">{pct.toFixed(1)}%</span>
+                  {:else if isDownloading}
+                    <span class="text-[#4cd7f6] font-bold flex items-center gap-1">
+                      <span class="w-1.5 h-1.5 rounded-full bg-[#4cd7f6] animate-pulse"></span>
+                      Stream
+                    </span>
+                  {/if}
                   {#if isDownloading}
                     <span class="text-[#4edea3] font-semibold flex items-center gap-1">
                       <Zap class="w-3 h-3 text-[#4edea3]" />
@@ -362,8 +375,8 @@
           <div class="flex flex-col gap-1 pt-1">
             <div class="w-full bg-[#090e16] rounded-full h-2 overflow-hidden border border-[#252a33]/60 relative">
               <div
-                class="h-full rounded-full transition-all duration-300 {isCompleted ? 'bg-[#10b981]' : isDownloading ? 'bg-gradient-to-r from-[#00e5ff] to-[#4d8eff]' : 'bg-[#30353e]'}"
-                style="width: {pct}%"
+                class="h-full rounded-full transition-all duration-300 {isCompleted ? 'bg-[#10b981]' : isDownloading ? 'bg-gradient-to-r from-[#00e5ff] to-[#4d8eff]' : 'bg-[#30353e]'} {!task.total_bytes && isDownloading ? 'w-full animate-pulse opacity-80' : ''}"
+                style="width: {!task.total_bytes && isDownloading ? '100%' : `${pct}%`}"
               ></div>
             </div>
 
@@ -518,11 +531,19 @@
                 <div class="space-y-1">
                   <div class="w-full bg-[#090e16] rounded-full h-1.5 overflow-hidden">
                     <div
-                      class="h-full rounded-full transition-all {isCompleted ? 'bg-[#10b981]' : isDownloading ? 'bg-[#00e5ff]' : 'bg-[#30353e]'}"
-                      style="width: {pct}%"
+                      class="h-full rounded-full transition-all {isCompleted ? 'bg-[#10b981]' : isDownloading ? 'bg-[#00e5ff]' : 'bg-[#30353e]'} {!task.total_bytes && isDownloading ? 'w-full animate-pulse opacity-80' : ''}"
+                      style="width: {!task.total_bytes && isDownloading ? '100%' : `${pct}%`}"
                     ></div>
                   </div>
-                  <span class="text-[10px] font-mono text-[#8c909f]">{pct.toFixed(1)}%</span>
+                  <span class="text-[10px] font-mono text-[#8c909f]">
+                    {#if task.total_bytes}
+                      {pct.toFixed(1)}%
+                    {:else if isDownloading}
+                      Stream
+                    {:else}
+                      --
+                    {/if}
+                  </span>
                 </div>
               </td>
               <td class="py-2 px-3 font-mono text-[11px] text-[#4edea3]">
@@ -536,6 +557,11 @@
                   <span class="text-[10px] px-1.5 py-0.5 rounded font-medium {isCompleted ? 'bg-[#10b981]/20 text-[#4edea3]' : isDownloading ? 'bg-[#03b5d3]/20 text-[#4cd7f6]' : isPaused ? 'bg-[#f59e0b]/20 text-[#f59e0b]' : 'bg-[#93000a]/20 text-[#ffb4ab]'}">
                     {isDownloading ? store.t('sidebar.statusDownloading') : isCompleted ? store.t('sidebar.statusCompleted') : isPaused ? store.t('sidebar.statusPaused') : store.t('common.failed')}
                   </span>
+                  {#if task.quality}
+                    <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#4cd7f6]/10 text-[#4cd7f6] border border-[#4cd7f6]/30 uppercase font-semibold">
+                      {task.quality}
+                    </span>
+                  {/if}
                   {#if task.speed_limit_bps && task.speed_limit_bps > 0}
                     {@const lp = bpsToUnit(task.speed_limit_bps)}
                     <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#00e5ff]/10 text-[#00e5ff] border border-[#00e5ff]/30 flex items-center gap-0.5" title="{store.t('bento.speedLimit')}: {lp.value} {lp.unit}">

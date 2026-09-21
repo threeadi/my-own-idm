@@ -42,6 +42,7 @@ export interface DownloadTask {
   segments: Segment[];
   referer?: string | null;
   speed_limit_bps?: number | null;
+  quality?: string | null;
   // Computed in frontend
   speed_bps?: number;
   eta_seconds?: number | null;

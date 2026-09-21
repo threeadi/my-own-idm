@@ -31,6 +31,7 @@ export class IdmStore {
   initialAddUrl = $state<string>('');
   initialFilename = $state<string>('');
   initialHeaders = $state<Record<string, string> | null>(null);
+  initialQuality = $state<string>('');
   bypassDuplicateCheck = $state<boolean>(false);
 
   globalSpeedLimitBps = $derived<number | null>(
@@ -55,6 +56,7 @@ export class IdmStore {
   duplicateModalData = $state<DuplicateCheckResult | null>(null);
   duplicateModalUrl = $state<string>('');
   duplicateModalHeaders = $state<Record<string, string> | null>(null);
+  duplicateModalQuality = $state<string>('');
 
   selectedTask = $derived<DownloadTask | null>(
     this.tasks.find((t) => t.id === this.selectedTaskId) || null
@@ -399,9 +401,9 @@ export class IdmStore {
         } else {
           const dup = await this.checkDuplicateDownload(p.url, p.filename || '');
           if (dup.is_duplicate) {
-            this.openDuplicateModal(dup, p.url, p.headers || null);
+            this.openDuplicateModal(dup, p.url, p.headers || null, p.quality || '');
           } else {
-            this.openAddModal(p.url, p.filename, p.headers || null);
+            this.openAddModal(p.url, p.filename, p.headers || null, false, p.quality || '');
           }
         }
       }
@@ -472,11 +474,13 @@ export class IdmStore {
     url: string = '',
     filename: string = '',
     headers: Record<string, string> | null = null,
-    bypassDuplicate: boolean = false
+    bypassDuplicate: boolean = false,
+    quality: string = ''
   ) {
     this.initialAddUrl = url;
     this.initialFilename = filename || '';
     this.initialHeaders = headers || null;
+    this.initialQuality = quality || '';
     this.bypassDuplicateCheck = bypassDuplicate;
     this.isAddModalOpen = true;
   }
@@ -724,10 +728,11 @@ export class IdmStore {
     };
   }
 
-  async openDuplicateModal(data: DuplicateCheckResult, url: string, headers: Record<string, string> | null = null) {
+  async openDuplicateModal(data: DuplicateCheckResult, url: string, headers: Record<string, string> | null = null, quality: string = '') {
     this.duplicateModalData = data;
     this.duplicateModalUrl = url;
     this.duplicateModalHeaders = headers;
+    this.duplicateModalQuality = quality;
 
     if (this.settings.duplicateActionRemember && this.settings.duplicateAction && this.settings.duplicateAction !== 'ask') {
       await this.proceedWithDuplicateAction(this.settings.duplicateAction, false);
@@ -743,12 +748,14 @@ export class IdmStore {
     this.duplicateModalData = null;
     this.duplicateModalUrl = '';
     this.duplicateModalHeaders = null;
+    this.duplicateModalQuality = '';
   }
 
   async proceedWithDuplicateAction(choice: 'numbered' | 'overwrite' | 'resume', remember: boolean = false) {
     const data = this.duplicateModalData;
     const url = this.duplicateModalUrl;
     const headers = this.duplicateModalHeaders;
+    const quality = this.duplicateModalQuality;
 
     if (remember) {
       this.settings.duplicateAction = choice;
@@ -760,10 +767,10 @@ export class IdmStore {
 
     if (choice === 'numbered') {
       const filename = data?.suggested_new_filename || '';
-      this.openAddModal(url, filename, headers, true);
+      this.openAddModal(url, filename, headers, true, quality);
     } else if (choice === 'overwrite') {
       const filename = data?.filename || '';
-      this.openAddModal(url, filename, headers, true);
+      this.openAddModal(url, filename, headers, true, quality);
     } else if (choice === 'resume') {
       if (data?.task_id) {
         if (data.status === 'paused') {
@@ -771,7 +778,7 @@ export class IdmStore {
         }
         await this.openTransferWindow(data.task_id);
       } else {
-        this.openAddModal(url, data?.filename || '', headers, true);
+        this.openAddModal(url, data?.filename || '', headers, true, quality);
       }
     }
   }
