@@ -1054,6 +1054,188 @@ describe('IdmStore State & Filtering', () => {
     expect(store.isAddModalOpen).toBe(true);
     expect(store.initialAddUrl).toBe('https://example.com/fresh-brand-new.pdf');
   });
+
+  describe('Task Sorting & Ordering', () => {
+    it('sorts tasks by name asc and desc', () => {
+      const store = new IdmStore();
+      store.tasks = [
+        makeTask({ id: '1', filename: 'Charlie.mp4' }),
+        makeTask({ id: '2', filename: 'Alpha.mp4' }),
+        makeTask({ id: '3', filename: 'Bravo.mp4' }),
+      ];
+
+      store.setSort('name', 'asc');
+      expect(store.filteredTasks.map((t) => t.filename)).toEqual([
+        'Alpha.mp4',
+        'Bravo.mp4',
+        'Charlie.mp4',
+      ]);
+
+      store.setSort('name', 'desc');
+      expect(store.filteredTasks.map((t) => t.filename)).toEqual([
+        'Charlie.mp4',
+        'Bravo.mp4',
+        'Alpha.mp4',
+      ]);
+    });
+
+    it('sorts tasks by size asc and desc', () => {
+      const store = new IdmStore();
+      store.tasks = [
+        makeTask({ id: '1', filename: 'medium.bin', total_bytes: 500, downloaded_bytes: 500 }),
+        makeTask({ id: '2', filename: 'small.bin', total_bytes: 100, downloaded_bytes: 100 }),
+        makeTask({ id: '3', filename: 'large.bin', total_bytes: 2000, downloaded_bytes: 2000 }),
+      ];
+
+      store.setSort('size', 'asc');
+      expect(store.filteredTasks.map((t) => t.filename)).toEqual([
+        'small.bin',
+        'medium.bin',
+        'large.bin',
+      ]);
+
+      store.setSort('size', 'desc');
+      expect(store.filteredTasks.map((t) => t.filename)).toEqual([
+        'large.bin',
+        'medium.bin',
+        'small.bin',
+      ]);
+    });
+
+    it('sorts tasks by date asc and desc', () => {
+      const store = new IdmStore();
+      store.tasks = [
+        makeTask({ id: '1', filename: 'old.bin', created_at: '2026-09-01 10:00:00' }),
+        makeTask({ id: '2', filename: 'newest.bin', created_at: '2026-09-21 12:00:00' }),
+        makeTask({ id: '3', filename: 'mid.bin', created_at: '2026-09-10 11:00:00' }),
+      ];
+
+      store.setSort('date', 'asc');
+      expect(store.filteredTasks.map((t) => t.filename)).toEqual([
+        'old.bin',
+        'mid.bin',
+        'newest.bin',
+      ]);
+
+      store.setSort('date', 'desc');
+      expect(store.filteredTasks.map((t) => t.filename)).toEqual([
+        'newest.bin',
+        'mid.bin',
+        'old.bin',
+      ]);
+    });
+
+    it('sorts tasks by progress asc and desc', () => {
+      const store = new IdmStore();
+      store.tasks = [
+        makeTask({ id: '1', filename: 'half.bin', total_bytes: 1000, downloaded_bytes: 500, status: 'downloading' }),
+        makeTask({ id: '2', filename: 'done.bin', total_bytes: 1000, downloaded_bytes: 1000, status: 'completed' }),
+        makeTask({ id: '3', filename: 'zero.bin', total_bytes: 1000, downloaded_bytes: 0, status: 'queued' }),
+      ];
+
+      store.setSort('progress', 'asc');
+      expect(store.filteredTasks.map((t) => t.filename)).toEqual([
+        'zero.bin',
+        'half.bin',
+        'done.bin',
+      ]);
+
+      store.setSort('progress', 'desc');
+      expect(store.filteredTasks.map((t) => t.filename)).toEqual([
+        'done.bin',
+        'half.bin',
+        'zero.bin',
+      ]);
+    });
+
+    it('sorts tasks by speed asc and desc', () => {
+      const store = new IdmStore();
+      store.tasks = [
+        makeTask({ id: '1', filename: 'medium.bin', speed_bps: 200000 }),
+        makeTask({ id: '2', filename: 'fast.bin', speed_bps: 1000000 }),
+        makeTask({ id: '3', filename: 'slow.bin', speed_bps: 50000 }),
+      ];
+
+      store.setSort('speed', 'asc');
+      expect(store.filteredTasks.map((t) => t.filename)).toEqual([
+        'slow.bin',
+        'medium.bin',
+        'fast.bin',
+      ]);
+
+      store.setSort('speed', 'desc');
+      expect(store.filteredTasks.map((t) => t.filename)).toEqual([
+        'fast.bin',
+        'medium.bin',
+        'slow.bin',
+      ]);
+    });
+
+    it('sorts tasks by status asc and desc', () => {
+      const store = new IdmStore();
+      store.tasks = [
+        makeTask({ id: '1', filename: 'task1.bin', status: 'paused' }),
+        makeTask({ id: '2', filename: 'task2.bin', status: 'completed' }),
+        makeTask({ id: '3', filename: 'task3.bin', status: 'downloading' }),
+      ];
+
+      store.setSort('status', 'asc');
+      expect(store.filteredTasks.map((t) => t.filename)).toEqual([
+        'task2.bin', // 'completed'
+        'task3.bin', // 'downloading'
+        'task1.bin', // 'paused'
+      ]);
+
+      store.setSort('status', 'desc');
+      expect(store.filteredTasks.map((t) => t.filename)).toEqual([
+        'task1.bin', // 'paused'
+        'task3.bin', // 'downloading'
+        'task2.bin', // 'completed'
+      ]);
+    });
+
+    it('toggles sort order and cycles criteria correctly', () => {
+      const store = new IdmStore();
+      expect(store.sortBy).toBe('date');
+      expect(store.sortOrder).toBe('desc');
+
+      // Toggling order
+      store.toggleSortOrder();
+      expect(store.sortOrder).toBe('asc');
+      store.toggleSortOrder();
+      expect(store.sortOrder).toBe('desc');
+
+      // Clicking same criterion without order toggles order
+      store.setSort('date');
+      expect(store.sortOrder).toBe('asc');
+      store.setSort('date');
+      expect(store.sortOrder).toBe('desc');
+
+      // Clicking new criterion sets sensible default
+      store.setSort('name');
+      expect(store.sortBy).toBe('name');
+      expect(store.sortOrder).toBe('asc');
+
+      store.setSort('size');
+      expect(store.sortBy).toBe('size');
+      expect(store.sortOrder).toBe('desc');
+
+      // Cycling criteria
+      store.sortBy = 'date';
+      store.cycleSortCriteria();
+      expect(store.sortBy).toBe('size');
+      store.cycleSortCriteria();
+      expect(store.sortBy).toBe('name');
+      store.cycleSortCriteria();
+      expect(store.sortBy).toBe('progress');
+      store.cycleSortCriteria();
+      expect(store.sortBy).toBe('speed');
+      store.cycleSortCriteria();
+      expect(store.sortBy).toBe('status');
+      store.cycleSortCriteria();
+      expect(store.sortBy).toBe('date');
+    });
+  });
 });
 
 

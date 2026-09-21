@@ -1,4 +1,4 @@
-export type DownloadCategory = 
+export type DownloadCategory =
   | 'all'
   | 'compressed'
   | 'programs'
@@ -7,7 +7,7 @@ export type DownloadCategory =
   | 'documents'
   | 'general';
 
-export type TaskStatus = 
+export type TaskStatus =
   | 'queued'
   | 'probing'
   | 'downloading'
@@ -48,6 +48,9 @@ export interface DownloadTask {
 }
 
 export type SpeedLimitUnit = 'KB/s' | 'MB/s';
+
+export type SortCriterion = 'date' | 'size' | 'name' | 'progress' | 'speed' | 'status';
+export type SortOrder = 'asc' | 'desc';
 
 export interface GlobalSpeedLimitConfig {
   enabled: boolean;

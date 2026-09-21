@@ -1,6 +1,6 @@
 import { invoke, isTauri as coreIsTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import type { DownloadCategory, DownloadTask, SpeedMetrics, SpeedLimitUnit, GlobalSpeedLimitConfig, AppSettings, DuplicateCheckResult } from './types';
+import type { DownloadCategory, DownloadTask, SpeedMetrics, SpeedLimitUnit, GlobalSpeedLimitConfig, AppSettings, DuplicateCheckResult, SortCriterion, SortOrder } from './types';
 import { unitToBps, bpsToUnit, DEFAULT_APP_SETTINGS, matchesDownloadExtension } from './types';
 import { getCompileTimeVersion, fetchRuntimeAppVersion } from './version';
 
@@ -22,7 +22,8 @@ export class IdmStore {
   isProgressModalOpen = $state<boolean>(false);
   progressModalTaskId = $state<string | null>(null);
   viewMode = $state<'cards' | 'table'>('cards');
-  sortBy = $state<'date' | 'size' | 'name'>('date');
+  sortBy = $state<SortCriterion>('date');
+  sortOrder = $state<SortOrder>('desc');
   speedLimiterEnabled = $state<boolean>(false);
   globalSpeedLimitValue = $state<number>(1);
   globalSpeedLimitUnit = $state<SpeedLimitUnit>('MB/s');
@@ -75,7 +76,7 @@ export class IdmStore {
 
 
   filteredTasks = $derived.by<DownloadTask[]>(() => {
-    return this.tasks.filter((task) => {
+    const list = this.tasks.filter((task) => {
       // Category / Status Filter
       if (this.activeCategory === 'downloading') {
         if (task.status !== 'downloading') return false;
@@ -97,6 +98,40 @@ export class IdmStore {
       }
       return true;
     });
+
+    const factor = this.sortOrder === 'asc' ? 1 : -1;
+
+    list.sort((a, b) => {
+      if (this.sortBy === 'name') {
+        return factor * a.filename.localeCompare(b.filename, undefined, { numeric: true, sensitivity: 'base' });
+      }
+      if (this.sortBy === 'size') {
+        const sizeA = a.total_bytes ?? a.downloaded_bytes;
+        const sizeB = b.total_bytes ?? b.downloaded_bytes;
+        return factor * (sizeA - sizeB);
+      }
+      if (this.sortBy === 'progress') {
+        const pctA = a.total_bytes && a.total_bytes > 0 ? a.downloaded_bytes / a.total_bytes : 0;
+        const pctB = b.total_bytes && b.total_bytes > 0 ? b.downloaded_bytes / b.total_bytes : 0;
+        return factor * (pctA - pctB);
+      }
+      if (this.sortBy === 'speed') {
+        const speedA = a.speed_bps ?? 0;
+        const speedB = b.speed_bps ?? 0;
+        return factor * (speedA - speedB);
+      }
+      if (this.sortBy === 'status') {
+        const statusA = typeof a.status === 'string' ? a.status : 'failed';
+        const statusB = typeof b.status === 'string' ? b.status : 'failed';
+        return factor * statusA.localeCompare(statusB);
+      }
+      // Default: 'date'
+      const dateA = new Date(a.created_at).getTime() || 0;
+      const dateB = new Date(b.created_at).getTime() || 0;
+      return factor * (dateA - dateB);
+    });
+
+    return list;
   });
 
   categoryCounts = $derived.by<Record<string, number>>(() => {
@@ -488,6 +523,30 @@ export class IdmStore {
   closePropertiesModal() {
     this.isPropertiesModalOpen = false;
     this.propertiesTaskId = null;
+  }
+
+  setSort(criterion: SortCriterion, order?: SortOrder) {
+    if (this.sortBy === criterion && !order) {
+      this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.sortBy = criterion;
+      if (order) {
+        this.sortOrder = order;
+      } else {
+        this.sortOrder = criterion === 'name' ? 'asc' : 'desc';
+      }
+    }
+  }
+
+  toggleSortOrder() {
+    this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
+  }
+
+  cycleSortCriteria() {
+    const criteria: SortCriterion[] = ['date', 'size', 'name', 'progress', 'speed', 'status'];
+    const idx = criteria.indexOf(this.sortBy);
+    const nextIdx = (idx + 1) % criteria.length;
+    this.sortBy = criteria[nextIdx];
   }
 
   async moveTaskFile(taskId: string, newDir: string) {

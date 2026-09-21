@@ -1,6 +1,6 @@
 <script lang="ts">
   import { store } from '$lib/idmStore.svelte';
-  import { formatBytes, formatEta, formatSpeed, bpsToUnit, type DownloadTask } from '$lib/types';
+  import { formatBytes, formatEta, formatSpeed, bpsToUnit, type DownloadTask, type SortCriterion } from '$lib/types';
   import {
     Play,
     Pause,
@@ -14,6 +14,8 @@
     Folder,
     Zap,
     ArrowUpDown,
+    ArrowUp,
+    ArrowDown,
     AlertCircle,
     CheckCircle2,
     Info,
@@ -101,11 +103,6 @@
     }
   }
 
-  function cycleSort() {
-    if (store.sortBy === 'date') store.sortBy = 'size';
-    else if (store.sortBy === 'size') store.sortBy = 'name';
-    else store.sortBy = 'date';
-  }
 </script>
 
 <svelte:window onclick={closeContextMenu} onkeydown={(e) => e.key === 'Escape' && closeContextMenu()} />
@@ -145,14 +142,40 @@
         </button>
       </div>
 
-      <!-- Sorting Button -->
-      <button
-        onclick={cycleSort}
-        class="h-7 px-2.5 rounded-lg bg-[#171c24] text-[#dee2ee] hover:bg-[#252a33] text-xs font-sans flex items-center gap-1.5 transition-colors cursor-pointer border border-[#252a33]"
-      >
-        <ArrowUpDown class="w-3 h-3 text-[#8c909f]" />
-        <span>Urutkan: {store.sortBy === 'date' ? 'Tanggal' : store.sortBy === 'size' ? 'Ukuran' : 'Nama'}</span>
-      </button>
+      <!-- Sorting Controls: Criterion Select + Order Toggle -->
+      <div class="flex items-center bg-[#171c24] rounded-lg border border-[#252a33] p-0.5">
+        <div class="flex items-center pl-1.5 pr-0.5 gap-1 text-[#8c909f]">
+          <ArrowUpDown class="w-3 h-3 text-[#00e5ff]" />
+          <span class="text-[11px] text-[#8c909f] font-sans">Urut:</span>
+        </div>
+        <select
+          value={store.sortBy}
+          onchange={(e) => store.setSort(e.currentTarget.value as SortCriterion, store.sortOrder)}
+          class="bg-transparent text-xs text-[#dee2ee] font-medium py-1 pr-1.5 pl-0.5 border-none outline-none cursor-pointer focus:ring-0 [&>option]:bg-[#171c24] [&>option]:text-[#dee2ee]"
+          title="Pilih Kriteria Pengurutan"
+        >
+          <option value="date">Tanggal</option>
+          <option value="size">Ukuran</option>
+          <option value="name">Nama</option>
+          <option value="progress">Progres</option>
+          <option value="speed">Kecepatan</option>
+          <option value="status">Status</option>
+        </select>
+        <div class="w-[1px] h-3.5 bg-[#252a33] mx-0.5"></div>
+        <button
+          onclick={() => store.toggleSortOrder()}
+          class="h-6 px-1.5 text-xs font-mono flex items-center gap-1 text-[#8c909f] hover:text-[#dee2ee] hover:bg-[#252a33] rounded transition-colors cursor-pointer"
+          title={store.sortOrder === 'asc' ? 'Urutan: Menaik (ASC) — Klik untuk Menurun (DESC)' : 'Urutan: Menurun (DESC) — Klik untuk Menaik (ASC)'}
+        >
+          {#if store.sortOrder === 'asc'}
+            <ArrowUp class="w-3 h-3 text-[#10b981]" />
+            <span class="text-[10px] font-bold text-[#10b981]">ASC</span>
+          {:else}
+            <ArrowDown class="w-3 h-3 text-[#00e5ff]" />
+            <span class="text-[10px] font-bold text-[#00e5ff]">DESC</span>
+          {/if}
+        </button>
+      </div>
 
       <!-- View Switcher (Cards vs Table) -->
       <div class="flex items-center bg-[#171c24] rounded-lg p-0.5 border border-[#252a33]">
@@ -363,13 +386,103 @@
       <table class="w-full text-left border-collapse text-xs">
         <thead class="bg-[#1b2028] border-b border-[#252a33] text-[#8c909f] font-semibold uppercase tracking-wider text-[10px]">
           <tr>
-            <th class="py-2.5 px-3 w-10 text-center">#</th>
-            <th class="py-2.5 px-3">Nama Berkas</th>
-            <th class="py-2.5 px-3 w-28">Ukuran</th>
-            <th class="py-2.5 px-3 w-44">Progres</th>
-            <th class="py-2.5 px-3 w-24">Kecepatan</th>
+            <th
+              class="py-2.5 px-3 w-12 text-center cursor-pointer hover:text-[#dee2ee] transition-colors select-none"
+              onclick={() => store.setSort('date')}
+              title="Urutkan berdasarkan Tanggal Ditambahkan"
+            >
+              <div class="flex items-center justify-center gap-1">
+                <span>#</span>
+                {#if store.sortBy === 'date'}
+                  {#if store.sortOrder === 'asc'}
+                    <ArrowUp class="w-2.5 h-2.5 text-[#10b981]" />
+                  {:else}
+                    <ArrowDown class="w-2.5 h-2.5 text-[#00e5ff]" />
+                  {/if}
+                {/if}
+              </div>
+            </th>
+            <th
+              class="py-2.5 px-3 cursor-pointer hover:text-[#dee2ee] transition-colors select-none"
+              onclick={() => store.setSort('name')}
+              title="Urutkan berdasarkan Nama Berkas"
+            >
+              <div class="flex items-center gap-1">
+                <span>Nama Berkas</span>
+                {#if store.sortBy === 'name'}
+                  {#if store.sortOrder === 'asc'}
+                    <ArrowUp class="w-3 h-3 text-[#10b981]" />
+                  {:else}
+                    <ArrowDown class="w-3 h-3 text-[#00e5ff]" />
+                  {/if}
+                {/if}
+              </div>
+            </th>
+            <th
+              class="py-2.5 px-3 w-28 cursor-pointer hover:text-[#dee2ee] transition-colors select-none"
+              onclick={() => store.setSort('size')}
+              title="Urutkan berdasarkan Ukuran Berkas"
+            >
+              <div class="flex items-center gap-1">
+                <span>Ukuran</span>
+                {#if store.sortBy === 'size'}
+                  {#if store.sortOrder === 'asc'}
+                    <ArrowUp class="w-3 h-3 text-[#10b981]" />
+                  {:else}
+                    <ArrowDown class="w-3 h-3 text-[#00e5ff]" />
+                  {/if}
+                {/if}
+              </div>
+            </th>
+            <th
+              class="py-2.5 px-3 w-44 cursor-pointer hover:text-[#dee2ee] transition-colors select-none"
+              onclick={() => store.setSort('progress')}
+              title="Urutkan berdasarkan Persentase Progres"
+            >
+              <div class="flex items-center gap-1">
+                <span>Progres</span>
+                {#if store.sortBy === 'progress'}
+                  {#if store.sortOrder === 'asc'}
+                    <ArrowUp class="w-3 h-3 text-[#10b981]" />
+                  {:else}
+                    <ArrowDown class="w-3 h-3 text-[#00e5ff]" />
+                  {/if}
+                {/if}
+              </div>
+            </th>
+            <th
+              class="py-2.5 px-3 w-24 cursor-pointer hover:text-[#dee2ee] transition-colors select-none"
+              onclick={() => store.setSort('speed')}
+              title="Urutkan berdasarkan Kecepatan Download"
+            >
+              <div class="flex items-center gap-1">
+                <span>Kecepatan</span>
+                {#if store.sortBy === 'speed'}
+                  {#if store.sortOrder === 'asc'}
+                    <ArrowUp class="w-3 h-3 text-[#10b981]" />
+                  {:else}
+                    <ArrowDown class="w-3 h-3 text-[#00e5ff]" />
+                  {/if}
+                {/if}
+              </div>
+            </th>
             <th class="py-2.5 px-3 w-20">Sisa Waktu</th>
-            <th class="py-2.5 px-3 w-24">Status</th>
+            <th
+              class="py-2.5 px-3 w-24 cursor-pointer hover:text-[#dee2ee] transition-colors select-none"
+              onclick={() => store.setSort('status')}
+              title="Urutkan berdasarkan Status Unduhan"
+            >
+              <div class="flex items-center gap-1">
+                <span>Status</span>
+                {#if store.sortBy === 'status'}
+                  {#if store.sortOrder === 'asc'}
+                    <ArrowUp class="w-3 h-3 text-[#10b981]" />
+                  {:else}
+                    <ArrowDown class="w-3 h-3 text-[#00e5ff]" />
+                  {/if}
+                {/if}
+              </div>
+            </th>
             <th class="py-2.5 px-3 w-32 text-right">Aksi</th>
           </tr>
         </thead>
