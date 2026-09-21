@@ -771,6 +771,33 @@
                 </p>
               </div>
             </div>
+
+            <!-- Tindakan Tautan Unduhan Duplikat -->
+            <div class="bg-[#1b2028] p-4 rounded-xl border border-[#30353e]/80 space-y-4">
+              <div class="flex items-center gap-2 pb-2 border-b border-[#252a33]">
+                <Layers class="w-4 h-4 text-[#00e5ff]" />
+                <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">{store.t('settings.duplicateActionTitle')}</h3>
+              </div>
+
+              <div>
+                <p class="text-[11px] text-[#8c909f] mb-2.5">
+                  {store.t('settings.duplicateActionDesc')}
+                </p>
+
+                <select
+                  bind:value={draft.duplicateAction}
+                  onchange={() => {
+                    draft.duplicateActionRemember = draft.duplicateAction !== 'ask';
+                  }}
+                  class="w-full bg-[#090e16] text-[#dee2ee] text-xs rounded-lg px-3 py-2 border border-[#30353e] focus:outline-none focus:border-[#00e5ff] cursor-pointer [&>option]:bg-[#171c24] [&>option]:text-[#dee2ee]"
+                >
+                  <option value="ask">{store.t('settings.duplicateActionAsk')}</option>
+                  <option value="numbered">{store.t('settings.duplicateActionNumbered')}</option>
+                  <option value="overwrite">{store.t('settings.duplicateActionOverwrite')}</option>
+                  <option value="resume">{store.t('settings.duplicateActionResume')}</option>
+                </select>
+              </div>
+            </div>
           </div>
         {/if}
 

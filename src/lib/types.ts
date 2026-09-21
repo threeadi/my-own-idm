@@ -152,6 +152,7 @@ export function formatDisplayVersion(version?: string | null, prefix = 'v'): str
 }
 
 export type SupportedLanguage = 'id' | 'en';
+export type DuplicateAction = 'ask' | 'numbered' | 'overwrite' | 'resume';
 
 export interface AppSettings {
   language: SupportedLanguage;
@@ -173,6 +174,8 @@ export interface AppSettings {
   excludedSites: string;
   connectionTimeoutSec: number;
   maxRetries: number;
+  duplicateAction: DuplicateAction;
+  duplicateActionRemember: boolean;
 }
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -193,8 +196,10 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   tempDir: '',
   autoCaptureExtensions: '3GP 7Z AAC ACE AIF APK ARJ ASF AVI BIN BZ2 EXE GZ GZIP IMG ISO LZH M4A M4V MKV MOV MP3 MP4 MPA MPE MPEG MPG MSI MSU OGG OGV PDF PLJ PPS PPT PPTX QT R0* R1* RA RAR RM RMVB SEA SIT SITX TAR TIF TIFF TS WAV WMA WMV Z ZIP',
   excludedSites: '',
-  connectionTimeoutSec: 60,
+  connectionTimeoutSec: 30,
   maxRetries: 5,
+  duplicateAction: 'ask',
+  duplicateActionRemember: false,
 };
 
 export function matchesDownloadExtension(url: string, extensionsStr?: string): boolean {

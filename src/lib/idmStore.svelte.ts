@@ -717,10 +717,16 @@ export class IdmStore {
     };
   }
 
-  openDuplicateModal(data: DuplicateCheckResult, url: string, headers: Record<string, string> | null = null) {
+  async openDuplicateModal(data: DuplicateCheckResult, url: string, headers: Record<string, string> | null = null) {
     this.duplicateModalData = data;
     this.duplicateModalUrl = url;
     this.duplicateModalHeaders = headers;
+
+    if (this.settings.duplicateActionRemember && this.settings.duplicateAction && this.settings.duplicateAction !== 'ask') {
+      await this.proceedWithDuplicateAction(this.settings.duplicateAction, false);
+      return;
+    }
+
     this.isDuplicateModalOpen = true;
     this.isAddModalOpen = false;
   }
@@ -732,12 +738,39 @@ export class IdmStore {
     this.duplicateModalHeaders = null;
   }
 
-  proceedWithNewDownload() {
+  async proceedWithDuplicateAction(choice: 'numbered' | 'overwrite' | 'resume', remember: boolean = false) {
+    const data = this.duplicateModalData;
     const url = this.duplicateModalUrl;
-    const filename = this.duplicateModalData?.suggested_new_filename || '';
     const headers = this.duplicateModalHeaders;
+
+    if (remember) {
+      this.settings.duplicateAction = choice;
+      this.settings.duplicateActionRemember = true;
+      await this.saveAppSettings({ duplicateAction: choice, duplicateActionRemember: true });
+    }
+
     this.closeDuplicateModal();
-    this.openAddModal(url, filename, headers);
+
+    if (choice === 'numbered') {
+      const filename = data?.suggested_new_filename || '';
+      this.openAddModal(url, filename, headers);
+    } else if (choice === 'overwrite') {
+      const filename = data?.filename || '';
+      this.openAddModal(url, filename, headers);
+    } else if (choice === 'resume') {
+      if (data?.task_id) {
+        if (data.status === 'paused') {
+          await this.resumeTask(data.task_id);
+        }
+        await this.openTransferWindow(data.task_id);
+      } else {
+        this.openAddModal(url, data?.filename || '', headers);
+      }
+    }
+  }
+
+  proceedWithNewDownload() {
+    this.proceedWithDuplicateAction('numbered', false);
   }
 
   async openExternalUrl(url: string) {
@@ -854,6 +887,12 @@ export class IdmStore {
       const num = parseInt(raw.maxRetries, 10);
       if (!isNaN(num) && num >= 0) s.maxRetries = num;
     }
+    if ('duplicateAction' in raw && (raw.duplicateAction === 'ask' || raw.duplicateAction === 'numbered' || raw.duplicateAction === 'overwrite' || raw.duplicateAction === 'resume')) {
+      s.duplicateAction = raw.duplicateAction;
+    }
+    if ('duplicateActionRemember' in raw) {
+      s.duplicateActionRemember = raw.duplicateActionRemember === 'true';
+    }
     this.settings = s;
   }
 
@@ -878,6 +917,8 @@ export class IdmStore {
       excludedSites: s.excludedSites || '',
       connectionTimeoutSec: String(s.connectionTimeoutSec),
       maxRetries: String(s.maxRetries),
+      duplicateAction: s.duplicateAction || 'ask',
+      duplicateActionRemember: String(s.duplicateActionRemember ?? false),
     };
   }
 

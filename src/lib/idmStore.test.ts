@@ -46,6 +46,23 @@ function makeTask(overrides: Partial<DownloadTask> = {}): DownloadTask {
   };
 }
 
+function makeDupResult(overrides: Partial<DuplicateCheckResult> = {}): DuplicateCheckResult {
+  return {
+    is_duplicate: true,
+    task_id: 'task-100',
+    filename: 'report.pdf',
+    file_path: 'C:\\Downloads\\report.pdf',
+    file_exists_on_disk: true,
+    status: 'completed',
+    total_bytes: 2048,
+    downloaded_bytes: 2048,
+    percent: 100,
+    completed_at: '2026-09-20 12:00:00',
+    suggested_new_filename: 'report (1).pdf',
+    ...overrides,
+  };
+}
+
 describe('IdmStore State & Filtering', () => {
   beforeEach(() => {
     (globalThis as any).window = {
@@ -1315,6 +1332,149 @@ describe('IdmStore State & Filtering', () => {
 
       const store = new IdmStore();
       await expect(store.reportDiagnostic('task-abc-123')).rejects.toThrow('Network error');
+    });
+  });
+
+  describe('Duplicate link handling & auto-actions', () => {
+    it('opens and closes duplicate modal properly when duplicateAction is ask', async () => {
+      const store = new IdmStore();
+      const dupData = makeDupResult();
+
+      await store.openDuplicateModal(dupData, 'https://example.com/report.pdf', { Authorization: 'Bearer token' });
+
+      expect(store.isDuplicateModalOpen).toBe(true);
+      expect(store.duplicateModalData).toEqual(dupData);
+      expect(store.duplicateModalUrl).toBe('https://example.com/report.pdf');
+      expect(store.duplicateModalHeaders).toEqual({ Authorization: 'Bearer token' });
+
+      store.closeDuplicateModal();
+      expect(store.isDuplicateModalOpen).toBe(false);
+      expect(store.duplicateModalData).toBeNull();
+      expect(store.duplicateModalUrl).toBe('');
+      expect(store.duplicateModalHeaders).toBeNull();
+    });
+
+    it('proceedWithDuplicateAction numbered opens add modal with suggested new filename', async () => {
+      const store = new IdmStore();
+      const dupData = makeDupResult();
+
+      await store.openDuplicateModal(dupData, 'https://example.com/report.pdf');
+      await store.proceedWithDuplicateAction('numbered');
+
+      expect(store.isDuplicateModalOpen).toBe(false);
+      expect(store.isAddModalOpen).toBe(true);
+      expect(store.initialFilename).toBe('report (1).pdf');
+      expect(store.initialAddUrl).toBe('https://example.com/report.pdf');
+    });
+
+    it('proceedWithDuplicateAction overwrite opens add modal with original filename', async () => {
+      const store = new IdmStore();
+      const dupData = makeDupResult();
+
+      await store.openDuplicateModal(dupData, 'https://example.com/report.pdf');
+      await store.proceedWithDuplicateAction('overwrite');
+
+      expect(store.isDuplicateModalOpen).toBe(false);
+      expect(store.isAddModalOpen).toBe(true);
+      expect(store.initialFilename).toBe('report.pdf');
+      expect(store.initialAddUrl).toBe('https://example.com/report.pdf');
+    });
+
+    it('proceedWithDuplicateAction resume opens transfer window and resumes if paused', async () => {
+      const store = new IdmStore();
+      const resumeSpy = vi.spyOn(store, 'resumeTask').mockResolvedValue(undefined as any);
+      const transferSpy = vi.spyOn(store, 'openTransferWindow').mockResolvedValue(undefined as any);
+
+      const dupData = makeDupResult({
+        task_id: 'task-paused-1',
+        filename: 'movie.mp4',
+        file_path: 'C:\\Downloads\\movie.mp4',
+        status: 'paused',
+        total_bytes: 5000,
+        downloaded_bytes: 1000,
+        suggested_new_filename: 'movie (1).mp4',
+      });
+
+      await store.openDuplicateModal(dupData, 'https://example.com/movie.mp4');
+      await store.proceedWithDuplicateAction('resume');
+
+      expect(store.isDuplicateModalOpen).toBe(false);
+      expect(resumeSpy).toHaveBeenCalledWith('task-paused-1');
+      expect(transferSpy).toHaveBeenCalledWith('task-paused-1');
+    });
+
+    it('proceedWithDuplicateAction resume falls back to add modal if no task_id', async () => {
+      const store = new IdmStore();
+      const dupData = makeDupResult({
+        task_id: null,
+        filename: 'file.zip',
+        file_path: null,
+        status: null,
+        total_bytes: 0,
+        downloaded_bytes: 0,
+        suggested_new_filename: 'file (1).zip',
+      });
+
+      await store.openDuplicateModal(dupData, 'https://example.com/file.zip');
+      await store.proceedWithDuplicateAction('resume');
+
+      expect(store.isAddModalOpen).toBe(true);
+      expect(store.initialFilename).toBe('file.zip');
+    });
+
+    it('proceedWithDuplicateAction with remember saves settings', async () => {
+      const store = new IdmStore();
+      const saveSpy = vi.spyOn(store, 'saveAppSettings').mockResolvedValue(undefined as any);
+
+      const dupData = makeDupResult();
+
+      await store.openDuplicateModal(dupData, 'https://example.com/report.pdf');
+      await store.proceedWithDuplicateAction('numbered', true);
+
+      expect(store.settings.duplicateAction).toBe('numbered');
+      expect(store.settings.duplicateActionRemember).toBe(true);
+      expect(saveSpy).toHaveBeenCalledWith({ duplicateAction: 'numbered', duplicateActionRemember: true });
+    });
+
+    it('openDuplicateModal auto-executes if duplicateActionRemember is true and duplicateAction is set', async () => {
+      const store = new IdmStore();
+      store.settings.duplicateAction = 'numbered';
+      store.settings.duplicateActionRemember = true;
+
+      const proceedSpy = vi.spyOn(store, 'proceedWithDuplicateAction').mockResolvedValue(undefined as any);
+
+      const dupData = makeDupResult();
+
+      await store.openDuplicateModal(dupData, 'https://example.com/report.pdf');
+
+      expect(proceedSpy).toHaveBeenCalledWith('numbered', false);
+      expect(store.isDuplicateModalOpen).toBe(false);
+    });
+
+    it('proceedWithNewDownload delegates to proceedWithDuplicateAction numbered', async () => {
+      const store = new IdmStore();
+      const proceedSpy = vi.spyOn(store, 'proceedWithDuplicateAction').mockResolvedValue(undefined as any);
+
+      store.proceedWithNewDownload();
+      expect(proceedSpy).toHaveBeenCalledWith('numbered', false);
+    });
+
+    it('serializes and deserializes duplicateAction settings properly', () => {
+      const store = new IdmStore();
+      store.settings.duplicateAction = 'overwrite';
+      store.settings.duplicateActionRemember = true;
+
+      const raw = (store as any).settingsToRaw(store.settings);
+      expect(raw.duplicateAction).toBe('overwrite');
+      expect(raw.duplicateActionRemember).toBe('true');
+
+      const store2 = new IdmStore();
+      (store2 as any).applyRawSettings({
+        duplicateAction: 'resume',
+        duplicateActionRemember: 'true',
+      });
+      expect(store2.settings.duplicateAction).toBe('resume');
+      expect(store2.settings.duplicateActionRemember).toBe(true);
     });
   });
 });
