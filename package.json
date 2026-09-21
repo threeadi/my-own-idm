@@ -1,7 +1,7 @@
 {
-  "name": "tauri-app",
+  "name": "IDM Turbo Desktop",
   "version": "0.1.0-dev",
-  "description": "",
+  "description": "A High-Performance Desktop Internet Download Manager built with Tauri v2, Rust, Svelte 5 (Runes).",
   "type": "module",
   "scripts": {
     "dev": "vite dev",
