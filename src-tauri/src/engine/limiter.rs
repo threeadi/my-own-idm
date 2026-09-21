@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 pub struct TokenBucketRateLimiter {
     limit_bps: Arc<AtomicU64>,
     state: parking_lot::Mutex<LimiterState>,
+    notify: Arc<tokio::sync::Notify>,
 }
 
 #[derive(Debug)]
@@ -29,16 +30,35 @@ impl TokenBucketRateLimiter {
                 last_checked: now,
                 tokens: initial_tokens,
             }),
+            notify: Arc::new(tokio::sync::Notify::new()),
         }
     }
 
     /// Dynamically changes the rate limit in bytes per second without restarting downloads.
+    /// Immediately clears negative token debt and provides initial burst allowance on rate increase,
+    /// waking up any sleeping worker threads on the fly.
     pub fn set_limit_bps(&self, new_limit: u64) {
-        let mut state = self.state.lock();
-        state.last_checked = Instant::now();
-        let max_capacity = (new_limit as f64 * 0.25).max(1024.0);
-        state.tokens = state.tokens.min(max_capacity);
-        self.limit_bps.store(new_limit, Ordering::Relaxed);
+        let old_limit = self.limit_bps.swap(new_limit, Ordering::Relaxed);
+        {
+            let mut state = self.state.lock();
+            let now = Instant::now();
+            let limit_f64 = new_limit as f64;
+            let max_capacity = (limit_f64 * 0.25).max(1024.0);
+
+            if new_limit == 0 || new_limit > old_limit {
+                // Clear any accumulated token debt immediately so workers aren't starved
+                if state.tokens < 0.0 {
+                    state.tokens = 0.0;
+                }
+                // Give an immediate burst allowance so workers accelerate on the fly
+                let burst = (limit_f64 * 0.1).min(max_capacity);
+                state.tokens = state.tokens.max(burst);
+            } else {
+                state.tokens = state.tokens.min(max_capacity);
+            }
+            state.last_checked = now;
+        }
+        self.notify.notify_waiters();
     }
 
     /// Retrieves the current rate limit in bytes per second.
@@ -46,51 +66,74 @@ impl TokenBucketRateLimiter {
         self.limit_bps.load(Ordering::Relaxed)
     }
 
+    /// Returns a reference to the notification handle for waking up listeners on rate changes.
+    pub fn get_notify(&self) -> Arc<tokio::sync::Notify> {
+        self.notify.clone()
+    }
+
     /// Acquires permission to transmit `bytes`. If tokens are insufficient,
     /// asynchronously sleeps for the required duration without blocking OS threads.
     /// Uses a token-debt queuing model to ensure multiple concurrent workers/threads
-    /// aggregate strictly to the target limit without race conditions.
+    /// aggregate strictly to the target limit. If the speed limit is increased on the fly,
+    /// waiting workers wake up immediately without waiting for old sleep timers to expire.
     pub async fn acquire(&self, bytes: usize) {
         if bytes == 0 {
             return;
         }
 
-        let limit = self.limit_bps.load(Ordering::Relaxed);
-        if limit == 0 {
-            return; // Unlimited throughput
-        }
+        let mut bytes_to_deduct = bytes;
 
-        let wait_duration = {
-            let mut state = self.state.lock();
-            let now = Instant::now();
-            let limit_f64 = limit as f64;
-
-            let elapsed = if now > state.last_checked {
-                now.duration_since(state.last_checked).as_secs_f64()
-            } else {
-                0.0
-            };
-            state.last_checked = now;
-
-            // Replenish tokens, capped to at most 0.25s of allowance
-            let max_capacity = (limit_f64 * 0.25).max(1024.0);
-            state.tokens = (state.tokens + elapsed * limit_f64).min(max_capacity);
-
-            let bytes_f64 = bytes as f64;
-            state.tokens -= bytes_f64;
-
-            if state.tokens >= 0.0 {
-                None
-            } else {
-                let debt = -state.tokens;
-                let wait_secs = debt / limit_f64;
-                // Cap accumulated debt delay to 2.0s to avoid indefinite stalls
-                Some(Duration::from_secs_f64(wait_secs.min(2.0)))
+        loop {
+            let limit = self.limit_bps.load(Ordering::Relaxed);
+            if limit == 0 {
+                return; // Unlimited throughput
             }
-        };
 
-        if let Some(dur) = wait_duration {
-            tokio::time::sleep(dur).await;
+            let wait_duration = {
+                let mut state = self.state.lock();
+                let now = Instant::now();
+                let limit_f64 = limit as f64;
+
+                let elapsed = if now > state.last_checked {
+                    now.duration_since(state.last_checked).as_secs_f64()
+                } else {
+                    0.0
+                };
+                state.last_checked = now;
+
+                // Replenish tokens, capped to at most 0.25s of allowance
+                let max_capacity = (limit_f64 * 0.25).max(1024.0);
+                state.tokens = (state.tokens + elapsed * limit_f64).min(max_capacity);
+
+                if bytes_to_deduct > 0 {
+                    state.tokens -= bytes_to_deduct as f64;
+                    bytes_to_deduct = 0;
+                }
+
+                if state.tokens >= 0.0 {
+                    None
+                } else {
+                    let debt = -state.tokens;
+                    let wait_secs = debt / limit_f64;
+                    // Cap accumulated debt delay to 2.0s to avoid indefinite stalls
+                    Some(Duration::from_secs_f64(wait_secs.min(2.0)))
+                }
+            };
+
+            match wait_duration {
+                Some(dur) => {
+                    tokio::select! {
+                        _ = tokio::time::sleep(dur) => {
+                            break;
+                        }
+                        _ = self.notify.notified() => {
+                            // Rate limit changed on the fly! Loop again to re-evaluate with new limit immediately
+                            continue;
+                        }
+                    }
+                }
+                None => break,
+            }
         }
     }
 }
@@ -138,6 +181,34 @@ mod tests {
         assert!(
             elapsed >= Duration::from_millis(400),
             "Expected elapsed >= 400ms, got {:?}",
+            elapsed
+        );
+    }
+
+    #[tokio::test]
+    async fn test_rate_limiter_accelerates_on_the_fly() {
+        // Start with strict limit: 10 KB/s (10,240 B/s)
+        let limiter = Arc::new(TokenBucketRateLimiter::new(10_240));
+        limiter.acquire(10_240).await; // drain initial bucket
+
+        let lim_clone = limiter.clone();
+        let handle = tokio::spawn(async move {
+            let start = Instant::now();
+            // This 10,240 bytes acquire would normally take ~1,000ms at 10 KB/s
+            lim_clone.acquire(10_240).await;
+            start.elapsed()
+        });
+
+        // Sleep 40ms, then accelerate on the fly to 10 MB/s!
+        tokio::time::sleep(Duration::from_millis(40)).await;
+        limiter.set_limit_bps(10 * 1024 * 1024);
+
+        let elapsed = handle.await.unwrap();
+        // Since rate limit was increased on the fly, worker must have woken up early
+        // and finished well before the original ~1,000ms!
+        assert!(
+            elapsed < Duration::from_millis(300),
+            "Expected elapsed < 300ms due to on-the-fly acceleration, got {:?}",
             elapsed
         );
     }

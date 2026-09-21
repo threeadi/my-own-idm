@@ -2,11 +2,20 @@ use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::mpsc::Sender;
 
+use crate::engine::limiter::TokenBucketRateLimiter;
 use crate::engine::types::{format_bytes, DownloadCategory, ProbeResult};
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum StreamOutcome {
+    Completed,
+    Cancelled,
+    RateChanged(Option<u64>),
+}
 
 pub struct YtDlpRunner;
 
@@ -156,105 +165,221 @@ impl YtDlpRunner {
         }
     }
 
+    pub fn compute_effective_limit(
+        task_limiter: &Option<Arc<TokenBucketRateLimiter>>,
+        global_limiter: &Option<Arc<TokenBucketRateLimiter>>,
+    ) -> Option<u64> {
+        match (
+            task_limiter.as_ref().map(|l| l.get_limit_bps()).filter(|&b| b > 0),
+            global_limiter.as_ref().map(|l| l.get_limit_bps()).filter(|&b| b > 0),
+        ) {
+            (Some(t), Some(g)) => Some(t.min(g)),
+            (Some(t), None) => Some(t),
+            (None, Some(g)) => Some(g),
+            (None, None) => None,
+        }
+    }
+
     pub async fn run_download(
         url: String,
         output_file: String,
         cancel_flag: Arc<AtomicBool>,
         progress_tx: Sender<(usize, u64)>,
-        limit_rate_bps: Option<u64>,
+        task_limiter: Option<Arc<TokenBucketRateLimiter>>,
+        global_limiter: Option<Arc<TokenBucketRateLimiter>>,
     ) -> Result<(), String> {
         let yt_dlp_exe = Self::find_yt_dlp()?;
-
-        let mut cmd = Command::new(&yt_dlp_exe);
-        cmd.arg("--no-warnings")
-            .arg("--no-playlist")
-            .arg("--newline")
-            .arg("-f")
-            .arg("bv*+ba/b/best")
-            .arg("--merge-output-format")
-            .arg("mp4")
-            .arg("--concurrent-fragments")
-            .arg("8")
-            .arg("--progress-template")
-            .arg("IDM_PROGRESS:%(progress.downloaded_bytes)s")
-            .arg("-o")
-            .arg(&output_file);
-
-        if let Some(rate) = limit_rate_bps {
-            if rate > 0 {
-                cmd.arg("--limit-rate").arg(format!("{}", rate));
-            }
-        }
-
-        cmd.arg(&url)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-
-        if let Some(ff_dir) = Self::find_ffmpeg_dir() {
-            cmd.arg("--ffmpeg-location").arg(ff_dir);
-        }
-
-        let mut child = cmd
-            .spawn()
-            .map_err(|e| format!("Failed to spawn yt-dlp: {}", e))?;
-
-        let stdout = child.stdout.take().ok_or("Failed to capture stdout")?;
-        let reader = BufReader::new(stdout).lines();
-
-        let completed = Self::process_progress_stream(reader, cancel_flag.clone(), progress_tx).await;
-        if !completed {
-            let _ = child.kill().await;
-            return Ok(());
-        }
-
-        let status = child
-            .wait()
-            .await
-            .map_err(|e| format!("Failed to wait for yt-dlp: {}", e))?;
-
-        if status.success() {
-            Ok(())
-        } else {
-            Err("yt-dlp download failed".to_string())
-        }
-    }
-
-    pub async fn process_progress_stream<R: tokio::io::AsyncBufRead + Unpin>(
-        mut reader: tokio::io::Lines<R>,
-        cancel_flag: Arc<AtomicBool>,
-        progress_tx: Sender<(usize, u64)>,
-    ) -> bool {
         let mut last_bytes: u64 = 0;
+        let mut current_rate = Self::compute_effective_limit(&task_limiter, &global_limiter);
 
         loop {
             if cancel_flag.load(Ordering::Relaxed) {
-                return false;
+                return Ok(());
             }
 
+            let mut cmd = Command::new(&yt_dlp_exe);
+            cmd.arg("--no-warnings")
+                .arg("--no-playlist")
+                .arg("--newline")
+                .arg("-c") // --continue: resume partially downloaded video files
+                .arg("-f")
+                .arg("bv*+ba/b/best")
+                .arg("--merge-output-format")
+                .arg("mp4")
+                .arg("--concurrent-fragments")
+                .arg("8")
+                .arg("--progress-template")
+                .arg("IDM_PROGRESS:%(progress.downloaded_bytes)s")
+                .arg("-o")
+                .arg(&output_file);
+
+            if let Some(rate) = current_rate {
+                if rate > 0 {
+                    cmd.arg("--limit-rate").arg(format!("{}", rate));
+                }
+            }
+
+            cmd.arg(&url)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped());
+
+            if let Some(ff_dir) = Self::find_ffmpeg_dir() {
+                cmd.arg("--ffmpeg-location").arg(ff_dir);
+            }
+
+            let mut child = cmd
+                .spawn()
+                .map_err(|e| format!("Failed to spawn yt-dlp: {}", e))?;
+
+            let stdout = child.stdout.take().ok_or("Failed to capture stdout")?;
+            let reader = BufReader::new(stdout).lines();
+
+            let task_notify = task_limiter.as_ref().map(|l| l.get_notify());
+            let global_notify = global_limiter.as_ref().map(|l| l.get_notify());
+
+            let stream_outcome = Self::process_progress_stream_with_rate_check(
+                reader,
+                cancel_flag.clone(),
+                progress_tx.clone(),
+                &mut last_bytes,
+                &task_limiter,
+                &global_limiter,
+                current_rate,
+                task_notify,
+                global_notify,
+            )
+            .await;
+
+            match stream_outcome {
+                StreamOutcome::Completed => {
+                    let status = child
+                        .wait()
+                        .await
+                        .map_err(|e| format!("Failed to wait for yt-dlp: {}", e))?;
+
+                    if status.success() {
+                        return Ok(());
+                    } else {
+                        return Err("yt-dlp download failed".to_string());
+                    }
+                }
+                StreamOutcome::Cancelled => {
+                    let _ = child.kill().await;
+                    return Ok(());
+                }
+                StreamOutcome::RateChanged(new_rate) => {
+                    crate::log_info!("ytdlp", "Speed limit dynamically changed to {:?} bps, restarting stream with resume", new_rate);
+                    let _ = child.kill().await;
+                    let _ = child.wait().await;
+                    current_rate = new_rate;
+                    // Debounce slightly in case user is actively clicking presets
+                    tokio::time::sleep(Duration::from_millis(150)).await;
+                    continue;
+                }
+            }
+        }
+    }
+
+    pub async fn process_progress_stream_with_rate_check<R: tokio::io::AsyncBufRead + Unpin>(
+        mut reader: tokio::io::Lines<R>,
+        cancel_flag: Arc<AtomicBool>,
+        progress_tx: Sender<(usize, u64)>,
+        last_bytes: &mut u64,
+        task_limiter: &Option<Arc<TokenBucketRateLimiter>>,
+        global_limiter: &Option<Arc<TokenBucketRateLimiter>>,
+        current_rate: Option<u64>,
+        task_notify: Option<Arc<tokio::sync::Notify>>,
+        global_notify: Option<Arc<tokio::sync::Notify>>,
+    ) -> StreamOutcome {
+        loop {
+            if cancel_flag.load(Ordering::Relaxed) {
+                return StreamOutcome::Cancelled;
+            }
+
+            let new_rate = Self::compute_effective_limit(task_limiter, global_limiter);
+            if new_rate != current_rate {
+                return StreamOutcome::RateChanged(new_rate);
+            }
+
+            let task_fut = async {
+                if let Some(n) = &task_notify {
+                    n.notified().await;
+                } else {
+                    std::future::pending::<()>().await;
+                }
+            };
+
+            let global_fut = async {
+                if let Some(n) = &global_notify {
+                    n.notified().await;
+                } else {
+                    std::future::pending::<()>().await;
+                }
+            };
+
             tokio::select! {
-                _ = tokio::time::sleep(std::time::Duration::from_millis(50)) => {
+                _ = tokio::time::sleep(std::time::Duration::from_millis(100)) => {
                     if cancel_flag.load(Ordering::Relaxed) {
-                        return false;
+                        return StreamOutcome::Cancelled;
+                    }
+                    let check_rate = Self::compute_effective_limit(task_limiter, global_limiter);
+                    if check_rate != current_rate {
+                        return StreamOutcome::RateChanged(check_rate);
+                    }
+                }
+                _ = task_fut => {
+                    let check_rate = Self::compute_effective_limit(task_limiter, global_limiter);
+                    if check_rate != current_rate {
+                        return StreamOutcome::RateChanged(check_rate);
+                    }
+                }
+                _ = global_fut => {
+                    let check_rate = Self::compute_effective_limit(task_limiter, global_limiter);
+                    if check_rate != current_rate {
+                        return StreamOutcome::RateChanged(check_rate);
                     }
                 }
                 line_res = reader.next_line() => {
                     match line_res {
                         Ok(Some(line)) => {
                             if let Some(bytes) = Self::parse_progress_line(&line) {
-                                if bytes > last_bytes {
-                                    let delta = bytes - last_bytes;
-                                    last_bytes = bytes;
+                                if bytes > *last_bytes {
+                                    let delta = bytes - *last_bytes;
+                                    *last_bytes = bytes;
                                     let _ = progress_tx.send((0, delta)).await;
+                                } else if *last_bytes == 0 && bytes > 0 {
+                                    *last_bytes = bytes;
+                                    let _ = progress_tx.send((0, bytes)).await;
                                 }
                             }
                         }
-                        Ok(None) => break, // EOF
-                        Err(_) => break,
+                        Ok(None) => return StreamOutcome::Completed,
+                        Err(_) => return StreamOutcome::Completed,
                     }
                 }
             }
         }
-        true
+    }
+
+    pub async fn process_progress_stream<R: tokio::io::AsyncBufRead + Unpin>(
+        reader: tokio::io::Lines<R>,
+        cancel_flag: Arc<AtomicBool>,
+        progress_tx: Sender<(usize, u64)>,
+    ) -> bool {
+        let mut last_bytes = 0;
+        let outcome = Self::process_progress_stream_with_rate_check(
+            reader,
+            cancel_flag,
+            progress_tx,
+            &mut last_bytes,
+            &None,
+            &None,
+            None,
+            None,
+            None,
+        )
+        .await;
+        outcome == StreamOutcome::Completed
     }
 }
 
@@ -368,6 +493,108 @@ mod tests {
         assert!(res.is_err());
     }
 
+    #[test]
+    fn test_compute_effective_limit() {
+        let task_limiter_500k = Some(Arc::new(TokenBucketRateLimiter::new(500_000)));
+        let global_limiter_1m = Some(Arc::new(TokenBucketRateLimiter::new(1_000_000)));
+        let global_limiter_200k = Some(Arc::new(TokenBucketRateLimiter::new(200_000)));
+        let unlimited = Some(Arc::new(TokenBucketRateLimiter::new(0)));
+
+        // Both set: min applies
+        assert_eq!(
+            YtDlpRunner::compute_effective_limit(&task_limiter_500k, &global_limiter_1m),
+            Some(500_000)
+        );
+        assert_eq!(
+            YtDlpRunner::compute_effective_limit(&task_limiter_500k, &global_limiter_200k),
+            Some(200_000)
+        );
+
+        // Only task limit set
+        assert_eq!(
+            YtDlpRunner::compute_effective_limit(&task_limiter_500k, &None),
+            Some(500_000)
+        );
+
+        // Only global limit set
+        assert_eq!(
+            YtDlpRunner::compute_effective_limit(&None, &global_limiter_1m),
+            Some(1_000_000)
+        );
+
+        // Both unlimited / None
+        assert_eq!(
+            YtDlpRunner::compute_effective_limit(&unlimited, &None),
+            None
+        );
+        assert_eq!(
+            YtDlpRunner::compute_effective_limit(&None, &None),
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn test_process_progress_stream_rate_changed_notification() {
+        let (client, _server) = tokio::io::duplex(64);
+        let reader = BufReader::new(client).lines();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let (tx, _rx) = tokio::sync::mpsc::channel(10);
+        let mut last_bytes = 0;
+
+        let task_limiter = Arc::new(TokenBucketRateLimiter::new(500_000));
+        let task_notify = task_limiter.get_notify();
+
+        let lim_clone = task_limiter.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            lim_clone.set_limit_bps(1_000_000);
+        });
+
+        let outcome = YtDlpRunner::process_progress_stream_with_rate_check(
+            reader,
+            cancel,
+            tx,
+            &mut last_bytes,
+            &Some(task_limiter),
+            &None,
+            Some(500_000),
+            Some(task_notify),
+            None,
+        ).await;
+
+        assert_eq!(outcome, StreamOutcome::RateChanged(Some(1_000_000)));
+    }
+
+    #[tokio::test]
+    async fn test_process_progress_stream_with_rate_check_progress_deltas() {
+        let simulated_output = b"IDM_PROGRESS:5000\nIDM_PROGRESS:12000\n";
+        let reader = BufReader::new(&simulated_output[..]).lines();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let (tx, mut rx) = tokio::sync::mpsc::channel(10);
+        let mut last_bytes = 0;
+
+        let outcome = YtDlpRunner::process_progress_stream_with_rate_check(
+            reader,
+            cancel,
+            tx,
+            &mut last_bytes,
+            &None,
+            &None,
+            None,
+            None,
+            None,
+        ).await;
+
+        assert_eq!(outcome, StreamOutcome::Completed);
+        assert_eq!(last_bytes, 12000);
+
+        let mut deltas = Vec::new();
+        while let Ok((_, delta)) = rx.try_recv() {
+            deltas.push(delta);
+        }
+        assert_eq!(deltas, vec![5000, 7000]);
+    }
+
     #[tokio::test]
     async fn test_ytdlp_run_download_immediate_cancel() {
         let (tx, _rx) = tokio::sync::mpsc::channel(10);
@@ -379,7 +606,8 @@ mod tests {
             out,
             cancel,
             tx,
-            Some(500_000),
+            Some(Arc::new(TokenBucketRateLimiter::new(500_000))),
+            None,
         ).await;
         assert!(res.is_ok());
     }

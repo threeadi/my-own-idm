@@ -470,4 +470,43 @@ mod tests {
         let res = manager.check_duplicate_task("https://example.com/file.zip", "file.zip", "C:\\Downloads").await;
         assert!(!res.is_duplicate);
     }
+
+    #[tokio::test]
+    async fn test_update_task_path_and_logs() {
+        use crate::engine::types::{DownloadCategory, TaskStatus};
+        let db = Arc::new(crate::db::Database::open_in_memory().unwrap());
+        let manager = Arc::new(DownloadManager::new(db.clone()));
+
+        let task = DownloadTask {
+            id: "move-task-1".to_string(),
+            url: "https://example.com/f.zip".to_string(),
+            filename: "f.zip".to_string(),
+            save_dir: "C:\\Downloads".to_string(),
+            file_path: "C:\\Downloads\\f.zip".to_string(),
+            total_bytes: Some(1024),
+            downloaded_bytes: 1024,
+            category: DownloadCategory::General,
+            status: TaskStatus::Completed,
+            connections: 4,
+            supports_range: true,
+            is_hls: false,
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+            completed_at: None,
+            error_message: None,
+            segments: vec![],
+            referer: None,
+            speed_limit_bps: None,
+        };
+        db.insert_task(&task).unwrap();
+        manager.tasks.write().await.insert(task.id.clone(), task);
+
+        let updated = manager.update_task_path("move-task-1", "D:\\NewDir", "D:\\NewDir\\f.zip").await;
+        assert!(updated.is_ok());
+        let t = updated.unwrap();
+        assert_eq!(t.save_dir, "D:\\NewDir");
+        assert_eq!(t.file_path, "D:\\NewDir\\f.zip");
+
+        let logs = get_recent_logs(Some(10));
+        assert!(logs.len() <= 10);
+    }
 }

@@ -229,28 +229,28 @@
                     <span class="text-[10px] text-slate-400">Pilihan Cepat:</span>
                     <button
                       type="button"
-                      onclick={() => { taskLimitValue = 500; taskLimitUnit = 'KB/s'; applyTaskLimit(); }}
+                      onclick={() => { taskLimiterEnabled = true; taskLimitValue = 500; taskLimitUnit = 'KB/s'; applyTaskLimit(); }}
                       class="px-1.5 py-0.5 rounded bg-[#141b2b] hover:bg-[#1a2236] text-[10px] font-mono text-slate-300 hover:text-[#00e5ff] border border-[#222d45]"
                     >
                       500 KB/s
                     </button>
                     <button
                       type="button"
-                      onclick={() => { taskLimitValue = 1; taskLimitUnit = 'MB/s'; applyTaskLimit(); }}
+                      onclick={() => { taskLimiterEnabled = true; taskLimitValue = 1; taskLimitUnit = 'MB/s'; applyTaskLimit(); }}
                       class="px-1.5 py-0.5 rounded bg-[#141b2b] hover:bg-[#1a2236] text-[10px] font-mono text-slate-300 hover:text-[#00e5ff] border border-[#222d45]"
                     >
                       1 MB/s
                     </button>
                     <button
                       type="button"
-                      onclick={() => { taskLimitValue = 2; taskLimitUnit = 'MB/s'; applyTaskLimit(); }}
+                      onclick={() => { taskLimiterEnabled = true; taskLimitValue = 2; taskLimitUnit = 'MB/s'; applyTaskLimit(); }}
                       class="px-1.5 py-0.5 rounded bg-[#141b2b] hover:bg-[#1a2236] text-[10px] font-mono text-slate-300 hover:text-[#00e5ff] border border-[#222d45]"
                     >
                       2 MB/s
                     </button>
                     <button
                       type="button"
-                      onclick={() => { taskLimitValue = 5; taskLimitUnit = 'MB/s'; applyTaskLimit(); }}
+                      onclick={() => { taskLimiterEnabled = true; taskLimitValue = 5; taskLimitUnit = 'MB/s'; applyTaskLimit(); }}
                       class="px-1.5 py-0.5 rounded bg-[#141b2b] hover:bg-[#1a2236] text-[10px] font-mono text-slate-300 hover:text-[#00e5ff] border border-[#222d45]"
                     >
                       5 MB/s

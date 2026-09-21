@@ -673,22 +673,14 @@ impl DownloadManager {
         let is_youtube = effective_url.contains("youtube.com") || effective_url.contains("youtu.be");
         let is_stream = is_youtube || task.is_hls || effective_url.contains(".m3u8");
 
-        let effective_limit_bps = match (
-            task_limiter.as_ref().map(|l| l.get_limit_bps()).filter(|&b| b > 0),
-            global_limiter.as_ref().map(|l| l.get_limit_bps()).filter(|&b| b > 0),
-        ) {
-            (Some(t), Some(g)) => Some(t.min(g)),
-            (Some(t), None) => Some(t),
-            (None, Some(g)) => Some(g),
-            (None, None) => None,
-        };
-
         if is_stream {
             // Stream mode via YtDlpRunner (handles YouTube + HLS m3u8 streams with ffmpeg remuxing)
             let out_file = task.file_path.clone();
             let url_clone = effective_url;
             let cancel_clone = cancel_flag.clone();
             let tx_clone = tx.clone();
+            let task_limiter_clone = task_limiter.clone();
+            let global_limiter_clone = global_limiter.clone();
 
             tauri::async_runtime::spawn(async move {
                 let res = crate::engine::ytdlp::YtDlpRunner::run_download(
@@ -696,7 +688,8 @@ impl DownloadManager {
                     out_file,
                     cancel_clone,
                     tx_clone,
-                    effective_limit_bps,
+                    task_limiter_clone,
+                    global_limiter_clone,
                 )
                 .await;
                 if let Err(e) = res {
