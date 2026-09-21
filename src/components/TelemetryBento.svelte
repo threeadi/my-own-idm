@@ -118,33 +118,38 @@
   </section>
 {:else}
 <section class="relative overflow-hidden rounded-xl bg-[#171c24] border border-[#252a33] shadow-xl p-4 sm:p-5 shrink-0 select-none mb-3">
-  <!-- Collapse button -->
-  <button
-    type="button"
-    onclick={() => (isCollapsed = true)}
-    class="absolute top-3 right-3 p-1 rounded-lg bg-[#252a33]/80 hover:bg-[#343942] text-[#8c909f] hover:text-[#dee2ee] transition-colors cursor-pointer border border-[#30353e]/60 z-20"
-    title={store.t('bento.collapseTelemetry')}
-  >
-    <ChevronUp class="w-3.5 h-3.5" />
-  </button>
   <!-- Glowing Ambient Accents -->
   <div class="absolute -right-20 -top-20 w-72 h-72 rounded-full bg-[#4cd7f6]/5 blur-3xl pointer-events-none"></div>
   <div class="absolute -left-16 -bottom-16 w-64 h-64 rounded-full bg-[#4d8eff]/10 blur-3xl pointer-events-none"></div>
 
+  <!-- Top Header Row: Status Pills + Collapse Toggle -->
+  <div class="relative z-10 flex items-center justify-between gap-2 pb-3 mb-3 border-b border-[#252a33]/70">
+    <div class="flex items-center gap-2 flex-wrap">
+      <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#10b981]/15 text-[#4edea3] font-sans text-xs border border-[#10b981]/30">
+        <span class="w-1.5 h-1.5 rounded-full bg-[#4edea3] animate-pulse"></span>
+        {store.t('bento.connStable')}
+      </span>
+      <span class="inline-flex items-center gap-1 text-[#8c909f] font-mono text-xs">
+        <HardDrive class="w-3.5 h-3.5 text-[#4cd7f6]" />
+        <span>{store.t('bento.driveSpace')} <strong class="text-[#dee2ee] font-sans font-semibold">{store.t('bento.driveAvailable')}</strong></span>
+      </span>
+    </div>
+
+    <!-- Integrated Collapse Toggle -->
+    <button
+      type="button"
+      onclick={() => (isCollapsed = true)}
+      class="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg bg-[#252a33] text-[#8c909f] hover:text-[#4cd7f6] hover:bg-[#30353e] transition-colors cursor-pointer border border-[#30353e] shrink-0"
+      title={store.t('bento.collapseTelemetry')}
+    >
+      <span class="text-[11px] font-sans font-medium">{store.t('common.collapse')}</span>
+      <ChevronUp class="w-3.5 h-3.5" />
+    </button>
+  </div>
+
   <div class="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
     <!-- Left: Telemetry Highlights -->
     <div class="flex flex-col gap-1 max-w-xl">
-      <!-- Top Pills -->
-      <div class="flex items-center gap-2 flex-wrap">
-        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#10b981]/15 text-[#4edea3] font-sans text-xs border border-[#10b981]/30">
-          <span class="w-1.5 h-1.5 rounded-full bg-[#4edea3] animate-pulse"></span>
-          {store.t('bento.connStable')}
-        </span>
-        <span class="inline-flex items-center gap-1 text-[#8c909f] font-mono text-xs">
-          <HardDrive class="w-3.5 h-3.5 text-[#4cd7f6]" />
-          <span>{store.t('bento.driveSpace')} <strong class="text-[#dee2ee] font-sans font-semibold">{store.t('bento.driveAvailable')}</strong></span>
-        </span>
-      </div>
 
       <!-- Real-time Speed readout -->
       <div class="flex items-baseline gap-2 mt-1">

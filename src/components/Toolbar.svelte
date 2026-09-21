@@ -5,9 +5,6 @@
     Plus,
     Play,
     Pause,
-    Trash2,
-    FolderOpen,
-    FileText,
     Settings,
     Search,
     Gauge,
@@ -16,7 +13,6 @@
     Download
   } from '@lucide/svelte';
 
-  const selected = $derived(store.selectedTask);
   const totalSpeed = $derived(store.totalSpeedBps);
 </script>
 
@@ -121,46 +117,6 @@
           {store.speedLimiterEnabled ? store.t('toolbar.speedLimited', { value: `${store.globalSpeedLimitValue} ${store.globalSpeedLimitUnit}` }) : store.t('toolbar.speedLimiter')}
         </span>
       </button>
-
-      <!-- Selected Task Actions (if selected) -->
-      {#if selected}
-        <div class="h-4 w-[1px] bg-[#30353e] mx-1"></div>
-
-        <button
-          onclick={() => store.openTransferWindow(selected.id)}
-          class="h-7 px-2.5 rounded-lg bg-[#252a33] text-[#4cd7f6] hover:bg-[#343942] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
-          title={store.t('transfer.windowTitle')}
-        >
-          <Zap class="w-3 h-3 text-[#4cd7f6]" />
-          <span class="hidden xl:inline">{store.t('toolbar.transferDetails')}</span>
-        </button>
-
-        {#if selected.status === 'completed'}
-          <button
-            onclick={() => store.openFile(selected.file_path)}
-            class="h-7 px-2 rounded-lg bg-[#252a33] text-[#dee2ee] hover:text-[#4cd7f6] hover:bg-[#343942] text-xs transition-colors cursor-pointer"
-            title={store.t('menu.openFile')}
-          >
-            <FileText class="w-3.5 h-3.5" />
-          </button>
-        {/if}
-
-        <button
-          onclick={() => store.openFolder(selected.file_path)}
-          class="h-7 px-2 rounded-lg bg-[#252a33] text-[#dee2ee] hover:text-[#4cd7f6] hover:bg-[#343942] text-xs transition-colors cursor-pointer"
-          title={store.t('menu.openFolder')}
-        >
-          <FolderOpen class="w-3.5 h-3.5" />
-        </button>
-
-        <button
-          onclick={() => store.cancelTask(selected.id, true)}
-          class="h-7 px-2 rounded-lg bg-[#252a33] text-[#dee2ee] hover:text-[#ffb4ab] hover:bg-[#343942] text-xs transition-colors cursor-pointer"
-          title={store.t('common.delete')}
-        >
-          <Trash2 class="w-3.5 h-3.5" />
-        </button>
-      {/if}
     </div>
 
     <!-- Right: Settings -->
