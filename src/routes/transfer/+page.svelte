@@ -48,8 +48,32 @@
   let taskLimitUnit = $state<SpeedLimitUnit>('MB/s');
   let copied = $state<boolean>(false);
   let autoOpenOnClose = $state<boolean>(false);
+  let isReporting = $state<boolean>(false);
+  let isReported = $state<boolean>(false);
+
+  $effect(() => {
+    if (task?.id) {
+      isReported = false;
+      isReporting = false;
+    }
+  });
+
+  async function handleReportIssue() {
+    if (!task?.id || isReporting || isReported) return;
+    isReporting = true;
+    try {
+      await store.reportDiagnostic(task.id, errorMessage);
+      isReported = true;
+    } catch (e: any) {
+      console.error('Report failed:', e);
+      alert(store.t('report.failed', { error: e?.message || String(e) }));
+    } finally {
+      isReporting = false;
+    }
+  }
 
   import { invoke } from '@tauri-apps/api/core';
+
 
   onMount(async () => {
     await store.init();
@@ -402,14 +426,34 @@
 
         <!-- Failure Actions -->
         <div class="pt-3 border-t border-[#1f242e] flex items-center justify-between gap-2">
-          <button
-            type="button"
-            onclick={handleRefreshLink}
-            class="px-3.5 py-1.5 text-xs font-bold rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 flex items-center gap-1.5 shadow-[0_0_10px_rgba(245,158,11,0.2)] transition-colors cursor-pointer"
-          >
-            <RotateCw class="w-3.5 h-3.5" />
-            <span>{store.t('transferWindow.refreshBtn')}</span>
-          </button>
+          <div class="flex items-center gap-2">
+            <button
+              type="button"
+              onclick={handleRefreshLink}
+              class="px-3.5 py-1.5 text-xs font-bold rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 flex items-center gap-1.5 shadow-[0_0_10px_rgba(245,158,11,0.2)] transition-colors cursor-pointer"
+            >
+              <RotateCw class="w-3.5 h-3.5" />
+              <span>{store.t('transferWindow.refreshBtn')}</span>
+            </button>
+            <button
+              type="button"
+              onclick={handleReportIssue}
+              disabled={isReporting || isReported}
+              class="px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors flex items-center gap-1.5 cursor-pointer {isReported ? 'bg-[#10b981]/15 text-[#10b981] border-[#10b981]/30 cursor-default' : 'bg-[#171c24] hover:bg-[#252a33] text-slate-300 hover:text-white border-[#252a33]'}"
+              title={store.t('report.tooltip')}
+            >
+              {#if isReporting}
+                <RotateCw class="w-3.5 h-3.5 text-[#00e5ff] animate-spin" />
+                <span>{store.t('report.sending')}</span>
+              {:else if isReported}
+                <Check class="w-3.5 h-3.5 text-[#10b981]" />
+                <span>{store.t('report.sentSuccess')}</span>
+              {:else}
+                <AlertTriangle class="w-3.5 h-3.5 text-amber-400" />
+                <span>{store.t('report.btnReport')}</span>
+              {/if}
+            </button>
+          </div>
 
           <div class="flex items-center gap-2">
             <button
@@ -429,6 +473,7 @@
             </button>
           </div>
         </div>
+
       </div>
     {:else}
       <!-- ================= PHASE: IN-FLIGHT (DOWNLOADING / PAUSED) ================= -->

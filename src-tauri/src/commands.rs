@@ -347,7 +347,46 @@ pub async fn start_dragging_window(window: tauri::Window) -> Result<(), String> 
     window.start_dragging().map_err(|e| e.to_string())
 }
 
+pub async fn report_diagnostic_error_inner(
+    manager: &DownloadManager,
+    task_id: &str,
+    error_message: Option<String>,
+) -> Result<String, String> {
+    let task = {
+        let tasks = manager.tasks.read().await;
+        tasks.get(task_id).cloned()
+    };
+
+    let task = match task {
+        Some(t) => t,
+        None => {
+            let all = manager.db.load_all_tasks().map_err(|e| e.to_string())?;
+            all.into_iter()
+                .find(|t| t.id == task_id)
+                .ok_or_else(|| format!("Task {} not found", task_id))?
+        }
+    };
+
+    let recent_logs = crate::logger::AppLogger::get().get_recent_lines(30);
+    let error_reason = error_message
+        .or_else(|| task.error_message.clone())
+        .unwrap_or_else(|| "Unknown failure".to_string());
+
+    crate::crash_reporter::report_download_failure(&task, &error_reason, &recent_logs)
+}
+
+#[tauri::command]
+pub async fn report_diagnostic_error(
+    state: State<'_, AppState>,
+    task_id: String,
+    error_message: Option<String>,
+) -> Result<String, String> {
+    report_diagnostic_error_inner(&state.manager, &task_id, error_message).await
+}
+
+
 #[cfg(test)]
+
 mod tests {
     use super::*;
 
@@ -509,4 +548,54 @@ mod tests {
         let logs = get_recent_logs(Some(10));
         assert!(logs.len() <= 10);
     }
+
+    #[tokio::test]
+    async fn test_report_diagnostic_error_flow() {
+        use crate::engine::types::{DownloadCategory, TaskStatus};
+        crate::crash_reporter::init();
+
+        let db = Arc::new(crate::db::Database::open_in_memory().unwrap());
+        let manager = Arc::new(DownloadManager::new(db.clone()));
+
+        let task = DownloadTask {
+            id: "diag-task-1".to_string(),
+            url: "https://example.com/test.zip?token=secret".to_string(),
+            filename: "test.zip".to_string(),
+            save_dir: "C:\\Downloads".to_string(),
+            file_path: "C:\\Downloads\\test.zip".to_string(),
+            total_bytes: Some(2048),
+            downloaded_bytes: 512,
+            category: DownloadCategory::General,
+            status: TaskStatus::Failed("Connection reset".to_string()),
+            connections: 4,
+            supports_range: true,
+            is_hls: false,
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+            completed_at: None,
+            error_message: Some("Connection reset".to_string()),
+            segments: vec![],
+            referer: None,
+            speed_limit_bps: None,
+        };
+        db.insert_task(&task).unwrap();
+        manager.tasks.write().await.insert(task.id.clone(), task.clone());
+
+        // 1. In-memory task branch
+        let res_mem = report_diagnostic_error_inner(&manager, "diag-task-1", Some("Explicit timeout".to_string())).await;
+        assert!(res_mem.is_ok());
+        assert!(!res_mem.unwrap().is_empty());
+
+        // 2. Fallback DB task branch (remove from in-memory map)
+        manager.tasks.write().await.remove("diag-task-1");
+        let res_db = report_diagnostic_error_inner(&manager, "diag-task-1", None).await;
+        assert!(res_db.is_ok());
+        assert!(!res_db.unwrap().is_empty());
+
+        // 3. Non-existent task branch (returns Err)
+        let res_missing = report_diagnostic_error_inner(&manager, "non-existent-task-999", None).await;
+        assert!(res_missing.is_err());
+        assert!(res_missing.unwrap_err().contains("not found"));
+    }
 }
+
+

@@ -475,9 +475,17 @@ export const translations = {
     'notify.completedBody': 'Berkas berhasil diunduh.',
     'notify.failedDefault': 'Gagal mengunduh berkas atau koneksi terputus.',
     'notify.refreshFailedDefault': 'Gagal memperbarui URL',
+
+    // Crash & Error Reporting
+    'report.btnReport': 'Laporkan Masalah',
+    'report.sending': 'Mengirimkan laporan...',
+    'report.sentSuccess': 'Laporan Terkirim',
+    'report.tooltip': 'Kirim laporan diagnostik kesalahan ke pengembang',
+    'report.failed': 'Gagal mengirim laporan: {error}',
   },
 
   en: {
+
     // Common
     'common.save': 'Save',
     'common.cancel': 'Cancel',
@@ -940,8 +948,16 @@ export const translations = {
     'notify.completedBody': 'File downloaded successfully.',
     'notify.failedDefault': 'Failed to download file or connection lost.',
     'notify.refreshFailedDefault': 'Failed to refresh URL',
+
+    // Crash & Error Reporting
+    'report.btnReport': 'Report Issue',
+    'report.sending': 'Sending report...',
+    'report.sentSuccess': 'Report Sent',
+    'report.tooltip': 'Send diagnostic error report to developers',
+    'report.failed': 'Failed to send report: {error}',
   },
 } as const;
+
 
 export type TranslationKey = keyof typeof translations.id;
 

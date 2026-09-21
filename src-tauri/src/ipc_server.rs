@@ -110,6 +110,17 @@ Connection: close\r\n\r\n{}",
     )
 }
 
+pub fn parse_http_path(req_str: &str) -> &str {
+    if let Some(first_line) = req_str.lines().next() {
+        let mut parts = first_line.split_whitespace();
+        let _method = parts.next();
+        if let Some(path) = parts.next() {
+            return path;
+        }
+    }
+    ""
+}
+
 pub async fn process_http_request<S, F>(socket: &mut S, mut on_payload: F)
 where
     S: AsyncReadExt + AsyncWriteExt + Unpin,
@@ -159,10 +170,26 @@ where
         return;
     }
 
+    let path = parse_http_path(&req_str);
+
     // Parse HTTP Body
     if let Some(h_end) = header_end {
         let body = parse_http_body(&buffer, h_end);
         if let Ok(val) = serde_json::from_str::<serde_json::Value>(&body) {
+            if path.starts_with("/error-report") {
+                let error_type = val.get("error_type").and_then(|v| v.as_str()).unwrap_or("unknown");
+                let message = val.get("message").and_then(|v| v.as_str()).unwrap_or("Unknown extension error");
+                let browser = val.get("browser").and_then(|v| v.as_str()).unwrap_or("Unknown Browser");
+                let details = val.get("details");
+                let event_id = crate::crash_reporter::report_extension_error(error_type, message, browser, details).unwrap_or_default();
+                let reply_body = serde_json::json!({ "status": "ok", "event_id": event_id }).to_string();
+                let ok_resp = build_json_response(200, "OK", &reply_body);
+                let _ = socket.write_all(ok_resp.as_bytes()).await;
+                let _ = socket.flush().await;
+                let _ = socket.shutdown().await;
+                return;
+            }
+
             on_payload(&val);
 
             let ok_resp = build_json_response(200, "OK", "{\"status\":\"ok\"}");
@@ -222,10 +249,19 @@ where
 #[cfg(target_os = "windows")]
 async fn handle_pipe_client(mut server: NamedPipeServer, app: AppHandle) {
     process_pipe_message(&mut server, |val| {
-        trigger_download_popup(&app, val);
+        if val.get("type").and_then(|v| v.as_str()) == Some("error_report") {
+            let error_type = val.get("error_type").and_then(|v| v.as_str()).unwrap_or("unknown");
+            let message = val.get("message").and_then(|v| v.as_str()).unwrap_or("Unknown extension error");
+            let browser = val.get("browser").and_then(|v| v.as_str()).unwrap_or("Chrome (NamedPipe)");
+            let details = val.get("details");
+            let _ = crate::crash_reporter::report_extension_error(error_type, message, browser, details);
+        } else {
+            trigger_download_popup(&app, val);
+        }
     })
     .await;
 }
+
 
 fn trigger_download_popup(app: &AppHandle, val: &serde_json::Value) {
     crate::log_info!("ipc", "Received browser download request: {:?}", val);
@@ -483,7 +519,40 @@ mod tests {
     fn test_parse_http_body_oob() {
         assert_eq!(parse_http_body(b"abc", 10), "");
     }
+
+    #[test]
+    fn test_parse_http_path() {
+        assert_eq!(parse_http_path("POST /error-report HTTP/1.1\r\nHost: 127.0.0.1"), "/error-report");
+        assert_eq!(parse_http_path("GET /download?id=123 HTTP/1.1\r\n"), "/download?id=123");
+        assert_eq!(parse_http_path("INVALID"), "");
+    }
+
+    #[tokio::test]
+    async fn test_process_http_request_error_report() {
+        let (mut client, mut server) = tokio::io::duplex(2048);
+
+        let server_task = tokio::spawn(async move {
+            process_http_request(&mut server, |_| {}).await;
+        });
+
+        let body = r#"{"error_type":"unknown_stream","message":"M3U8 master format unhandled","browser":"Firefox"}"#;
+        let req = format!(
+            "POST /error-report HTTP/1.1\r\nContent-Length: {}\r\nContent-Type: application/json\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        client.write_all(req.as_bytes()).await.unwrap();
+
+        let mut response = Vec::new();
+        client.read_to_end(&mut response).await.unwrap();
+        let _ = server_task.await;
+
+        let resp_str = String::from_utf8_lossy(&response);
+        assert!(resp_str.contains("200 OK"));
+        assert!(resp_str.contains("\"status\":\"ok\""));
+    }
 }
+
 
 
 

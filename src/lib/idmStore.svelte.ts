@@ -632,7 +632,24 @@ export class IdmStore {
     }
   }
 
+  async reportDiagnostic(taskId: string, errorMessage?: string): Promise<string> {
+    if (!isTauri()) {
+      return `local-diag-${taskId.slice(0, 8)}`;
+    }
+    try {
+      const eventId = await invoke<string>('report_diagnostic_error', {
+        taskId,
+        errorMessage: errorMessage || null,
+      });
+      return eventId;
+    } catch (e: any) {
+      console.error('Failed to report diagnostic error:', e);
+      throw e;
+    }
+  }
+
   async checkDuplicateDownload(url: string, filename: string = '', saveDir: string = ''): Promise<DuplicateCheckResult> {
+
     if (!url.trim()) {
       return {
         is_duplicate: false,

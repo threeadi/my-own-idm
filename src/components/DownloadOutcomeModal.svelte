@@ -35,8 +35,33 @@
   let recentLogs = $state<string[]>([]);
   let autoOpenOnClose = $state(false);
   let dontShowAgain = $state(false);
+  let isReporting = $state(false);
+  let isReported = $state(false);
+
+  $effect(() => {
+    if (task?.id) {
+      isReported = false;
+      isReporting = false;
+    }
+  });
+
+  async function handleReportIssue() {
+    if (!task?.id || isReporting || isReported) return;
+    isReporting = true;
+    try {
+      const errReason = store.outcomeErrorMessage || task.error_message || "Download failed";
+      await store.reportDiagnostic(task.id, errReason);
+      isReported = true;
+    } catch (e: any) {
+      console.error("Report failed:", e);
+      alert(store.t("report.failed", { error: e?.message || String(e) }));
+    } finally {
+      isReporting = false;
+    }
+  }
 
   function getFileIcon(cat?: string) {
+
     switch (cat) {
       case "video":
         return Video;
@@ -557,14 +582,36 @@
           </div>
         {:else}
           <!-- Gagal Actions -->
-          <button
-            onclick={toggleLogs}
-            class="px-3 py-2 rounded-xl text-xs font-mono text-slate-400 hover:text-white bg-[#252a33] hover:bg-[#30353e] transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
-            type="button"
-          >
-            <Terminal class="w-3.5 h-3.5 text-[#00e5ff]" />
-            <span>{showLogs ? store.t('outcome.hideLog') : store.t('outcome.techLog')}</span>
-          </button>
+          <div class="flex items-center gap-1.5">
+            <button
+              onclick={toggleLogs}
+              class="px-3 py-2 rounded-xl text-xs font-mono text-slate-400 hover:text-white bg-[#252a33] hover:bg-[#30353e] transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+              type="button"
+            >
+              <Terminal class="w-3.5 h-3.5 text-[#00e5ff]" />
+              <span>{showLogs ? store.t('outcome.hideLog') : store.t('outcome.techLog')}</span>
+            </button>
+
+            <button
+              onclick={handleReportIssue}
+              disabled={isReporting || isReported}
+              class="px-3 py-2 rounded-xl text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer shadow-sm border {isReported ? 'bg-[#10b981]/15 text-[#10b981] border-[#10b981]/30 cursor-default' : 'bg-[#252a33] hover:bg-[#30353e] text-slate-300 hover:text-white border-[#30353e]'}"
+              type="button"
+              title={store.t('report.tooltip')}
+            >
+              {#if isReporting}
+                <RotateCw class="w-3.5 h-3.5 text-[#00e5ff] animate-spin" />
+                <span>{store.t('report.sending')}</span>
+              {:else if isReported}
+                <Check class="w-3.5 h-3.5 text-[#10b981]" />
+                <span>{store.t('report.sentSuccess')}</span>
+              {:else}
+                <AlertTriangle class="w-3.5 h-3.5 text-amber-400" />
+                <span>{store.t('report.btnReport')}</span>
+              {/if}
+            </button>
+          </div>
+
 
           <div class="flex items-center gap-2">
             <button

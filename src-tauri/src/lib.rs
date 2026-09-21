@@ -1,4 +1,5 @@
 pub mod commands;
+pub mod crash_reporter;
 pub mod db;
 pub mod engine;
 pub mod ipc_server;
@@ -24,6 +25,9 @@ pub fn run() {
             // 1. Initialize robust file and console logger
             logger::AppLogger::init();
             log_info!("init", "My Own IDM application starting up...");
+
+            // 2. Initialize GlitchTip / Sentry Crash Reporter & Panic Integration
+            crash_reporter::init();
 
             // Setup SQLite DB in AppData
             let app_data_dir = app
@@ -87,8 +91,10 @@ pub fn run() {
             commands::start_dragging_window,
             commands::get_app_settings,
             commands::save_app_settings,
-            commands::register_native_host_manifest
+            commands::register_native_host_manifest,
+            commands::report_diagnostic_error
         ])
+
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

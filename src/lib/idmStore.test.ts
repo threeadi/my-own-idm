@@ -1275,7 +1275,50 @@ describe('IdmStore State & Filtering', () => {
       expect(store.settings.language).toBe('id');
     });
   });
+
+  describe('Diagnostic & Error Reporting', () => {
+    it('reports diagnostic error via Tauri invoke', async () => {
+      mockIsTauriReturn = true;
+      mockInvoke.mockImplementation((cmd, args) => {
+        if (cmd === 'report_diagnostic_error') {
+          return Promise.resolve('sentry-evt-12345');
+        }
+        return Promise.resolve(undefined);
+      });
+
+      const store = new IdmStore();
+      const id = await store.reportDiagnostic('task-abc-123', 'HTTP 403 Forbidden');
+      expect(id).toBe('sentry-evt-12345');
+      expect(mockInvoke).toHaveBeenCalledWith('report_diagnostic_error', {
+        taskId: 'task-abc-123',
+        errorMessage: 'HTTP 403 Forbidden',
+      });
+    });
+
+    it('falls back to local mock ID in non-Tauri browser environment', async () => {
+      (globalThis as any).window = {};
+      mockIsTauriReturn = false;
+      const store = new IdmStore();
+      const id = await store.reportDiagnostic('task-abc-123', 'Network timeout');
+      expect(id).toBe('local-diag-task-abc');
+    });
+
+
+    it('propagates error if Tauri invoke fails', async () => {
+      mockIsTauriReturn = true;
+      mockInvoke.mockImplementation((cmd) => {
+        if (cmd === 'report_diagnostic_error') {
+          return Promise.reject(new Error('Network error'));
+        }
+        return Promise.resolve(undefined);
+      });
+
+      const store = new IdmStore();
+      await expect(store.reportDiagnostic('task-abc-123')).rejects.toThrow('Network error');
+    });
+  });
 });
+
 
 
 

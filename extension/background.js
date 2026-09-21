@@ -185,6 +185,68 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ status: "error", error: String(err) });
       });
     return true; // Keep channel open for async response
+  } else if (request.action === "report-error") {
+    reportExtensionError(request.error_type || "extension_error", request.message, request.details)
+      .then((ok) => {
+        sendResponse({ status: ok ? "ok" : "fallback" });
+      });
+    return true;
   }
   return true;
 });
+
+// 5. Crash & Diagnostic Error Reporting
+async function reportExtensionError(errorType, message, details = {}) {
+  const payload = {
+    error_type: errorType,
+    message: String(message),
+    browser: navigator.userAgent,
+    details: details || {}
+  };
+
+  // Primary: Forward via Desktop App IPC HTTP Server
+  try {
+    const res = await fetch("http://127.0.0.1:18888/error-report", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      console.log("[MyOwnIDM] Extension diagnostic reported via Desktop IPC:", errorType);
+      return true;
+    }
+  } catch (ipcErr) {
+    // Desktop app may be closed or offline
+  }
+
+  // Fallback: Try Native Messaging if available
+  try {
+    chrome.runtime.sendNativeMessage(
+      NATIVE_HOST,
+      { type: "error_report", ...payload },
+      () => {
+        if (chrome.runtime.lastError) {
+          // Native host offline
+        }
+      }
+    );
+  } catch (e) {
+    // ignore
+  }
+
+  return false;
+}
+
+// Global Exception Handlers for Extension Background Service Worker
+self.addEventListener("error", (event) => {
+  reportExtensionError("uncaught_exception", event.message, {
+    filename: event.filename,
+    lineno: event.lineno,
+    colno: event.colno
+  });
+});
+
+self.addEventListener("unhandledrejection", (event) => {
+  reportExtensionError("unhandled_rejection", String(event.reason));
+});
+
