@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // @ts-expect-error CommonJS import in ESM
 import content from './content.js';
-const { cleanFilename, stripByteRanges, generateQualityPresets, safeSendMessage } = content;
+const { cleanFilename, stripByteRanges, generateQualityPresets, safeSendMessage, dismissVideo, isVideoDismissed } = content;
 
 describe('safeSendMessage', () => {
   const originalChrome = globalThis.chrome;
@@ -145,5 +145,26 @@ describe('cleanFilename', () => {
   it('falls back to default name when empty', () => {
     expect(cleanFilename('')).toBe('video');
     expect(cleanFilename('   ', 'fallback')).toBe('fallback');
+  });
+});
+
+describe('dismissVideo and isVideoDismissed', () => {
+  it('correctly tracks and checks dismissed video elements', () => {
+    const mockVideo1 = { id: 'v1' };
+    const mockVideo2 = { id: 'v2' };
+
+    expect(isVideoDismissed(mockVideo1)).toBe(false);
+    expect(isVideoDismissed(mockVideo2)).toBe(false);
+
+    dismissVideo(mockVideo1);
+
+    expect(isVideoDismissed(mockVideo1)).toBe(true);
+    expect(isVideoDismissed(mockVideo2)).toBe(false);
+  });
+
+  it('handles null/undefined gracefully without throwing', () => {
+    expect(isVideoDismissed(null)).toBe(false);
+    expect(isVideoDismissed(undefined)).toBe(false);
+    expect(() => dismissVideo(null)).not.toThrow();
   });
 });

@@ -3,7 +3,31 @@
   "use strict";
 
   const attachedButtons = new Map(); // video element -> { btn, panel }
+  const dismissedVideos = new WeakSet();
   let activePanel = null;
+
+  function dismissVideo(video) {
+    if (!video) return;
+    dismissedVideos.add(video);
+    if (attachedButtons.has(video)) {
+      const { btn, panel } = attachedButtons.get(video);
+      if (panel) {
+        panel.style.display = "none";
+        panel.remove();
+      }
+      if (btn) {
+        btn.style.opacity = "0";
+        btn.style.pointerEvents = "none";
+        btn.style.display = "none";
+        btn.remove();
+      }
+      attachedButtons.delete(video);
+    }
+  }
+
+  function isVideoDismissed(video) {
+    return video ? dismissedVideos.has(video) : false;
+  }
 
   function cleanFilename(rawTitle, defaultName = "video") {
     if (!rawTitle) return defaultName;
@@ -184,6 +208,7 @@
   }
 
   function attachFloatingButton(video) {
+    if (dismissedVideos.has(video)) return;
     const host = window.location.hostname;
     const isYouTube = host.includes("youtube.com") || host.includes("youtu.be") || host.includes("youtube-nocookie.com");
     const isInstagram = host.includes("instagram.com");
@@ -197,16 +222,25 @@
     const btn = document.createElement("div");
     btn.className = "myownidm-floating-bar";
     btn.innerHTML = `
-      <div class="myownidm-badge-count">${count}</div>
-      <div class="myownidm-text-group">
-        <span class="myownidm-title">Unduh dengan IDM Turbo</span>
-        <span class="myownidm-subtitle">${count} resolusi terdeteksi</span>
+      <div class="myownidm-bar-content" title="Pilih resolusi dan unduh video">
+        <div class="myownidm-badge-count">${count}</div>
+        <div class="myownidm-text-group">
+          <span class="myownidm-title">Unduh dengan IDM Turbo</span>
+          <span class="myownidm-subtitle">${count} resolusi terdeteksi</span>
+        </div>
+        <div class="myownidm-chevron">
+          <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </div>
       </div>
-      <div class="myownidm-chevron">
-        <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="6 9 12 15 18 9"></polyline>
+      <div class="myownidm-bar-divider"></div>
+      <button type="button" class="myownidm-bar-close" title="Tutup / Sembunyikan tombol unduh ini" aria-label="Tutup tombol unduh">
+        <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
         </svg>
-      </div>
+      </button>
     `;
 
     btn.style.position = "fixed";
@@ -458,6 +492,7 @@
 
     let hideTimeout;
     const showBtn = () => {
+      if (dismissedVideos.has(video)) return;
       clearTimeout(hideTimeout);
       updatePosition();
       btn.style.opacity = "1";
@@ -513,8 +548,9 @@
     panel.addEventListener("mouseenter", () => clearTimeout(hideTimeout));
     panel.addEventListener("mouseleave", () => hideBtn(1200));
 
-    // Pill Click Handler: Toggle Dropdown
-    btn.addEventListener("click", (e) => {
+    // Pill Click Handler: Click on content toggles Dropdown
+    const barContent = btn.querySelector(".myownidm-bar-content");
+    barContent?.addEventListener("click", (e) => {
       e.stopPropagation();
       e.preventDefault();
 
@@ -529,6 +565,14 @@
         btn.classList.add("myownidm-panel-active");
         activePanel = panel;
       }
+    });
+
+    // Close Button Click Handler: Dismisses floating bar for this video
+    const closeBtn = btn.querySelector(".myownidm-bar-close");
+    closeBtn?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      dismissVideo(video);
     });
   }
 
@@ -547,6 +591,7 @@
 
     const videos = document.querySelectorAll("video");
     videos.forEach((video) => {
+      if (dismissedVideos.has(video)) return;
       // Ignore tiny video elements (thumbnails, tracking pixels)
       if (video.offsetWidth > 0 && video.offsetWidth < 180 && video.offsetHeight > 0 && video.offsetHeight < 120) {
         return;
@@ -595,7 +640,7 @@
       lastGlobalCheck = now;
 
       for (const [video, item] of attachedButtons.entries()) {
-        if (!video.isConnected) continue;
+        if (!video.isConnected || dismissedVideos.has(video)) continue;
         const vRect = video.getBoundingClientRect();
         if (
           e.clientX >= vRect.left &&
@@ -632,6 +677,6 @@
   }
 
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { cleanFilename, stripByteRanges, generateQualityPresets, safeSendMessage };
+    module.exports = { cleanFilename, stripByteRanges, generateQualityPresets, safeSendMessage, dismissVideo, isVideoDismissed };
   }
 })();

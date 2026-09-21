@@ -6,13 +6,13 @@
   z-index: 2147483647;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   background: rgba(9, 14, 22, 0.94);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border: 1px solid rgba(0, 229, 255, 0.4);
   border-radius: 10px;
-  padding: 6px 12px;
+  padding: 5px 6px 5px 10px;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.75), 0 0 16px rgba(0, 229, 255, 0.2);
   cursor: pointer;
   transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1), 
@@ -24,6 +24,51 @@
   font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   opacity: 0.95;
   box-sizing: border-box;
+}
+
+/* Floating Bar Content Trigger */
+.myownidm-bar-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  flex: 1;
+}
+
+/* Subtle Divider */
+.myownidm-bar-divider {
+  width: 1px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.14);
+  margin: 0 2px;
+  flex-shrink: 0;
+}
+
+/* Close / Dismiss Button */
+.myownidm-bar-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  color: #8c909f;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  flex-shrink: 0;
+}
+
+.myownidm-bar-close:hover {
+  background: rgba(255, 82, 82, 0.22);
+  color: #ff5252;
+  transform: scale(1.1);
+}
+
+.myownidm-bar-close:active {
+  transform: scale(0.92);
 }
 
 .myownidm-floating-bar:hover {

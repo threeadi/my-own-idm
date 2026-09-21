@@ -18,8 +18,8 @@ describe('i18n Localization Engine', () => {
   });
 
   it('translates keys properly in Indonesian and English', () => {
-    expect(getTranslation('id', 'toolbar.addUrl')).toBe('+ Tambah URL');
-    expect(getTranslation('en', 'toolbar.addUrl')).toBe('+ Add URL');
+    expect(getTranslation('id', 'toolbar.addUrl')).toBe('Tambah URL');
+    expect(getTranslation('en', 'toolbar.addUrl')).toBe('Add URL');
 
     expect(getTranslation('id', 'common.save')).toBe('Simpan');
     expect(getTranslation('en', 'common.save')).toBe('Save');
