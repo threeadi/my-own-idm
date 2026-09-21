@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // @ts-expect-error CommonJS import in ESM
 import content from './content.js';
-const { cleanFilename, isGenericTitle, resolveSmartFilename, stripByteRanges, generateQualityPresets, safeSendMessage, dismissVideo, isVideoDismissed } = content;
+const { cleanFilename, isGenericTitle, resolveSmartFilename, stripByteRanges, generateQualityPresets, safeSendMessage, dismissVideo, isVideoDismissed, ensureTopmost } = content;
 
 describe('safeSendMessage', () => {
   const originalChrome = globalThis.chrome;
@@ -222,5 +222,99 @@ describe('dismissVideo and isVideoDismissed', () => {
     expect(isVideoDismissed(null)).toBe(false);
     expect(isVideoDismissed(undefined)).toBe(false);
     expect(() => dismissVideo(null)).not.toThrow();
+  });
+});
+
+describe('ensureTopmost', () => {
+  it('re-appends btn and panel to be the last children over any ads', () => {
+    const originalDoc = globalThis.document;
+    const body = {
+      children: [],
+      lastElementChild: null,
+      appendChild(child) {
+        const idx = this.children.indexOf(child);
+        if (idx !== -1) this.children.splice(idx, 1);
+        this.children.push(child);
+        child.parentElement = this;
+        this.lastElementChild = child;
+      }
+    };
+
+    const mockDoc = {
+      fullscreenElement: null,
+      body,
+      documentElement: body
+    };
+
+    globalThis.document = mockDoc;
+
+    const mockBtn = {
+      parentElement: null,
+      style: {
+        setProperty: vi.fn()
+      }
+    };
+    const mockPanel = {
+      parentElement: null,
+      style: {
+        setProperty: vi.fn()
+      }
+    };
+
+    // Initial attachment
+    ensureTopmost(mockBtn, mockPanel);
+
+    expect(body.children).toEqual([mockBtn, mockPanel]);
+    expect(body.lastElementChild).toBe(mockPanel);
+    expect(mockBtn.style.setProperty).toHaveBeenCalledWith('z-index', '2147483647', 'important');
+    expect(mockPanel.style.setProperty).toHaveBeenCalledWith('z-index', '2147483647', 'important');
+
+    // Simulate an ad element appended after IDM floating bar
+    const adOverlay = { parentElement: null, style: {} };
+    body.appendChild(adOverlay);
+    expect(body.lastElementChild).toBe(adOverlay);
+
+    // Call ensureTopmost again - IDM must re-append itself to be on top of the ad
+    ensureTopmost(mockBtn, mockPanel);
+    expect(body.children).toEqual([adOverlay, mockBtn, mockPanel]);
+    expect(body.lastElementChild).toBe(mockPanel);
+
+    globalThis.document = originalDoc;
+  });
+
+  it('prioritizes fullscreenElement when in fullscreen mode', () => {
+    const originalDoc = globalThis.document;
+    const fsContainer = {
+      children: [],
+      lastElementChild: null,
+      appendChild(child) {
+        this.children.push(child);
+        child.parentElement = this;
+        this.lastElementChild = child;
+      }
+    };
+
+    const mockDoc = {
+      fullscreenElement: fsContainer,
+      body: { children: [], appendChild: vi.fn() },
+      documentElement: {}
+    };
+
+    globalThis.document = mockDoc;
+
+    const mockBtn = { parentElement: null, style: { setProperty: vi.fn() } };
+    const mockPanel = { parentElement: null, style: { setProperty: vi.fn() } };
+
+    ensureTopmost(mockBtn, mockPanel);
+
+    expect(fsContainer.children).toEqual([mockBtn, mockPanel]);
+    expect(fsContainer.lastElementChild).toBe(mockPanel);
+
+    globalThis.document = originalDoc;
+  });
+
+  it('handles null/undefined btn without throwing', () => {
+    expect(() => ensureTopmost(null, null)).not.toThrow();
+    expect(() => ensureTopmost(undefined, undefined)).not.toThrow();
   });
 });

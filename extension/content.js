@@ -29,6 +29,31 @@
     return video ? dismissedVideos.has(video) : false;
   }
 
+  function ensureTopmost(btn, panel) {
+    if (!btn) return;
+    const targetParent = (typeof document !== "undefined" && (document.fullscreenElement || document.body || document.documentElement)) || null;
+    if (!targetParent) return;
+
+    if (panel) {
+      if (btn.parentElement !== targetParent || panel.parentElement !== targetParent || targetParent.lastElementChild !== panel) {
+        targetParent.appendChild(btn);
+        targetParent.appendChild(panel);
+      }
+    } else {
+      if (btn.parentElement !== targetParent || targetParent.lastElementChild !== btn) {
+        targetParent.appendChild(btn);
+      }
+    }
+
+    btn.style.setProperty("position", "fixed", "important");
+    btn.style.setProperty("z-index", "2147483647", "important");
+
+    if (panel) {
+      panel.style.setProperty("position", "fixed", "important");
+      panel.style.setProperty("z-index", "2147483647", "important");
+    }
+  }
+
   function cleanFilename(rawTitle, defaultName = "video", maxLen = 80) {
     if (!rawTitle) return defaultName;
     let clean = rawTitle
@@ -305,16 +330,18 @@
       </button>
     `;
 
-    btn.style.position = "fixed";
-    btn.style.zIndex = "2147483647";
-    btn.style.opacity = "0";
-    btn.style.pointerEvents = "none";
-    btn.style.display = "none";
+    btn.style.setProperty("position", "fixed", "important");
+    btn.style.setProperty("z-index", "2147483647", "important");
+    btn.style.setProperty("opacity", "0");
+    btn.style.setProperty("pointer-events", "none");
+    btn.style.setProperty("display", "none");
 
     // 2. Create Floating Sniffer Popover Panel
     const panel = document.createElement("div");
     panel.className = "myownidm-sniffer-panel";
-    panel.style.display = "none";
+    panel.style.setProperty("position", "fixed", "important");
+    panel.style.setProperty("z-index", "2147483647", "important");
+    panel.style.setProperty("display", "none");
 
     let qualityItemsHtml = "";
     presets.forEach((item) => {
@@ -379,8 +406,7 @@
       </div>
     `;
 
-    document.body.appendChild(btn);
-    document.body.appendChild(panel);
+    ensureTopmost(btn, panel);
     attachedButtons.set(video, { btn, panel });
 
     const closePanel = () => {
@@ -534,31 +560,35 @@
         return;
       }
 
-      btn.style.display = "flex";
+      ensureTopmost(btn, panel);
+      btn.style.setProperty("display", "flex", "important");
 
       const btnWidth = btn.offsetWidth || 230;
       const topPos = Math.max(10, vRect.top + 12);
       const leftPos = Math.max(10, vRect.right - btnWidth - 12);
 
-      btn.style.top = `${topPos}px`;
-      btn.style.left = `${leftPos}px`;
+      btn.style.setProperty("top", `${topPos}px`, "important");
+      btn.style.setProperty("left", `${leftPos}px`, "important");
+      btn.style.setProperty("z-index", "2147483647", "important");
 
       // Position dropdown panel directly below floating pill
       const panelWidth = 410;
       const panelLeft = Math.max(10, Math.min(window.innerWidth - panelWidth - 14, leftPos + btnWidth - panelWidth));
       const panelTop = topPos + (btn.offsetHeight || 38) + 6;
 
-      panel.style.top = `${panelTop}px`;
-      panel.style.left = `${panelLeft}px`;
+      panel.style.setProperty("top", `${panelTop}px`, "important");
+      panel.style.setProperty("left", `${panelLeft}px`, "important");
+      panel.style.setProperty("z-index", "2147483647", "important");
     };
 
     let hideTimeout;
     const showBtn = () => {
       if (dismissedVideos.has(video)) return;
       clearTimeout(hideTimeout);
+      ensureTopmost(btn, panel);
       updatePosition();
-      btn.style.opacity = "1";
-      btn.style.pointerEvents = "auto";
+      btn.style.setProperty("opacity", "1");
+      btn.style.setProperty("pointer-events", "auto", "important");
     };
 
     const hideBtn = (delay = 1800) => {
@@ -622,8 +652,10 @@
         if (activePanel && activePanel !== panel) {
           activePanel.style.display = "none";
         }
+        ensureTopmost(btn, panel);
         updatePosition();
-        panel.style.display = "flex";
+        panel.style.setProperty("display", "flex", "important");
+        panel.style.setProperty("z-index", "2147483647", "important");
         btn.classList.add("myownidm-panel-active");
         activePanel = panel;
       }
@@ -661,12 +693,7 @@
 
       if (attachedButtons.has(video)) {
         const item = attachedButtons.get(video);
-        if (!document.body.contains(item.btn)) {
-          document.body.appendChild(item.btn);
-        }
-        if (!document.body.contains(item.panel)) {
-          document.body.appendChild(item.panel);
-        }
+        ensureTopmost(item.btn, item.panel);
         return;
       }
 
@@ -710,18 +737,32 @@
           e.clientY >= vRect.top &&
           e.clientY <= vRect.bottom
         ) {
-          item.btn.style.display = "flex";
-          item.btn.style.opacity = "1";
-          item.btn.style.pointerEvents = "auto";
+          ensureTopmost(item.btn, item.panel);
+          item.btn.style.setProperty("display", "flex", "important");
+          item.btn.style.setProperty("opacity", "1");
+          item.btn.style.setProperty("pointer-events", "auto", "important");
           const btnWidth = item.btn.offsetWidth || 230;
-          item.btn.style.top = `${Math.max(10, vRect.top + 12)}px`;
-          item.btn.style.left = `${Math.max(10, vRect.right - btnWidth - 12)}px`;
+          item.btn.style.setProperty("top", `${Math.max(10, vRect.top + 12)}px`, "important");
+          item.btn.style.setProperty("left", `${Math.max(10, vRect.right - btnWidth - 12)}px`, "important");
         }
       }
     }, { passive: true });
 
     const observer = new MutationObserver(() => {
       scanAndAttach();
+      for (const [video, item] of attachedButtons.entries()) {
+        if (item.btn && item.panel && item.btn.style.display !== "none") {
+          ensureTopmost(item.btn, item.panel);
+        }
+      }
+    });
+
+    document.addEventListener("fullscreenchange", () => {
+      for (const [video, item] of attachedButtons.entries()) {
+        if (item.btn && item.panel) {
+          ensureTopmost(item.btn, item.panel);
+        }
+      }
     });
 
     observer.observe(document.body || document.documentElement, {
@@ -747,7 +788,8 @@
       generateQualityPresets,
       safeSendMessage,
       dismissVideo,
-      isVideoDismissed
+      isVideoDismissed,
+      ensureTopmost
     };
   }
 })();
