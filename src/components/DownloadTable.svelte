@@ -107,7 +107,7 @@
 
 <svelte:window onclick={closeContextMenu} onkeydown={(e) => e.key === 'Escape' && closeContextMenu()} />
 
-<div class="flex-1 flex flex-col min-w-0 overflow-y-auto select-none bg-[#0f141c] pr-1">
+<div class="w-full flex flex-col min-w-0 select-none bg-[#0f141c]">
   <!-- Control & Filter Header Bar -->
   <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-3 shrink-0">
     <div class="flex items-center gap-2">
@@ -382,8 +382,8 @@
     </div>
   {:else}
     <!-- TABLE VIEW -->
-    <div class="border border-[#252a33] rounded-xl overflow-hidden bg-[#171c24] mb-6">
-      <table class="w-full text-left border-collapse text-xs">
+    <div class="border border-[#252a33] rounded-xl overflow-x-auto bg-[#171c24] mb-6">
+      <table class="w-full min-w-[850px] text-left border-collapse text-xs">
         <thead class="bg-[#1b2028] border-b border-[#252a33] text-[#8c909f] font-semibold uppercase tracking-wider text-[10px]">
           <tr>
             <th

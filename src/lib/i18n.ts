@@ -43,6 +43,8 @@ export const translations = {
     'common.minimize': 'Minimalkan',
     'common.open': 'Buka',
     'common.processing': 'Memproses...',
+    'common.collapse': 'Sembunyikan',
+    'common.expand': 'Perluas',
 
     // Toolbar
     'toolbar.title': 'IDM Turbo Desktop',
@@ -350,6 +352,8 @@ export const translations = {
     'bento.limitBtn': 'Batasi',
     'bento.fullBandwidth': 'Prioritas Bandwidth Penuh',
     'bento.totalVolume': 'Total Volume Unduhan',
+    'bento.collapseTelemetry': 'Sembunyikan Telemetri',
+    'bento.expandTelemetry': 'Tampilkan Telemetri',
 
     // Download Outcome Modal
     'outcome.titleCompleted': 'Download Selesai • IDM Turbo Desktop',
@@ -516,6 +520,8 @@ export const translations = {
     'common.minimize': 'Minimize',
     'common.open': 'Open',
     'common.processing': 'Processing...',
+    'common.collapse': 'Collapse',
+    'common.expand': 'Expand',
 
     // Toolbar
     'toolbar.title': 'IDM Turbo Desktop',
@@ -823,6 +829,8 @@ export const translations = {
     'bento.limitBtn': 'Limit',
     'bento.fullBandwidth': 'Full Bandwidth Priority',
     'bento.totalVolume': 'Total Download Volume',
+    'bento.collapseTelemetry': 'Collapse Telemetry',
+    'bento.expandTelemetry': 'Expand Telemetry',
 
     // Download Outcome Modal
     'outcome.titleCompleted': 'Download Completed • IDM Turbo Desktop',

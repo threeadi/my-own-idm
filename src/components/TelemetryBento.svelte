@@ -10,7 +10,9 @@
     PauseCircle,
     CheckCircle2,
     Database,
-    ShieldCheck
+    ShieldCheck,
+    ChevronUp,
+    ChevronDown
   } from '@lucide/svelte';
 
   const totalSpeed = $derived(store.totalSpeedBps);
@@ -70,9 +72,61 @@
     }
     return { value: (totalSpeed / 1024).toFixed(0), unit: store.t('bento.unitKbS') };
   });
+  let isCollapsed = $state(false);
 </script>
 
+{#if isCollapsed}
+  <section class="relative overflow-hidden rounded-xl bg-[#171c24] border border-[#252a33] shadow-md px-3.5 py-2.5 shrink-0 select-none mb-3 flex items-center justify-between gap-3">
+    <!-- Left: Realtime Status & Speed -->
+    <div class="flex items-center gap-3 min-w-0">
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full {totalSpeed > 0 ? 'bg-[#4edea3] animate-pulse' : 'bg-[#8c909f]'}"></span>
+        <div class="flex items-baseline gap-1 font-mono">
+          <span class="font-bold text-base text-[#dee2ee]">{speedDisplay.value}</span>
+          <span class="text-xs text-[#4cd7f6] font-medium">{speedDisplay.unit}</span>
+        </div>
+      </div>
+      <div class="hidden sm:flex items-center gap-2.5 text-xs font-mono text-[#8c909f] border-l border-[#252a33] pl-3">
+        <span>DL: <strong class="text-[#dee2ee]">{counts.downloading || 0}</strong></span>
+        <span>•</span>
+        <span>Paused: <strong class="text-[#dee2ee]">{counts.paused || 0}</strong></span>
+        <span>•</span>
+        <span>Done: <strong class="text-[#4edea3]">{counts.completed || 0}</strong></span>
+        <span>•</span>
+        <span>Total: <strong class="text-[#adc6ff]">{formatBytes(totalVolumeBytes)}</strong></span>
+      </div>
+    </div>
+
+    <!-- Right: Quick Limiter / Expand -->
+    <div class="flex items-center gap-2 shrink-0">
+      {#if store.speedLimiterEnabled}
+        <span class="hidden md:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#00e5ff]/10 text-[#00e5ff] font-mono text-[11px] border border-[#00e5ff]/30">
+          <Zap class="w-3 h-3" />
+          {store.globalSpeedLimitValue} {store.globalSpeedLimitUnit}
+        </span>
+      {/if}
+      <button
+        type="button"
+        onclick={() => (isCollapsed = false)}
+        class="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg bg-[#252a33] text-[#8c909f] hover:text-[#4cd7f6] hover:bg-[#30353e] transition-colors cursor-pointer border border-[#30353e]"
+        title={store.t('bento.expandTelemetry')}
+      >
+        <span class="text-[11px] font-sans font-medium">{store.t('common.expand')}</span>
+        <ChevronDown class="w-3.5 h-3.5" />
+      </button>
+    </div>
+  </section>
+{:else}
 <section class="relative overflow-hidden rounded-xl bg-[#171c24] border border-[#252a33] shadow-xl p-4 sm:p-5 shrink-0 select-none mb-3">
+  <!-- Collapse button -->
+  <button
+    type="button"
+    onclick={() => (isCollapsed = true)}
+    class="absolute top-3 right-3 p-1 rounded-lg bg-[#252a33]/80 hover:bg-[#343942] text-[#8c909f] hover:text-[#dee2ee] transition-colors cursor-pointer border border-[#30353e]/60 z-20"
+    title={store.t('bento.collapseTelemetry')}
+  >
+    <ChevronUp class="w-3.5 h-3.5" />
+  </button>
   <!-- Glowing Ambient Accents -->
   <div class="absolute -right-20 -top-20 w-72 h-72 rounded-full bg-[#4cd7f6]/5 blur-3xl pointer-events-none"></div>
   <div class="absolute -left-16 -bottom-16 w-64 h-64 rounded-full bg-[#4d8eff]/10 blur-3xl pointer-events-none"></div>
@@ -281,3 +335,4 @@
     </div>
   </div>
 </section>
+{/if}

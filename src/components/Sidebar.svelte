@@ -33,7 +33,7 @@
   ]);
 </script>
 
-<aside class="w-60 shrink-0 select-none bg-[#171c24]/90 backdrop-blur-xl border-r border-[#30353e]/70 p-3 flex flex-col justify-between overflow-y-auto">
+<aside class="w-60 shrink-0 min-h-0 select-none bg-[#171c24]/90 backdrop-blur-xl border-r border-[#30353e]/70 p-3 flex flex-col justify-between overflow-y-auto">
   <div class="space-y-4">
     <!-- Status Unduhan -->
     <div>

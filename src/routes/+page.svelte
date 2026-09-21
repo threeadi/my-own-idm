@@ -42,12 +42,12 @@
   <Toolbar />
 
   <!-- Main Workspace -->
-  <div class="flex-1 flex overflow-hidden">
+  <div class="flex-1 flex overflow-hidden min-h-0 min-w-0">
     <!-- Left Categories & Status Navigation -->
     <Sidebar />
 
     <!-- Right Workspace Area -->
-    <main class="flex-1 flex flex-col min-w-0 overflow-y-auto bg-[#0f141c] p-3 sm:p-4">
+    <main class="flex-1 min-w-0 min-h-0 overflow-y-auto bg-[#0f141c] p-3 sm:p-4">
       <!-- Bento Telemetry Dashboard -->
       <TelemetryBento />
 
