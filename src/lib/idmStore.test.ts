@@ -169,7 +169,7 @@ describe('IdmStore State & Filtering', () => {
     expect(store.totalSpeedBps).toBe(750000);
   });
 
-  it('opens add modal with prefilled data', () => {
+  it('opens add modal with prefilled data and bypass parameter', () => {
     const store = new IdmStore();
     store.openAddModal('https://example.com/file.iso', 'file.iso', { Authorization: 'Bearer token' });
 
@@ -177,6 +177,10 @@ describe('IdmStore State & Filtering', () => {
     expect(store.initialAddUrl).toBe('https://example.com/file.iso');
     expect(store.initialFilename).toBe('file.iso');
     expect(store.initialHeaders).toEqual({ Authorization: 'Bearer token' });
+    expect(store.bypassDuplicateCheck).toBe(false);
+
+    store.openAddModal('https://example.com/file.iso', 'file.iso', null, true);
+    expect(store.bypassDuplicateCheck).toBe(true);
   });
 
   it('verifies isTauri helper', () => {
@@ -995,6 +999,7 @@ describe('IdmStore State & Filtering', () => {
     store.proceedWithNewDownload();
     expect(store.isDuplicateModalOpen).toBe(false);
     expect(store.isAddModalOpen).toBe(true);
+    expect(store.bypassDuplicateCheck).toBe(true);
     expect(store.initialAddUrl).toBe('https://example.com/sample.zip');
     expect(store.initialFilename).toBe('sample (1).zip');
     expect(store.initialHeaders).toEqual({ 'User-Agent': 'Custom' });
@@ -1363,6 +1368,7 @@ describe('IdmStore State & Filtering', () => {
 
       expect(store.isDuplicateModalOpen).toBe(false);
       expect(store.isAddModalOpen).toBe(true);
+      expect(store.bypassDuplicateCheck).toBe(true);
       expect(store.initialFilename).toBe('report (1).pdf');
       expect(store.initialAddUrl).toBe('https://example.com/report.pdf');
     });
@@ -1376,6 +1382,7 @@ describe('IdmStore State & Filtering', () => {
 
       expect(store.isDuplicateModalOpen).toBe(false);
       expect(store.isAddModalOpen).toBe(true);
+      expect(store.bypassDuplicateCheck).toBe(true);
       expect(store.initialFilename).toBe('report.pdf');
       expect(store.initialAddUrl).toBe('https://example.com/report.pdf');
     });
@@ -1419,6 +1426,7 @@ describe('IdmStore State & Filtering', () => {
       await store.proceedWithDuplicateAction('resume');
 
       expect(store.isAddModalOpen).toBe(true);
+      expect(store.bypassDuplicateCheck).toBe(true);
       expect(store.initialFilename).toBe('file.zip');
     });
 

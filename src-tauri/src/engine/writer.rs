@@ -30,7 +30,7 @@ impl FileWriter {
         // Pre-allocate if size known
         if let Some(total) = total_bytes {
             let current_len = file.metadata().await.map(|m| m.len()).unwrap_or(0);
-            if current_len < total {
+            if current_len != total {
                 file.set_len(total)
                     .await
                     .map_err(|e| format!("Failed to pre-allocate file: {}", e))?;
@@ -162,5 +162,24 @@ mod tests {
 
         let disk_bytes = tokio::fs::read(&file_path).await.expect("read file");
         assert_eq!(disk_bytes, b"Hello World");
+    }
+
+    #[tokio::test]
+    async fn test_file_writer_overwrite_truncation() {
+        let dir = tempdir().expect("create temp dir");
+        let file_path = dir.path().join("overwrite_test.bin");
+        let path_str = file_path.to_string_lossy().to_string();
+
+        // Write an initial larger file (10,000 bytes)
+        tokio::fs::write(&file_path, vec![0xAA; 10000]).await.expect("initial write");
+
+        // Open with smaller size (4000 bytes) as duplicate overwrite
+        let writer = FileWriter::create_or_open(&path_str, Some(4000))
+            .await
+            .expect("create writer");
+
+        assert_eq!(writer.total_bytes, Some(4000));
+        let metadata = tokio::fs::metadata(&file_path).await.expect("metadata");
+        assert_eq!(metadata.len(), 4000);
     }
 }

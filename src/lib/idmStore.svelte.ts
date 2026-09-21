@@ -31,6 +31,7 @@ export class IdmStore {
   initialAddUrl = $state<string>('');
   initialFilename = $state<string>('');
   initialHeaders = $state<Record<string, string> | null>(null);
+  bypassDuplicateCheck = $state<boolean>(false);
 
   globalSpeedLimitBps = $derived<number | null>(
     this.speedLimiterEnabled ? unitToBps(this.globalSpeedLimitValue, this.globalSpeedLimitUnit) : null
@@ -467,10 +468,16 @@ export class IdmStore {
     }
   }
 
-  openAddModal(url: string = '', filename: string = '', headers: Record<string, string> | null = null) {
+  openAddModal(
+    url: string = '',
+    filename: string = '',
+    headers: Record<string, string> | null = null,
+    bypassDuplicate: boolean = false
+  ) {
     this.initialAddUrl = url;
     this.initialFilename = filename || '';
     this.initialHeaders = headers || null;
+    this.bypassDuplicateCheck = bypassDuplicate;
     this.isAddModalOpen = true;
   }
 
@@ -753,10 +760,10 @@ export class IdmStore {
 
     if (choice === 'numbered') {
       const filename = data?.suggested_new_filename || '';
-      this.openAddModal(url, filename, headers);
+      this.openAddModal(url, filename, headers, true);
     } else if (choice === 'overwrite') {
       const filename = data?.filename || '';
-      this.openAddModal(url, filename, headers);
+      this.openAddModal(url, filename, headers, true);
     } else if (choice === 'resume') {
       if (data?.task_id) {
         if (data.status === 'paused') {
@@ -764,7 +771,7 @@ export class IdmStore {
         }
         await this.openTransferWindow(data.task_id);
       } else {
-        this.openAddModal(url, data?.filename || '', headers);
+        this.openAddModal(url, data?.filename || '', headers, true);
       }
     }
   }

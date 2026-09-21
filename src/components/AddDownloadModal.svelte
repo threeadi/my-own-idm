@@ -48,7 +48,7 @@
       if (!saveDir) {
         invoke<string>('get_default_download_dir').then((dir) => {
           saveDir = dir;
-          if (url) checkDuplicate();
+          if (url && !store.bypassDuplicateCheck) checkDuplicate();
         });
       }
       if (store.initialAddUrl) {
@@ -59,11 +59,12 @@
         if (url.trim() !== lastProbedUrl) {
           probeUrl(store.initialHeaders);
         }
-      } else if (url) {
+      } else if (url && !store.bypassDuplicateCheck) {
         checkDuplicate();
       }
     } else {
       lastProbedUrl = '';
+      store.bypassDuplicateCheck = false;
     }
   });
 
@@ -72,6 +73,7 @@
       const text = await navigator.clipboard.readText();
       if (text && text.trim().startsWith('http')) {
         url = text.trim();
+        store.bypassDuplicateCheck = false;
         clipboardCopied = true;
         probeUrl();
         setTimeout(() => {
@@ -106,7 +108,9 @@
       if (res.suggested_dir) {
         saveDir = res.suggested_dir;
       }
-      await checkDuplicate();
+      if (!store.bypassDuplicateCheck) {
+        await checkDuplicate();
+      }
     } catch (e: any) {
       probeError = String(e);
     } finally {
@@ -114,8 +118,16 @@
     }
   }
 
+  function handleUrlInput() {
+    if (url.trim() !== store.initialAddUrl.trim()) {
+      store.bypassDuplicateCheck = false;
+    }
+    checkDuplicate();
+  }
+
   async function checkDuplicate() {
     if (!url.trim()) return;
+    if (store.bypassDuplicateCheck) return;
     isCheckingDuplicate = true;
     try {
       const res = await store.checkDuplicateDownload(url.trim(), filename.trim(), saveDir.trim());
@@ -263,7 +275,7 @@
               type="text"
               bind:value={url}
               onchange={() => probeUrl()}
-              oninput={() => checkDuplicate()}
+              oninput={handleUrlInput}
               placeholder="https://example.com/file.iso..."
               class="w-full h-8 pl-3 pr-24 bg-[#090e16] text-[#dee2ee] font-mono text-xs rounded-lg focus:outline-none focus:ring-1 focus:ring-[#4cd7f6] border border-[#30353e] transition-all"
             />
