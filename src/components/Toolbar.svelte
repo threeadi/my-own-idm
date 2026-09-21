@@ -11,8 +11,6 @@
     Settings,
     Search,
     Gauge,
-    Sliders,
-    User,
     CheckCheck,
     Zap,
     Download
@@ -53,33 +51,14 @@
       </div>
     </div>
 
-    <!-- Right Controls -->
+    <!-- Right Telemetry -->
     <div class="flex items-center gap-2">
       {#if totalSpeed > 0}
-        <div class="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#10b981]/15 border border-[#10b981]/30 text-[#4edea3] text-[11px] font-mono">
+        <div class="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#10b981]/15 border border-[#10b981]/30 text-[#4edea3] text-[11px] font-mono">
           <Zap class="w-3 h-3 text-[#4edea3]" />
           <span class="font-semibold">{formatSpeed(totalSpeed)}</span>
         </div>
       {/if}
-
-      <button
-        onclick={() => (store.isSettingsModalOpen = true)}
-        class="w-7 h-7 flex items-center justify-center rounded-lg text-[#c2c6d6] hover:bg-[#252a33] hover:text-[#dee2ee] transition-colors cursor-pointer"
-        title="Pengaturan Aplikasi"
-      >
-        <Sliders class="w-3.5 h-3.5" />
-      </button>
-
-      <div class="w-7 h-7 rounded-full bg-[#adc6ff]/20 text-[#adc6ff] flex items-center justify-center">
-        <User class="w-3.5 h-3.5" />
-      </div>
-
-      <!-- Window Control Dots -->
-      <div class="flex items-center gap-1.5 ml-2 pl-2 border-l border-[#252a33]">
-        <span class="w-2.5 h-2.5 rounded-full bg-[#30353e] hover:bg-[#8c909f] transition-colors inline-block" title="Minimalkan"></span>
-        <span class="w-2.5 h-2.5 rounded-full bg-[#30353e] hover:bg-[#8c909f] transition-colors inline-block" title="Maksimalkan"></span>
-        <span class="w-2.5 h-2.5 rounded-full bg-[#93000a] hover:bg-[#ffb4ab] transition-colors inline-block" title="Tutup"></span>
-      </div>
     </div>
   </div>
 
