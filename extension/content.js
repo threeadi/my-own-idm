@@ -443,13 +443,20 @@
           return window.location.href;
         }
       }
+      if (host.includes("mediadelivery.net") || (typeof window !== "undefined" && window.location.href.includes("mediadelivery.net"))) {
+        return window.location.href;
+      }
       if (!targetUrl || targetUrl.startsWith("blob:")) {
         try {
           const resp = await safeSendMessage({ action: "get-detected-media", tabId: null });
           if (resp?.media && resp.media.length > 0) {
-            const stream = resp.media.find(m => m.type === "stream" || m.url.includes(".m3u8") || m.url.includes("/pl/"));
+            const nonScript = resp.media.filter(m => {
+              const u = m.url.toLowerCase();
+              return !u.includes(".js") && !u.includes(".json") && !u.includes(".css") && !u.includes(".html") && !u.includes(".map");
+            });
+            const stream = nonScript.find(m => m.type === "stream" || m.url.includes(".m3u8") || m.url.includes("/pl/"));
             if (stream) return stream.url;
-            const valid = resp.media.filter(m => !m.url.includes("googlevideo.com") && !m.url.includes(".m4s"));
+            const valid = nonScript.filter(m => !m.url.includes("googlevideo.com") && !m.url.includes(".m4s"));
             if (valid.length > 0) return valid[valid.length - 1].url;
           }
         } catch {

@@ -568,6 +568,11 @@ impl DownloadManager {
             let db_clone = self.db.clone();
             let tasks_clone = self.tasks.clone();
             let client_clone = self.client.clone();
+            let headers = task.referer.as_ref().map(|ref_url| {
+                let mut map = HashMap::new();
+                map.insert("Referer".to_string(), ref_url.clone());
+                map
+            });
 
             tauri::async_runtime::spawn(async move {
                 Self::execute_task(
@@ -577,7 +582,7 @@ impl DownloadManager {
                     client_clone,
                     task,
                     cancel_flag,
-                    None,
+                    headers,
                     task_limiter,
                     global_limiter,
                 )
@@ -674,7 +679,8 @@ impl DownloadManager {
         };
 
         let is_youtube = effective_url.contains("youtube.com") || effective_url.contains("youtu.be");
-        let is_stream = is_youtube || task.is_hls || effective_url.contains(".m3u8");
+        let is_stream_site = effective_url.contains("mediadelivery.net") || effective_url.contains("b-cdn.net");
+        let is_stream = is_youtube || is_stream_site || task.is_hls || effective_url.contains(".m3u8");
 
         let mut stream_err_rx = None;
 
@@ -686,7 +692,17 @@ impl DownloadManager {
             let tx_clone = tx.clone();
             let task_limiter_clone = task_limiter.clone();
             let global_limiter_clone = global_limiter.clone();
-            let headers_clone = custom_headers.clone();
+            let mut headers_map = custom_headers.clone().unwrap_or_default();
+            if !headers_map.contains_key("referer") && !headers_map.contains_key("Referer") {
+                if let Some(ref ref_url) = task.referer {
+                    headers_map.insert("Referer".to_string(), ref_url.clone());
+                }
+            }
+            let headers_clone = if !headers_map.is_empty() {
+                Some(headers_map)
+            } else {
+                None
+            };
 
             let (stream_err_tx, err_rx) = tokio::sync::oneshot::channel();
             stream_err_rx = Some(err_rx);

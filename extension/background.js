@@ -22,6 +22,19 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   }
 });
 
+function extractFilenameFromUrl(urlStr) {
+  try {
+    const parsed = new URL(urlStr);
+    const pathname = parsed.pathname;
+    const segments = pathname.split("/").filter(Boolean);
+    const last = segments[segments.length - 1];
+    if (last && last.includes(".")) {
+      return decodeURIComponent(last);
+    }
+  } catch (e) {}
+  return "";
+}
+
 // 2. Intercept Browser Downloads
 chrome.downloads.onCreated.addListener(async (item) => {
   if (!isInterceptorEnabled) return;
@@ -37,18 +50,33 @@ chrome.downloads.onCreated.addListener(async (item) => {
     // Ignore if already cancelled
   }
 
-  // Forward to desktop client
-  sendToMyOwnIdm(item.url, item.referrer, item.filename);
+  // Forward to desktop client with fallback URL filename
+  const safeFilename = item.filename || extractFilenameFromUrl(item.url);
+  sendToMyOwnIdm(item.url, item.referrer, safeFilename);
 });
 
 // 3. Media Sniffer (Video/Audio/m3u8 stream detection)
-const STREAM_EXTENSIONS = [".m3u8", "/pl/", "playlist", "/hls", ".urlset", "master.txt"];
+const STREAM_EXTENSIONS = [".m3u8", "/pl/", "playlist.m3u8", "master.m3u8", ".urlset", "master.txt", "index.txt"];
 const FILE_EXTENSIONS = [".mp4", ".mkv", ".webm", ".flv", ".mp3", ".aac", ".ogg"];
+const NON_MEDIA_EXTENSIONS = [
+  ".js", ".mjs", ".css", ".json", ".map", ".wasm",
+  ".html", ".htm", ".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".woff", ".woff2", ".ttf"
+];
 
 chrome.webRequest?.onResponseStarted?.addListener(
   (details) => {
     if (details.tabId < 0) return;
     const url = details.url.toLowerCase();
+
+    // STRICTLY IGNORE scripts, stylesheets, fonts, and static non-media assets
+    if (NON_MEDIA_EXTENSIONS.some(ext => {
+      const idx = url.indexOf(ext);
+      if (idx === -1) return false;
+      const nextChar = url.charAt(idx + ext.length);
+      return nextChar === "" || nextChar === "?" || nextChar === "#" || nextChar === "/";
+    })) {
+      return;
+    }
 
     // STRICTLY IGNORE fragment chunks (like .m4s, .ts segments, internal SABR videoplayback)
     if (
@@ -64,12 +92,16 @@ chrome.webRequest?.onResponseStarted?.addListener(
       return;
     }
 
-    const isStream = STREAM_EXTENSIONS.some(ext => url.includes(ext));
-    const isFile = FILE_EXTENSIONS.some(ext => url.includes(ext));
     const contentTypeHeader = details.responseHeaders?.find(
       h => h.name.toLowerCase() === "content-type"
     );
     const ct = contentTypeHeader?.value?.toLowerCase() || "";
+    if (ct.includes("javascript") || ct.includes("json") || ct.includes("css") || ct.includes("text/html")) {
+      return;
+    }
+
+    const isStream = STREAM_EXTENSIONS.some(ext => url.includes(ext));
+    const isFile = FILE_EXTENSIONS.some(ext => url.includes(ext));
     const isStreamMime = ct.includes("mpegurl");
 
     if (isStream || isStreamMime || isFile) {

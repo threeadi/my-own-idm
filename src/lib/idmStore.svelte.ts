@@ -485,6 +485,15 @@ export class IdmStore {
     this.isAddModalOpen = true;
   }
 
+  closeAddModal() {
+    this.isAddModalOpen = false;
+    this.initialAddUrl = '';
+    this.initialFilename = '';
+    this.initialHeaders = null;
+    this.initialQuality = '';
+    this.bypassDuplicateCheck = false;
+  }
+
   async openTransferWindow(taskId?: string): Promise<void> {
     const id = taskId || this.selectedTaskId || this.progressModalTaskId;
     if (!id) return;

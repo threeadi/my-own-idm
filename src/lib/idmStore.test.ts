@@ -341,6 +341,13 @@ describe('IdmStore State & Filtering', () => {
     expect(store.initialAddUrl).toBe('https://youtube.com/watch?v=123');
     expect(store.initialFilename).toBe('video.mp4');
     expect(store.initialHeaders).toEqual({ 'User-Agent': 'Custom' });
+
+    store.closeAddModal();
+    expect(store.isAddModalOpen).toBe(false);
+    expect(store.initialAddUrl).toBe('');
+    expect(store.initialFilename).toBe('');
+    expect(store.initialHeaders).toBeNull();
+    expect(store.bypassDuplicateCheck).toBe(false);
   });
 
   it('pauses and resumes download task', async () => {

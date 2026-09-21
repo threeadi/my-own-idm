@@ -39,11 +39,14 @@ impl Prober {
             url
         };
 
-        // If YouTube URL, try yt-dlp first
-        if effective_url.contains("youtube.com") || effective_url.contains("youtu.be") {
+        // If YouTube URL or Mediadelivery/BunnyCDN URL, try yt-dlp first
+        if effective_url.contains("youtube.com")
+            || effective_url.contains("youtu.be")
+            || effective_url.contains("mediadelivery.net")
+        {
             if let Ok(mut yt_probe) = crate::engine::ytdlp::YtDlpRunner::probe(effective_url).await {
                 yt_probe.url = effective_url.to_string();
-                crate::log_info!("probe", "YouTube stream probed via yt-dlp: filename='{}', size={:?}", yt_probe.filename, yt_probe.total_bytes);
+                crate::log_info!("probe", "Stream probed via yt-dlp: filename='{}', size={:?}", yt_probe.filename, yt_probe.total_bytes);
                 return Ok(yt_probe);
             }
         }
@@ -96,20 +99,29 @@ impl Prober {
 
         // Detect if it's HLS stream
         let mut is_hls = false;
-        if let Some(ct) = headers.get(CONTENT_TYPE).and_then(|v| v.to_str().ok()) {
-            let ct_lower = ct.to_ascii_lowercase();
-            if ct_lower.contains("mpegurl") || ct_lower.contains("m3u8") {
+        let url_lower = url.to_ascii_lowercase();
+        let is_static_asset = url_lower.ends_with(".js")
+            || url_lower.contains(".js?")
+            || url_lower.ends_with(".json")
+            || url_lower.ends_with(".css")
+            || url_lower.ends_with(".html")
+            || url_lower.ends_with(".htm");
+
+        if !is_static_asset {
+            if let Some(ct) = headers.get(CONTENT_TYPE).and_then(|v| v.to_str().ok()) {
+                let ct_lower = ct.to_ascii_lowercase();
+                if ct_lower.contains("mpegurl") || ct_lower.contains("m3u8") {
+                    is_hls = true;
+                }
+            }
+            if url_lower.contains(".m3u8")
+                || url_lower.contains("/hls/")
+                || url_lower.contains("/hls3/")
+                || url_lower.contains(".urlset")
+                || url_lower.ends_with("master.txt")
+            {
                 is_hls = true;
             }
-        }
-        let url_lower = url.to_ascii_lowercase();
-        if url_lower.contains(".m3u8")
-            || url_lower.contains("/hls/")
-            || url_lower.contains("/hls3/")
-            || url_lower.contains(".urlset")
-            || url_lower.ends_with("master.txt")
-        {
-            is_hls = true;
         }
 
         // Calculate HLS duration if HLS and total_bytes is None
@@ -606,5 +618,31 @@ Content-Type: application/pdf\r\n\r\n";
         let media_pl = "#EXTM3U\n#EXTINF:10.0,\nseg1.ts\n#EXTINF:20.0,\nseg2.ts\n";
         let dur = Prober::calculate_hls_duration(media_pl, "http://example.com/stream.m3u8", &client, &headers).await;
         assert_eq!(dur, 30.0);
+    }
+
+    #[tokio::test]
+    async fn test_probe_js_not_treated_as_hls() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buf = [0u8; 1024];
+            let _ = socket.read(&mut buf).await;
+            let resp = "HTTP/1.1 200 OK\r\n\
+Accept-Ranges: bytes\r\n\
+Content-Length: 529047\r\n\
+Content-Type: application/javascript\r\n\r\nconsole.log('hls');";
+            let _ = socket.write_all(resp.as_bytes()).await;
+        });
+
+        let client = reqwest::Client::new();
+        let url = format!("http://127.0.0.1:{}/hls/1.6.6/hls.min.js", port);
+        let res = Prober::probe(&client, &url, None).await.expect("probe js ok");
+
+        assert_eq!(res.filename, "hls.min.js");
+        assert_eq!(res.total_bytes, Some(529047));
+        assert!(!res.is_hls);
     }
 }

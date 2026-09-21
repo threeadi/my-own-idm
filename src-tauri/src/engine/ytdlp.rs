@@ -139,8 +139,7 @@ impl YtDlpRunner {
         let raw_size = parts.get(1).copied().unwrap_or("NA");
 
         let total_bytes = raw_size.parse::<u64>().ok();
-        let clean_title = crate::engine::probe::sanitize_filename(raw_title);
-        let filename = format!("{}.mp4", clean_title);
+        let filename = crate::engine::probe::sanitize_filename_with_ext(raw_title, "mp4");
 
         let formatted_size = match total_bytes {
             Some(b) => format_bytes(b),
@@ -160,7 +159,7 @@ impl YtDlpRunner {
             supports_range: true,
             category: DownloadCategory::Video,
             suggested_dir: default_download_dir,
-            is_hls: false,
+            is_hls: true,
         }
     }
 
@@ -257,6 +256,8 @@ impl YtDlpRunner {
                 .arg("--no-playlist")
                 .arg("--newline")
                 .arg("-c") // --continue: resume partially downloaded video files
+                .arg("--downloader-args")
+                .arg("ffmpeg_i:-extension_picky false -allowed_segment_extensions ALL")
                 .arg("-f")
                 .arg(&format_selector)
                 .arg("--merge-output-format")
@@ -271,7 +272,7 @@ impl YtDlpRunner {
             if let Some(ref hdrs) = headers {
                 for (k, v) in hdrs {
                     let k_lower = k.to_ascii_lowercase();
-                    if k_lower == "referer" && !v.is_empty() {
+                    if (k_lower == "referer" || k_lower == "user-agent") && !v.is_empty() {
                         cmd.arg("--add-header").arg(format!("{}: {}", k, v));
                     }
                 }
@@ -547,6 +548,7 @@ mod tests {
         assert_eq!(probe.filename, "Taylor Swift - Cruel Summer (Official Music Video).mp4");
         assert_eq!(probe.total_bytes, Some(45678900));
         assert_eq!(probe.category, DownloadCategory::Video);
+        assert!(probe.is_hls);
         assert!(probe.formatted_size.contains("MB"));
     }
 
@@ -557,6 +559,7 @@ mod tests {
 
         assert_eq!(probe.filename, "Live Stream Video.mp4");
         assert_eq!(probe.total_bytes, None);
+        assert!(probe.is_hls);
         assert_eq!(probe.formatted_size, "Unknown size");
     }
 

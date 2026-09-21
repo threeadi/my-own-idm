@@ -53,9 +53,7 @@
       }
       if (store.initialAddUrl) {
         url = store.initialAddUrl;
-        if (store.initialFilename) {
-          filename = store.initialFilename;
-        }
+        filename = store.initialFilename || '';
         if (url.trim() !== lastProbedUrl) {
           probeUrl(store.initialHeaders);
         }
@@ -65,6 +63,10 @@
     } else {
       lastProbedUrl = '';
       store.bypassDuplicateCheck = false;
+      url = '';
+      filename = '';
+      probeResult = null;
+      probeError = null;
     }
   });
 
@@ -73,6 +75,8 @@
       const text = await navigator.clipboard.readText();
       if (text && text.trim().startsWith('http')) {
         url = text.trim();
+        filename = '';
+        store.initialFilename = '';
         store.bypassDuplicateCheck = false;
         clipboardCopied = true;
         probeUrl();
@@ -101,7 +105,7 @@
     try {
       const res = await invoke<ProbeResult>('probe_url', { url: trimmedUrl, headers });
       probeResult = res;
-      if (!filename || filename === 'download.bin') {
+      if (!store.initialFilename || !filename || filename === 'download.bin') {
         filename = res.filename;
       }
       category = res.category;
@@ -121,8 +125,13 @@
   function handleUrlInput() {
     if (url.trim() !== store.initialAddUrl.trim()) {
       store.bypassDuplicateCheck = false;
+      store.initialFilename = '';
+      filename = '';
+      lastProbedUrl = '';
+      probeUrl();
+    } else {
+      checkDuplicate();
     }
-    checkDuplicate();
   }
 
   async function checkDuplicate() {
@@ -191,7 +200,7 @@
 
       await store.refreshTasks();
       store.selectedTaskId = task.id;
-      store.isAddModalOpen = false;
+      store.closeAddModal();
 
       if (downloadNow) {
         store.openTransferWindow(task.id);
@@ -228,7 +237,7 @@
         </div>
         <div class="flex items-center gap-1">
           <button
-            onclick={() => (store.isAddModalOpen = false)}
+            onclick={() => store.closeAddModal()}
             class="w-6 h-6 rounded flex items-center justify-center text-[#8c909f] hover:bg-[#30353e] hover:text-[#dee2ee] transition-colors cursor-pointer"
             title={store.t('common.minimize')}
             type="button"
@@ -236,7 +245,7 @@
             <Minus class="w-3.5 h-3.5" />
           </button>
           <button
-            onclick={() => (store.isAddModalOpen = false)}
+            onclick={() => store.closeAddModal()}
             class="w-6 h-6 rounded flex items-center justify-center text-[#8c909f] hover:bg-[#93000a] hover:text-white transition-colors cursor-pointer"
             title={store.t('common.close')}
             type="button"
@@ -451,7 +460,7 @@
 
         <div class="flex items-center gap-2">
           <button
-            onclick={() => (store.isAddModalOpen = false)}
+            onclick={() => store.closeAddModal()}
             class="h-8 px-3 rounded-lg text-[#8c909f] hover:text-[#dee2ee] hover:bg-[#252a33] text-xs font-medium transition-colors cursor-pointer"
             type="button"
           >
