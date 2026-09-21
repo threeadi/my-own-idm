@@ -12,8 +12,7 @@ use crate::engine::hls::HlsDownloader;
 use crate::engine::limiter::TokenBucketRateLimiter;
 use crate::engine::probe::Prober;
 use crate::engine::types::{
-    DownloadCategory, DownloadTask, GlobalSpeedLimitConfig, ProbeResult, Segment, SpeedMetrics,
-    TaskStatus,
+    DownloadTask, GlobalSpeedLimitConfig, ProbeResult, Segment, SpeedMetrics, TaskStatus,
 };
 use crate::engine::worker::SegmentWorker;
 use crate::engine::writer::FileWriter;
