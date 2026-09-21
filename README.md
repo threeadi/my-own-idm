@@ -1,49 +1,107 @@
-# My Own IDM — IDM Turbo Desktop ⚡
+# IDM Turbo Desktop ⚡ (My Own IDM)
 
-> **A High-Performance Desktop Internet Download Manager** built with **Tauri v2**, **Rust**, **Svelte 5 (Runes)**, and styled after Google Stitch's **"Kinetic Telemetry"** dark-mode design system.
+> **A High-Performance Desktop Internet Download Manager** built with **Tauri v2**, **Rust 2021**, **Svelte 5 (Runes)**, and styled after Google Stitch's **"Kinetic Telemetry"** dark-mode design system.
 
 [![Tauri v2](https://img.shields.io/badge/Tauri-v2.0-blue?logo=tauri)](https://tauri.app)
 [![Rust](https://img.shields.io/badge/Rust-2021%20Edition-orange?logo=rust)](https://www.rust-lang.org)
 [![Svelte 5](https://img.shields.io/badge/Svelte-5.x%20Runes-red?logo=svelte)](https://svelte.dev)
-[![Vitest](https://img.shields.io/badge/Vitest%20Frontend%20Coverage-98.88%25-brightgreen?logo=vitest)](https://vitest.dev)
-[![Cargo llvm-cov](https://img.shields.io/badge/Rust%20Backend%20Coverage-81.28%25-brightgreen?logo=rust)](https://github.com/taiki-e/cargo-llvm-cov)
+[![Vitest](https://img.shields.io/badge/Vitest%20Frontend%20Coverage-97.04%25-brightgreen?logo=vitest)](https://vitest.dev)
+[![Cargo llvm-cov](https://img.shields.io/badge/Rust%20Backend%20Coverage-80.82%25-brightgreen?logo=rust)](https://github.com/taiki-e/cargo-llvm-cov)
+[![GlitchTip](https://img.shields.io/badge/GlitchTip-Connected-purple?logo=sentry)](https://glitchtip.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ---
 
-## 🌟 Fitur Utama (Key Features)
+## 📸 Tampilan Antarmuka (UI Showcase & Screenshots)
+
+### 1. Dashboard Utama — Tampilan Kartu Telemetri (Cards View)
+Tampilan kartu interaktif dengan speedometer real-time, visualisasi waveform fluktuasi 60 detik, status antrean, dan bar segmen transfer aktif.
+
+![Dashboard Cards View](docs/screenshots/dashboard-cards.png)
+
+---
+
+### 2. Dashboard Antrean Berkas — Tampilan Tabel (Table View)
+Tampilan tabel data dense untuk manajemen unduhan massal dengan filter status, tombol kontrol cepat, bar progres beranimasi shimmer, serta pemantau multi-jalur 32 segmen di footer.
+
+![Dashboard Table View](docs/screenshots/dashboard-table.png)
+
+---
+
+### 3. Dialog Tambah Unduhan Baru (Acrylic Glass Modal)
+Shell modal transparan akrilik dengan deteksi clipboard otomatis, validasi TLS/HTTPS, inspeksi kemampuan resume server, dan pemilih 4, 8, atau 16 jalur thread turbo.
+
+![Add Download Modal](docs/screenshots/add-download-modal.png)
+
+---
+
+### 4. Dialog Unduhan Selesai & Integritas Berkas (Outcome Modal)
+Animasi transisi in-place saat unduhan rampung dengan validasi hash SHA-256, info kecepatan rata-rata, serta tombol langsung *Buka Berkas Sekarang* atau *Buka Folder*.
+
+![Transfer Completed Modal](docs/screenshots/transfer-completed-modal.png)
+
+---
+
+### 5. Dialog Pemulihan & Diagnostik Kegagalan (Failure & Diagnostic Modal)
+Tampilan diagnostik cerdas saat koneksi terputus dengan rincian pesan error server, live log stream, tombol pembaruan tautan unduhan, dan pelaporan masalah langsung ke GlitchTip.
+
+![Download Failed Modal](docs/screenshots/download-failed-modal.png)
+
+---
+
+### 6. Pengaturan & Opsi Konfigurasi Aplikasi
+Pusat kendali preferensi unduhan, pengaturan jalur koneksi paralel (hingga 32 thread), batasan kecepatan jaringan, direktori penyimpanan default, dan seleksi bahasa (Indonesian / English).
+
+![Settings Modal](docs/screenshots/settings-modal.png)
+
+---
+
+### 7. Status Integrasi Ekstensi Peramban (Browser Extension Integration)
+Pemantau status koneksi IPC Windows Named Pipe (`\\.\pipe\myownidm-ipc`), HTTP local fallback (`127.0.0.1:18888`), serta pendaftaran otomatis Native Messaging Host untuk Chrome, Edge, Firefox, dan Brave.
+
+![Extension Settings](docs/screenshots/extension-settings.png)
+
+---
+
+## 🌟 Fitur Unggulan (Key Features)
 
 ### 1. 🚀 Mesin Akselerasi Multi-Thread (Turbo Multi-Part Engine)
-- **Dynamic Chunk Splitting**: Membagi berkas secara byte-exact ke dalam 1 hingga 32 koneksi thread paralel melalui HTTP `Range` request.
-- **Concurrent File Writer**: Pre-alokasi berkas sparse di disk dan penulisan chunk konkuren non-blocking dari beberapa worker thread tanpa race condition.
-- **Auto-Resume & Crash Safety**: Merekam progres per segmen secara berkala ke SQLite database. Jika koneksi terputus atau aplikasi ditutup, unduhan dapat dilanjutkan (*resumed*) tanpa mengulang dari awal.
+- **Dynamic Chunk Splitting**: Membagi berkas secara presisi per byte ke dalam 1 hingga 32 koneksi thread paralel melalui HTTP `Range` request.
+- **Concurrent Block Pre-allocating Writer**: Pre-alokasi berkas sparse di disk dan penulisan chunk konkuren non-blocking dari beberapa worker thread tanpa race condition.
+- **Resilient Auto-Resume**: Merekam progres per segmen secara berkala ke SQLite database. Jika koneksi terputus atau komputer restart, unduhan dapat dilanjutkan (*resumed*) tanpa mengulang dari 0%.
+- **Token Bucket Rate Limiter**: Pembatas kecepatan unduhan cerdas yang dapat diatur secara global maupun per-tugas (500 KB/s, 1 MB/s, 2 MB/s, 5 MB/s, atau kustom).
 
 ### 2. 🎬 Universal Media & Stream Grabber
 - **YouTube, Instagram Reels, TikTok, & X (Twitter)**: Terintegrasi dengan `yt-dlp` dan `ffmpeg` untuk memproses video, audio, dan remuxing otomatis ke format `.mp4` utuh berkualitas tinggi tanpa korup.
 - **Native HLS / M3U8 Stream Downloader**: Mengunduh dan menggabungkan segmen `.ts` secara mandiri, lengkap dengan dekripsi roundtrip AES-128-CBC.
 
-### 3. 🎨 Desain Sistem Google Stitch ("Kinetic Telemetry")
-- **Two-Tier Toolbar**: Header atas untuk navigasi & pencarian global; toolbar bawah untuk aksi instan (*+ Tambah URL*, *Mulai Semua*, *Jeda Semua*, *Bersihkan Selesai*, *Batasi Kecepatan*).
-- **Bento Telemetry Dashboard**:
-  - Speedometer real-time dengan angka monospaced JetBrains Mono.
-  - Grafik SVG live waveform 60-detik dengan efek cyan glow.
-  - 4 kartu metrik telemetri ringkas (Sedang Mengunduh, Dijeda, Selesai, Total Volume).
-- **Tabel & Kartu Antrean Fleksibel**: Beralih antara *Cards View* (bento kartu tugas) dan *Table View* (tabel data dense), dilengkapi bar segmen thread beranimasi *striped shimmer*.
-- **Dialog Modal Translucent & Draggable**:
-  - **Tambah Unduhan Baru**: Shell akrilik dengan deteksi clipboard instan, indikator HTTPS TLS v1.3, dan pemilih 4, 8, atau 16 jalur thread turbo.
-  - **Progress In-Flight**: Dual progress bar, tabel status 16-thread live, tombol kontrol cepat, serta header yang dapat digeser (*data-tauri-drag-region*).
-  - **Download Outcome Modal**: Otomatis muncul saat unduhan selesai (dengan tombol *Buka Berkas*, *Buka Folder*, dan *Tutup*) atau gagal (dengan rincian pesan error dan tombol *Coba Lagi*).
+### 3. 🛡️ GlitchTip / Sentry Crash & Diagnostic Error Reporting
+- **Crash Reporter Otomatis ([crash_reporter.rs](file:///d:/Development/my-own-idm/src-tauri/src/crash_reporter.rs))**: Menggunakan Sentry SDK v0.34 yang terhubung langsung ke GlitchTip project DSN dengan penanganan fatal panic dan backtrace.
+- **Pembersihan Data Sensitif (Sanitizer)**: Secara otomatis menyamarkan token query (`token`, `auth`, `api_key`, `secret`, `signature`, `password`), kredensial otentikasi URL, serta direktori nama pengguna sistem (`C:\Users\***\`) sebelum dikirim.
+- **Failover Multi-Tier untuk Ekstensi**: Ekstensi browser mengirimkan laporan error lewat IPC lokal ke desktop; jika aplikasi desktop sedang tertutup, ekstensi langsung mengirimkan payload error Sentry ke Store API GlitchTip secara mandiri.
+- **Tombol "Laporkan Masalah"**: Hadir di dialog kegagalan unduhan dengan umpan balik reaktif (*Mengirimkan laporan...* -> *Laporan Terkirim*).
 
-### 4. 🧩 Ekstensi Browser & Inter-Process Communication (IPC)
-- **Floating Video Grabber Button**: Muncul otomatis di sisi video YouTube, Instagram Reels, TikTok, atau Shorts saat kursor melintas atau saat video diputar.
+### 4. 🔄 Perbarui Tautan Unduhan (Refresh Download Address)
+- Mengatasi tautan kadaluwarsa akibat token CDN sementara, signed URL (YouTube/GDrive), atau jeda waktu yang lama (`HTTP 403 Forbidden` / `HTTP 410 Gone`).
+- **Preservasi Progres 100%**: Membuka browser untuk menangkap URL baru melalui ekstensi dan menyambungkan kembali unduhan tanpa menghapus file `.part` atau byte yang sudah terunduh.
+
+### 5. 🪟 Jendela Transfer Mengambang Terdedikasi (Floating Window Lifecycle)
+- Unduhan yang sedang aktif dapat dibuka di jendela floating native Tauri tersendiri (`/transfer?id=...`).
+- **In-Place Lifecycle Transitions**: Jendela tidak tertutup mendadak saat selesai, melainkan bertransformasi secara mulus menjadi tampilan sukses (*Buka Berkas*, *Buka Folder*) dengan aura Emerald Glow, atau tampilan pemulihan kegagalan dengan aura Rose Red Glow.
+
+### 6. 🌐 Dukungan Penuh Dua Bahasa (Bilingual i18n)
+- Antarmuka mendukung penuh **Bahasa Indonesia** dan **English**, dapat diganti kapan saja melalui menu pengaturan dengan penyimpanan preferensi permanen di SQLite.
+
+### 7. 🧩 Ekstensi Browser & Inter-Process Communication (IPC)
+- **Floating Video Grabber Button**: Muncul otomatis di sisi video saat kursor melintas di YouTube, Instagram Reels, TikTok, atau Twitter/X.
 - **Dual-Channel IPC**:
-  - Windows Named Pipe (`\\.\pipe\myownidm-ipc`) dengan protokol 4-byte LE length-prefixed JSON.
-  - Localhost HTTP Server fallback di `http://127.0.0.1:17890/download` dengan CORS & Private Network Access (PNA) headers.
-  - Auto-register Chrome & Firefox Native Messaging Host manifest di Windows Registry.
+  - Windows Named Pipe (`\\.\pipe\myownidm-ipc`) dengan framing 4-byte little-endian length-prefixed JSON.
+  - Localhost HTTP Server di `http://127.0.0.1:18888` dengan header CORS & Chrome Private Network Access (PNA).
+  - Pendaftaran otomatis manifest Native Messaging Host untuk Chrome, Edge, Firefox, dan Brave.
 
-### 5. 🛡️ SQLite Database & Logging Thread-Safe
-- Database SQLite lokal tersimpan aman di direktori `%APPDATA%\com.myownidm.app\idm.db`.
-- Log harian terpusat dengan rotasi file dan ring buffer di `%APPDATA%\com.myownidm.app\logs\idm.log`.
+### 8. 📊 Hybrid Thread-Safe Logging
+- **In-Memory Ring Buffer**: Menyimpan 1.000 baris log diagnostik terkini untuk inspeksi live instan di UI tanpa membebani hard disk.
+- **Daily Rotating File Logger**: Menulis berkas log harian di `%APPDATA%\com.myownidm.app\logs\idm.log`.
 
 ---
 
@@ -51,17 +109,21 @@
 
 ```mermaid
 graph TD
-    Browser[Browser / YouTube / Instagram] -->|Click Floating Grabber| Ext[Chrome / Firefox Extension]
-    Ext -->|Named Pipe / HTTP IPC| IPC[src-tauri / ipc_server.rs]
+    Browser[Browser / YouTube / TikTok / Web] -->|Click Floating Grabber| Ext[Chrome / Firefox / Edge Extension]
+    Ext -->|Named Pipe / HTTP IPC :18888| IPC[src-tauri / ipc_server.rs]
+    Ext -.->|Fallback Offline| GTDirect[GlitchTip Store API]
     
     subgraph Rust Core (src-tauri)
         IPC --> Manager[Download Manager]
-        Manager --> Probe[HTTP Probe / yt-dlp]
+        Manager --> Limiter[Token Bucket Rate Limiter]
+        Limiter --> Probe[HTTP Probe / yt-dlp]
         Manager --> Worker[Segment Workers 1..32]
         Manager --> HLS[HLS / M3U8 AES-128 Engine]
-        Manager --> Writer[Concurrent FileWriter]
+        Worker --> Writer[Concurrent Pre-allocating Writer]
         Manager --> DB[(SQLite Database)]
-        Manager --> Logger[AppLogger]
+        Manager --> Logger[Hybrid AppLogger]
+        Manager --> CrashRep[GlitchTip Crash Reporter]
+        CrashRep -->|Sanitized Event| GT[GlitchTip Error Server]
     end
 
     subgraph Desktop UI (Svelte 5 / TailwindCSS)
@@ -70,65 +132,76 @@ graph TD
         Store --> Bento[TelemetryBento.svelte]
         Store --> Table[DownloadTable.svelte]
         Store --> SegmentVis[SegmentVisualizer.svelte]
-        Store --> Modals[Add / Progress / Outcome Modals]
+        Store --> Modals[Add / Progress / Outcome / Refresh Modals]
+        Store --> TransferWin[Floating Transfer Window]
     end
 ```
 
 ---
 
-## 📂 Struktur Proyek (Directory Layout)
+## 📂 Struktur Direktori (Directory Layout)
 
 ```
 my-own-idm/
-├── src/                          # Frontend Svelte 5 SPA
+├── docs/
+│   └── screenshots/              # Tangkapan layar antarmuka aplikasi
+├── src/                          # Frontend Svelte 5 Single-Page Application
 │   ├── app.css                   # Stitch "Kinetic Telemetry" CSS Tokens & Animations
 │   ├── app.html                  # Google Fonts (Plus Jakarta Sans, JetBrains Mono)
 │   ├── lib/
-│   │   ├── idmStore.svelte.ts    # Central Reactive State Store (Runes $state/$derived)
-│   │   ├── idmStore.test.ts      # Store & Event Unit Tests
+│   │   ├── idmStore.svelte.ts    # Central Reactive State Store (Runes $state, $derived)
+│   │   ├── idmStore.test.ts      # Store & Event Unit Tests (Vitest)
+│   │   ├── i18n.ts               # Kamus Lengkap Bahasa Indonesia & English
 │   │   ├── types.ts              # TypeScript Interfaces & Utility Formatters
-│   │   └── types.test.ts         # Types & Formatters Unit Tests
-│   ├── components/               # Modular UI Components
+│   │   ├── types.test.ts         # Types & Formatters Unit Tests
+│   │   └── version.ts            # Informasi Versi Aplikasi
+│   ├── components/               # Komponen Modular UI
 │   │   ├── Toolbar.svelte        # Two-Tier Navigation Toolbar
-│   │   ├── Sidebar.svelte        # Category & Engine Status Sidebar
-│   │   ├── TelemetryBento.svelte # Speedometer & SVG Waveform Dashboard
-│   │   ├── DownloadTable.svelte  # Cards & Table Task Queue
-│   │   ├── SegmentVisualizer.svelte # Multi-Thread Live Segment Monitor
-│   │   ├── AddDownloadModal.svelte  # Acrylic Glass Shell New Download Dialog
-│   │   ├── DownloadProgressModal.svelte # Dual Progress In-Flight Transfer Dialog
-│   │   ├── DownloadOutcomeModal.svelte  # Finished & Error Notification Dialog
-│   │   └── SettingsModal.svelte  # Application Preferences Dialog
+│   │   ├── Sidebar.svelte        # Kategori & Status Engine Sidebar
+│   │   ├── TelemetryBento.svelte # Speedometer & Waveform Telemetri Dashboard
+│   │   ├── DownloadTable.svelte  # Antrean Berkas (Cards & Table View)
+│   │   ├── SegmentVisualizer.svelte # Pemantau Segmen Multi-Thread Live
+│   │   ├── AddDownloadModal.svelte  # Dialog Tambah Unduhan Baru Akrilik
+│   │   ├── DownloadProgressModal.svelte # Dialog Progres In-Flight Dual Bar
+│   │   ├── DownloadOutcomeModal.svelte  # Dialog Notifikasi Selesai & Gagal
+│   │   ├── RefreshLinkModal.svelte  # Dialog Pembaruan Tautan Kadaluwarsa
+│   │   ├── PropertiesModal.svelte   # Dialog Rincian Berkas & Checksum
+│   │   └── SettingsModal.svelte  # Dialog Preferensi & Integrasi Peramban
 │   └── routes/
-│       └── +page.svelte          # Main Application Viewport
-├── src-tauri/                    # Backend Rust / Tauri Core
-│   ├── Cargo.toml                # Rust Dependencies & Optimizations
-│   ├── tauri.conf.json           # Tauri Window & Security Config
+│       ├── +page.svelte          # Viewport Aplikasi Utama
+│       └── transfer/
+│           └── +page.svelte      # Jendela Transfer Mengambang Mandiri
+├── src-tauri/                    # Backend Rust (Tauri v2)
+│   ├── Cargo.toml                # Rust Dependencies & Build Profile (idm-turbo-desktop)
+│   ├── tauri.conf.json           # Konfigurasi Jendela & Keamanan Tauri
 │   └── src/
-│       ├── lib.rs                # Tauri App Entry Point & Window Event Handler
-│       ├── commands.rs           # Tauri IPC Commands
+│       ├── lib.rs                # App Entry Point & Window Event Handler
+│       ├── commands.rs           # Handler Perintah IPC Tauri
+│       ├── crash_reporter.rs     # GlitchTip / Sentry & Sanitizer Data Sensitif
 │       ├── db/                   # SQLite Storage Engine & CRUD Tests
-│       ├── logger.rs             # Thread-Safe Rotating File Logger
-│       ├── native_messaging.rs   # Browser Native Messaging Host IO
-│       ├── ipc_server.rs         # Windows Named Pipe & HTTP Server
+│       ├── logger.rs             # Hybrid Ring Buffer & Rotating File Logger
+│       ├── native_messaging.rs   # Registrasi Manifest Native Messaging Browser
+│       ├── ipc_server.rs         # Server Windows Named Pipe & Localhost HTTP
 │       ├── tray.rs               # System Tray Icon & Context Menu
 │       └── engine/
-│           ├── manager.rs        # Download Orchestrator & Segment Allocator
-│           ├── worker.rs         # HTTP Range Worker Threads
-│           ├── writer.rs         # Concurrent Block Pre-allocating File Writer
+│           ├── manager.rs        # Download Orchestrator & Task Evaluator
+│           ├── worker.rs         # HTTP Range Worker Execution
+│           ├── writer.rs         # Pre-allocated Concurrent File Writer
 │           ├── probe.rs          # HTTP HEAD/GET Prober & Filename Parser
+│           ├── limiter.rs        # Token Bucket Rate Limiter (Global & Task)
 │           ├── hls.rs            # M3U8 Playlist Parser & AES-128 Decryptor
-│           ├── ytdlp.rs          # Stream Runner & Process Output Parser
-│           └── types.rs          # Rust Enums, Structs, & Serialization
-├── extension/                    # Browser Extension (Manifest V3)
-│   ├── manifest.json             # Extension Permissions & Declarations
-│   ├── background.js             # Media Sniffer & Native Messaging Sender
-│   ├── content.js                # Floating Video Grabber Injector
-│   ├── content.css               # Obsidian Glass & Cyan Glowing Button Styling
-│   └── content.test.js           # Extension Sanitization Unit Tests
-├── package.json                  # Scripts & NPM Dependencies
-├── svelte.config.js              # SvelteKit Static Adapter Config
-├── vite.config.js                # Vite Bundler Setup
-└── vitest.config.ts              # Vitest Runner & v8 Coverage Thresholds
+│           ├── ytdlp.rs          # Process Runner Stream & Parser yt-dlp
+│           └── types.rs          # Tipe Data, Enums, & Serialisasi Rust
+├── extension/                    # Ekstensi Browser (Manifest V3)
+│   ├── manifest.json             # Deklarasi Izin Ekstensi V3
+│   ├── background.js             # Media Traffic Sniffer & Pengirim IPC / GlitchTip
+│   ├── content.js                # Penampil Tombol Unduh Video Mengambang
+│   ├── content.css               # Styling Tombol Obsidian Glass & Cyan Glow
+│   └── content.test.js           # Unit Test Ekstensi Browser (Vitest)
+├── package.json                  # Konfigurasi Script & Dependensi NPM
+├── svelte.config.js              # Konfigurasi Adapter Static SvelteKit
+├── vite.config.js                # Konfigurasi Bundler Vite
+└── vitest.config.ts              # Konfigurasi Vitest & Ambang Batas Coverage
 ```
 
 ---
@@ -145,10 +218,10 @@ Pastikan lingkungan pengembangan Anda telah terinstal:
    winget install ffmpeg
    ```
 
-### Instalasi & Menjalankan Dev Mode
+### Instalasi & Menjalankan Mode Pengembangan (Dev Mode)
 1. Clone repositori ini:
    ```bash
-   git clone https://github.com/username/my-own-idm.git
+   git clone https://github.com/threeadi/my-own-idm.git
    cd my-own-idm
    ```
 2. Instal dependensi Node.js:
@@ -175,35 +248,40 @@ Berkas installer hasil kompilasi akan berada di `src-tauri/target/release/bundle
 2. Masuk ke halaman ekstensi:
    - **Chrome**: `chrome://extensions/`
    - **Edge**: `edge://extensions/`
-3. Aktifkan **Developer mode** (Mode pengembang) di sudut kanan atas.
+3. Aktifkan **Developer mode** di sudut kanan atas.
 4. Klik tombol **Load unpacked** (Muat yang belum dibongkar).
 5. Arahkan ke folder `my-own-idm/extension`.
-6. Ekstensi **My Own IDM Integration Module** siap digunakan! Saat memutar video di YouTube, Instagram Reels, atau TikTok, tombol mengambang `⚡ Download this video [TURBO]` akan muncul di samping video.
+6. Ekstensi **My Own IDM Integration Module** siap digunakan! Saat memutar video di YouTube, Instagram Reels, TikTok, atau Twitter/X, tombol mengambang `⚡ Download this video [TURBO]` akan muncul otomatis di samping video.
 
 ---
 
-## 🧪 Pengujian & Coverage (> 80%)
+## 🧪 Pengujian & Ambang Batas Coverage (> 80%)
 
-Proyek ini dilengkapi dengan suite pengujian otomatis komprehensif pada lapisan Frontend maupun Backend dengan ambang batas minimal **80% coverage**:
+Proyek ini memiliki suite pengujian otomatis komprehensif pada lapisan Frontend maupun Backend dengan ambang batas minimal **80% coverage**:
 
 | Layer | Framework | Jumlah Test | Line Coverage | Status |
 | :--- | :--- | :---: | :---: | :---: |
-| **Frontend & Extension** | Vitest (v8) | **42 / 42** (100%) | **98.88%** | ✅ Passed |
-| **Backend Core** | Cargo llvm-cov | **86 / 86** (100%) | **81.28%** | ✅ Passed |
+| **Frontend & Store** | Vitest (v8) | **99 / 99** (100%) | **97.04%** | ✅ Passed |
+| **Backend Rust Core** | Cargo llvm-cov | **125 / 125** (100%) | **80.82%** | ✅ Passed |
+| **TypeScript / Svelte Check** | svelte-check | **0 Errors, 0 Warnings** | — | ✅ Clean |
 
-### Menjalankan Seluruh Pengujian:
+### Perintah Pengujian:
 
 1. **Frontend Unit Tests + Coverage Report**:
    ```bash
    npm run test:coverage
    ```
-2. **Backend Rust Tests**:
+2. **Backend Rust Unit Tests**:
    ```bash
    npm run test:backend
    ```
 3. **Backend Rust Coverage (Summary Only)**:
    ```bash
    npm run test:backend:coverage
+   ```
+4. **Validasi Tipe TypeScript & SvelteKit**:
+   ```bash
+   npm run check
    ```
 
 ---
