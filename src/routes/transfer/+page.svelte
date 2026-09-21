@@ -637,31 +637,98 @@
               </div>
             </div>
 
-            <!-- IDM Segmented Multi-Thread Bar -->
+            <!-- Quick Action Button Row: Details Toggle -->
+            <div class="flex items-center justify-between gap-2 pt-0.5">
+              <button
+                type="button"
+                onclick={() => (showDetails = !showDetails)}
+                class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-[#141b2b] hover:bg-[#1a2236] text-slate-300 hover:text-white rounded-lg border border-[#222d45] transition cursor-pointer"
+              >
+                {#if showDetails}
+                  <ChevronUp class="w-3.5 h-3.5 text-[#00e5ff]" />
+                  <span>Sembunyikan detail</span>
+                {:else}
+                  <ChevronDown class="w-3.5 h-3.5 text-[#00e5ff]" />
+                  <span>Tampilkan detail</span>
+                {/if}
+              </button>
+            </div>
+
+            <!-- IDM Segmented Multi-Thread Bar (Stitch Kinetic Telemetry) -->
             <div class="space-y-1 pt-0.5">
               <div class="flex justify-between items-center text-[10px] text-slate-400">
                 <span>Multi-Thread Chunk Buffers</span>
                 <span class="font-mono text-[#00e5ff]">{task.connections || 1} Jalur</span>
               </div>
-              <div class="w-full h-3 bg-[#07090e] border border-[#222d45] rounded overflow-hidden flex items-center p-0.5 gap-0.5">
+              <div class="w-full h-3.5 bg-[#07090e] border border-[#222d45] rounded overflow-hidden flex items-center p-0.5 gap-0.5">
                 {#if task.segments && task.segments.length > 0}
                   {#each task.segments as seg (seg.index)}
                     {@const segTotal = seg.end_byte - seg.start_byte + 1}
-                    {@const segPct = segTotal > 0 ? (seg.downloaded_bytes / segTotal) * 100 : 0}
+                    {@const segPct = segTotal > 0 ? Math.min(100, Math.max(0, (seg.downloaded_bytes / segTotal) * 100)) : 0}
                     <div
-                      class="h-full rounded-xs {seg.is_finished ? 'bg-[#10b981]' : isDownloading && segPct > 0 ? 'bg-gradient-to-r from-blue-700 to-[#00e5ff] shadow-[0_0_6px_rgba(0,229,255,0.4)]' : 'bg-[#141b2b]'}"
-                      style="flex: 1;"
-                      title="Jalur #{seg.index + 1}: {segPct.toFixed(0)}%"
-                    ></div>
+                      class="h-full bg-[#141b2b] rounded-xs overflow-hidden flex-1 relative border border-[#222d45]/50 flex items-center"
+                      title="Jalur #{seg.index + 1}: {segPct.toFixed(0)}% ({formatBytes(seg.downloaded_bytes)} / {formatBytes(segTotal)})"
+                    >
+                      <div
+                        class="h-full transition-[width] duration-150 ease-out {seg.is_finished ? 'bg-[#10b981]' : isDownloading && segPct > 0 ? 'bg-gradient-to-r from-blue-700 to-[#00e5ff] shadow-[0_0_6px_rgba(0,229,255,0.4)]' : 'bg-transparent'}"
+                        style="width: {segPct}%;"
+                      ></div>
+                    </div>
                   {/each}
                 {:else}
-                  <div
-                    class="h-full bg-gradient-to-r from-blue-700 to-[#00e5ff] rounded-xs transition-[width] duration-150"
-                    style="width: {pct}%"
-                  ></div>
+                  <div class="h-full bg-[#141b2b] rounded-xs overflow-hidden w-full relative">
+                    <div
+                      class="h-full bg-gradient-to-r from-blue-700 to-[#00e5ff] rounded-xs transition-[width] duration-150"
+                      style="width: {pct}%"
+                    ></div>
+                  </div>
                 {/if}
               </div>
             </div>
+
+            <!-- Connection Threads Live Telemetry Table (Stitch Kinetic Telemetry) -->
+            {#if showDetails && task.segments && task.segments.length > 0}
+              <div class="pt-1 transition-all duration-300">
+                <div class="border border-[#222d45] rounded-lg overflow-hidden bg-[#07090e]/80 max-h-36 overflow-y-auto">
+                  <table class="w-full text-left border-collapse text-xs">
+                    <thead class="bg-[#0f1420] text-slate-400 border-b border-[#1a2236] text-[10px] uppercase select-none sticky top-0">
+                      <tr>
+                        <th class="py-1 px-3 w-12 text-center">N.</th>
+                        <th class="py-1 px-3 w-32">Diunduh</th>
+                        <th class="py-1 px-3">Info</th>
+                      </tr>
+                    </thead>
+                    <tbody class="font-mono divide-y divide-[#141b2b] text-slate-300 text-xs">
+                      {#each task.segments as seg}
+                        {@const segTotal = seg.end_byte - seg.start_byte + 1}
+                        {@const segPct = segTotal > 0 ? Math.min(100, Math.max(0, (seg.downloaded_bytes / segTotal) * 100)) : 0}
+                        <tr class="hover:bg-[#141b2b]/50 transition-colors">
+                          <td class="py-1 px-3 text-center text-slate-500 font-sans">{seg.index + 1}</td>
+                          <td class="py-1 px-3 text-[#00e5ff] font-medium">{formatBytes(seg.downloaded_bytes)}</td>
+                          <td class="py-1 px-3">
+                            {#if seg.is_finished}
+                              <span class="inline-flex items-center gap-1 text-[#10b981] font-sans">
+                                <CheckCircle2 class="w-3.5 h-3.5" />
+                                <span>Selesai</span>
+                              </span>
+                            {:else if isDownloading && segPct > 0}
+                              <span class="inline-flex items-center gap-1.5 text-emerald-400 font-sans">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+                                <span>Mengunduh... ({segPct.toFixed(0)}%)</span>
+                              </span>
+                            {:else if isDownloading}
+                              <span class="text-slate-500 font-sans">Menunggu...</span>
+                            {:else}
+                              <span class="text-amber-400 font-sans">Dijeda</span>
+                            {/if}
+                          </td>
+                        </tr>
+                      {/each}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            {/if}
           </div>
         </div>
 

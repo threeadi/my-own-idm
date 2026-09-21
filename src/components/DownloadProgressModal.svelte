@@ -378,18 +378,24 @@
             {#if task.segments && task.segments.length > 0}
               {#each task.segments as seg}
                 {@const segTotal = seg.end_byte - seg.start_byte + 1}
-                {@const segPct = segTotal > 0 ? (seg.downloaded_bytes / segTotal) * 100 : 0}
+                {@const segPct = segTotal > 0 ? Math.min(100, Math.max(0, (seg.downloaded_bytes / segTotal) * 100)) : 0}
                 <div
-                  class="h-full rounded-xs transition-all {seg.is_finished ? 'bg-[#10b981]' : isDownloading && segPct > 0 ? 'bg-gradient-to-r from-blue-700 to-[#00e5ff] shadow-[0_0_6px_rgba(0,229,255,0.4)]' : 'bg-[#141b2b]'}"
-                  style="flex: 1;"
-                  title="Bagian #{seg.index + 1}: {segPct.toFixed(0)}%"
-                ></div>
+                  class="h-full bg-[#141b2b] rounded-xs overflow-hidden flex-1 relative border border-[#222d45]/50 flex items-center"
+                  title="Bagian #{seg.index + 1}: {segPct.toFixed(0)}% ({formatBytes(seg.downloaded_bytes)} / {formatBytes(segTotal)})"
+                >
+                  <div
+                    class="h-full transition-[width] duration-150 ease-out {seg.is_finished ? 'bg-[#10b981]' : isDownloading && segPct > 0 ? 'bg-gradient-to-r from-blue-700 to-[#00e5ff] shadow-[0_0_6px_rgba(0,229,255,0.4)]' : 'bg-transparent'}"
+                    style="width: {segPct}%;"
+                  ></div>
+                </div>
               {/each}
             {:else}
-              <div
-                class="h-full bg-gradient-to-r from-blue-700 to-[#00e5ff] rounded-xs transition-all"
-                style="width: {pct}%"
-              ></div>
+              <div class="h-full bg-[#141b2b] rounded-xs overflow-hidden w-full relative">
+                <div
+                  class="h-full bg-gradient-to-r from-blue-700 to-[#00e5ff] rounded-xs transition-all"
+                  style="width: {pct}%"
+                ></div>
+              </div>
             {/if}
           </div>
         </div>

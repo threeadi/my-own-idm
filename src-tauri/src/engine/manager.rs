@@ -776,7 +776,11 @@ impl DownloadManager {
             task.downloaded_bytes += chunk_bytes;
             bytes_since_last_calc += chunk_bytes;
 
-            update_segment_progress(&mut task.segments, seg_idx, chunk_bytes);
+            if is_stream && task.segments.len() > 1 {
+                sync_stream_segments(&mut task.segments, task.downloaded_bytes);
+            } else {
+                update_segment_progress(&mut task.segments, seg_idx, chunk_bytes);
+            }
 
             let now = Instant::now();
 
@@ -835,7 +839,12 @@ impl DownloadManager {
                 task.downloaded_bytes = actual_final_bytes;
                 task.total_bytes = Some(actual_final_bytes);
 
-                if task.segments.is_empty() {
+                if is_stream && task.segments.len() > 1 {
+                    sync_stream_segments(&mut task.segments, actual_final_bytes);
+                    for seg in task.segments.iter_mut() {
+                        seg.is_finished = true;
+                    }
+                } else if task.segments.is_empty() {
                     task.segments.push(Segment {
                         index: 0,
                         start_byte: 0,
@@ -915,6 +924,27 @@ pub fn update_segment_progress(segments: &mut [Segment], seg_idx: usize, chunk_b
         }
     }
     false
+}
+
+pub fn sync_stream_segments(segments: &mut [Segment], total_downloaded: u64) {
+    for seg in segments.iter_mut() {
+        if seg.end_byte == u64::MAX {
+            seg.downloaded_bytes = total_downloaded.saturating_sub(seg.start_byte);
+            seg.is_finished = false;
+            continue;
+        }
+        let seg_len = seg.end_byte.saturating_sub(seg.start_byte).saturating_add(1);
+        if total_downloaded >= seg.end_byte.saturating_add(1) {
+            seg.downloaded_bytes = seg_len;
+            seg.is_finished = true;
+        } else if total_downloaded > seg.start_byte {
+            seg.downloaded_bytes = total_downloaded.saturating_sub(seg.start_byte);
+            seg.is_finished = false;
+        } else {
+            seg.downloaded_bytes = 0;
+            seg.is_finished = false;
+        }
+    }
 }
 
 pub fn calculate_metrics(
@@ -1253,6 +1283,54 @@ mod tests {
         // Out of bounds index should return false safely
         let oob = update_segment_progress(&mut segs, 99, 10);
         assert!(!oob);
+    }
+
+    #[test]
+    fn test_sync_stream_segments() {
+        let mut segs = calculate_segments(1000, 4);
+
+        // At 0 bytes
+        sync_stream_segments(&mut segs, 0);
+        assert_eq!(segs[0].downloaded_bytes, 0);
+        assert_eq!(segs[3].downloaded_bytes, 0);
+
+        // At 300 bytes: seg 0 full (250), seg 1 has 50, seg 2 has 0, seg 3 has 0
+        sync_stream_segments(&mut segs, 300);
+        assert_eq!(segs[0].downloaded_bytes, 250);
+        assert!(segs[0].is_finished);
+        assert_eq!(segs[1].downloaded_bytes, 50);
+        assert!(!segs[1].is_finished);
+        assert_eq!(segs[2].downloaded_bytes, 0);
+        assert_eq!(segs[3].downloaded_bytes, 0);
+
+        // At 983 bytes (98.3%): seg 0, 1, 2 full, seg 3 has 233
+        sync_stream_segments(&mut segs, 983);
+        assert_eq!(segs[0].downloaded_bytes, 250);
+        assert!(segs[0].is_finished);
+        assert_eq!(segs[1].downloaded_bytes, 250);
+        assert!(segs[1].is_finished);
+        assert_eq!(segs[2].downloaded_bytes, 250);
+        assert!(segs[2].is_finished);
+        assert_eq!(segs[3].downloaded_bytes, 233);
+        assert!(!segs[3].is_finished);
+
+        // At 1000 bytes (100%): all finished
+        sync_stream_segments(&mut segs, 1000);
+        for seg in &segs {
+            assert!(seg.is_finished);
+        }
+
+        // Unknown size: end_byte = u64::MAX
+        let mut unknown_segs = vec![Segment {
+            index: 0,
+            start_byte: 0,
+            end_byte: u64::MAX,
+            downloaded_bytes: 0,
+            is_finished: false,
+        }];
+        sync_stream_segments(&mut unknown_segs, 5000);
+        assert_eq!(unknown_segs[0].downloaded_bytes, 5000);
+        assert!(!unknown_segs[0].is_finished);
     }
 
     #[test]
