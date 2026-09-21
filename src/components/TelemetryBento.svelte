@@ -21,6 +21,45 @@
     return store.tasks.reduce((acc, t) => acc + (t.downloaded_bytes || 0), 0);
   });
 
+  // Rolling 20-sample history for the 60-second fluctuation chart
+  let speedHistory = $state<number[]>(new Array(20).fill(0));
+
+  $effect(() => {
+    const currentSpeed = totalSpeed;
+    const interval = setInterval(() => {
+      speedHistory = [...speedHistory.slice(1), currentSpeed];
+    }, 1000);
+    return () => clearInterval(interval);
+  });
+
+  const waveSvgPath = $derived.by(() => {
+    const hasActivity = speedHistory.some((v) => v > 0);
+
+    if (!hasActivity) {
+      // Resting flat line near bottom
+      return {
+        fill: 'M0,55 L240,55 L240,60 L0,60 Z',
+        stroke: 'M0,55 L240,55',
+      };
+    }
+
+    const maxVal = Math.max(...speedHistory, 1024 * 100);
+    const stepX = 240 / (speedHistory.length - 1);
+    const points = speedHistory.map((val, idx) => {
+      const x = idx * stepX;
+      const ratio = Math.min(val / maxVal, 1);
+      const y = 55 - ratio * 45;
+      return { x, y };
+    });
+
+    let stroke = `M${points[0].x.toFixed(1)},${points[0].y.toFixed(1)}`;
+    for (let i = 1; i < points.length; i++) {
+      stroke += ` L${points[i].x.toFixed(1)},${points[i].y.toFixed(1)}`;
+    }
+    const fill = `${stroke} L240,60 L0,60 Z`;
+    return { fill, stroke };
+  });
+
   // Determine display speed and unit
   const speedDisplay = $derived.by<{ value: string; unit: string }>(() => {
     if (totalSpeed <= 0) {
@@ -80,7 +119,7 @@
           Fluktuasi 60 Detik
         </span>
         <span class="text-[#4cd7f6] font-mono text-[10px] font-semibold">
-          {totalSpeed > 0 ? 'Aktif (32 Node)' : 'Siap'}
+          {totalSpeed > 0 ? `Aktif (${store.settings.defaultConnections} Jalur)` : 'Siap'}
         </span>
       </div>
       <div class="h-10 w-full flex items-end">
@@ -91,8 +130,8 @@
               <stop offset="100%" stop-color="currentColor" stop-opacity="0.0"></stop>
             </linearGradient>
           </defs>
-          <path d="M0,45 C20,40 35,50 55,30 C75,12 90,38 115,22 C140,8 160,25 185,15 C210,5 225,20 240,12 L240,60 L0,60 Z" fill="url(#waveGrad)"></path>
-          <path d="M0,45 C20,40 35,50 55,30 C75,12 90,38 115,22 C140,8 160,25 185,15 C210,5 225,20 240,12" stroke="currentColor" stroke-linecap="round" stroke-width="2" vector-effect="non-scaling-stroke"></path>
+          <path d={waveSvgPath.fill} fill="url(#waveGrad)"></path>
+          <path d={waveSvgPath.stroke} stroke="currentColor" stroke-linecap="round" stroke-width="2" vector-effect="non-scaling-stroke"></path>
         </svg>
       </div>
     </div>

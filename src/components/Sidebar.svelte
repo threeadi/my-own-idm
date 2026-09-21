@@ -116,12 +116,12 @@
         Status Mesin
       </span>
       <span class="font-sans text-[11px] font-semibold text-[#4edea3] flex items-center gap-1.5 mt-0.5">
-        <span class="w-1.5 h-1.5 rounded-full bg-[#4edea3] animate-ping"></span>
-        Multi-Thread Aktif
+        <span class="w-1.5 h-1.5 rounded-full {store.totalSpeedBps > 0 ? 'bg-[#4edea3] animate-ping' : 'bg-[#4cd7f6]'}"></span>
+        {store.totalSpeedBps > 0 ? 'Multi-Thread Aktif' : 'Multi-Thread Siap'}
       </span>
     </div>
     <span class="font-mono text-xs text-[#4cd7f6] bg-[#090e16] px-2 py-0.5 rounded border border-[#30353e]">
-      32 Bagian
+      {store.settings.defaultConnections} Bagian
     </span>
   </div>
 </aside>
