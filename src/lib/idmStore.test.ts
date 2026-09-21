@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { DownloadTask, SpeedMetrics } from './types';
+import type { DownloadTask, SpeedMetrics, DuplicateCheckResult } from './types';
 
 // Mock Tauri APIs
 const mockInvoke = vi.fn();
@@ -306,7 +306,9 @@ describe('IdmStore State & Filtering', () => {
     await store.setupEventListeners();
     const handler = eventListeners.get('browser-download-requested');
 
-    handler!({
+    mockInvoke.mockResolvedValueOnce({ is_duplicate: false });
+
+    await handler!({
       payload: {
         url: 'https://youtube.com/watch?v=123',
         filename: 'video.mp4',
@@ -947,6 +949,110 @@ describe('IdmStore State & Filtering', () => {
 
     const resBrowserNotMatched = await store.checkDuplicateDownload('https://example.com/other-new.zip');
     expect(resBrowserNotMatched.is_duplicate).toBe(false);
+  });
+
+  it('handles openDuplicateModal, closeDuplicateModal, and proceedWithNewDownload', () => {
+    const store = new IdmStore();
+    const mockDup: DuplicateCheckResult = {
+      is_duplicate: true,
+      status: 'downloading',
+      task_id: 'task-1',
+      filename: 'sample.zip',
+      file_path: 'C:\\Downloads\\sample.zip',
+      file_exists_on_disk: true,
+      downloaded_bytes: 100,
+      total_bytes: 200,
+      percent: 50.0,
+      completed_at: null,
+      suggested_new_filename: 'sample (1).zip',
+    };
+
+    store.openDuplicateModal(mockDup, 'https://example.com/sample.zip', { 'User-Agent': 'Custom' });
+    expect(store.isDuplicateModalOpen).toBe(true);
+    expect(store.duplicateModalData).toEqual(mockDup);
+    expect(store.duplicateModalUrl).toBe('https://example.com/sample.zip');
+    expect(store.duplicateModalHeaders).toEqual({ 'User-Agent': 'Custom' });
+    expect(store.isAddModalOpen).toBe(false);
+
+    // Test proceedWithNewDownload
+    store.proceedWithNewDownload();
+    expect(store.isDuplicateModalOpen).toBe(false);
+    expect(store.isAddModalOpen).toBe(true);
+    expect(store.initialAddUrl).toBe('https://example.com/sample.zip');
+    expect(store.initialFilename).toBe('sample (1).zip');
+    expect(store.initialHeaders).toEqual({ 'User-Agent': 'Custom' });
+
+    // Test closeDuplicateModal
+    store.openDuplicateModal(mockDup, 'https://example.com/sample.zip');
+    expect(store.isDuplicateModalOpen).toBe(true);
+    store.closeDuplicateModal();
+    expect(store.isDuplicateModalOpen).toBe(false);
+    expect(store.duplicateModalData).toBeNull();
+    expect(store.duplicateModalUrl).toBe('');
+    expect(store.duplicateModalHeaders).toBeNull();
+  });
+
+  it('handles browser-download-requested event with duplicate detection', async () => {
+    const store = new IdmStore();
+    mockIsTauriReturn = true;
+
+    await store.setupEventListeners();
+    const browserListener = eventListeners.get('browser-download-requested');
+    expect(browserListener).toBeDefined();
+
+    // 1. When duplicate is found
+    mockInvoke.mockResolvedValueOnce({
+      is_duplicate: true,
+      status: 'completed',
+      task_id: 'task-dup-event',
+      filename: 'document.pdf',
+      file_path: 'C:\\Downloads\\document.pdf',
+      file_exists_on_disk: true,
+      downloaded_bytes: 1000,
+      total_bytes: 1000,
+      percent: 100.0,
+      completed_at: '2026-09-21',
+      suggested_new_filename: 'document (1).pdf',
+    });
+
+    await browserListener!({
+      payload: {
+        url: 'https://example.com/document.pdf',
+        filename: 'document.pdf',
+        headers: { Cookie: 'auth=1' },
+      },
+    });
+
+    expect(store.isDuplicateModalOpen).toBe(true);
+    expect(store.isAddModalOpen).toBe(false);
+    expect(store.duplicateModalData?.status).toBe('completed');
+
+    // 2. When not a duplicate
+    store.closeDuplicateModal();
+    mockInvoke.mockResolvedValueOnce({
+      is_duplicate: false,
+      status: null,
+      task_id: null,
+      filename: null,
+      file_path: null,
+      file_exists_on_disk: false,
+      downloaded_bytes: 0,
+      total_bytes: 0,
+      percent: 0,
+      completed_at: null,
+      suggested_new_filename: null,
+    });
+
+    await browserListener!({
+      payload: {
+        url: 'https://example.com/fresh-brand-new.pdf',
+        filename: 'fresh-brand-new.pdf',
+      },
+    });
+
+    expect(store.isDuplicateModalOpen).toBe(false);
+    expect(store.isAddModalOpen).toBe(true);
+    expect(store.initialAddUrl).toBe('https://example.com/fresh-brand-new.pdf');
   });
 });
 

@@ -11,6 +11,7 @@
   import FilePropertiesModal from '../components/FilePropertiesModal.svelte';
   import SettingsModal from '../components/SettingsModal.svelte';
   import RefreshLinkModal from '../components/RefreshLinkModal.svelte';
+  import DuplicateConfirmModal from '../components/DuplicateConfirmModal.svelte';
 
   onMount(() => {
     store.init();
@@ -61,6 +62,7 @@
   <DownloadOutcomeModal />
   <FilePropertiesModal />
   <RefreshLinkModal />
+  <DuplicateConfirmModal />
   <SettingsModal />
 </div>
 

@@ -48,6 +48,11 @@ export class IdmStore {
   refreshError = $state<string | null>(null);
   refreshCountdown = $state<number>(3);
 
+  isDuplicateModalOpen = $state<boolean>(false);
+  duplicateModalData = $state<DuplicateCheckResult | null>(null);
+  duplicateModalUrl = $state<string>('');
+  duplicateModalHeaders = $state<Record<string, string> | null>(null);
+
   selectedTask = $derived<DownloadTask | null>(
     this.tasks.find((t) => t.id === this.selectedTaskId) || null
   );
@@ -348,14 +353,19 @@ export class IdmStore {
     });
 
     // 5. Browser Extension download request
-    await listen<any>('browser-download-requested', (event) => {
+    await listen<any>('browser-download-requested', async (event) => {
       console.log('browser-download-requested received:', event.payload);
       const p = event.payload;
       if (p && p.url) {
         if (this.isRefreshModalOpen && this.refreshTaskId) {
           this.refreshDetectedUrl = p.url;
         } else {
-          this.openAddModal(p.url, p.filename, p.headers);
+          const dup = await this.checkDuplicateDownload(p.url, p.filename || '');
+          if (dup.is_duplicate) {
+            this.openDuplicateModal(dup, p.url, p.headers || null);
+          } else {
+            this.openAddModal(p.url, p.filename, p.headers || null);
+          }
         }
       }
     });
@@ -572,11 +582,12 @@ export class IdmStore {
     }
     if (isTauri()) {
       try {
-        return await invoke<DuplicateCheckResult>('check_duplicate_download', {
+        const res = await invoke<DuplicateCheckResult>('check_duplicate_download', {
           url: url.trim(),
           filename: filename.trim(),
           saveDir: saveDir.trim(),
         });
+        if (res) return res;
       } catch (e) {
         console.warn('Failed to check duplicate download via Tauri invoke:', e);
       }
@@ -619,6 +630,29 @@ export class IdmStore {
       completed_at: null,
       suggested_new_filename: null,
     };
+  }
+
+  openDuplicateModal(data: DuplicateCheckResult, url: string, headers: Record<string, string> | null = null) {
+    this.duplicateModalData = data;
+    this.duplicateModalUrl = url;
+    this.duplicateModalHeaders = headers;
+    this.isDuplicateModalOpen = true;
+    this.isAddModalOpen = false;
+  }
+
+  closeDuplicateModal() {
+    this.isDuplicateModalOpen = false;
+    this.duplicateModalData = null;
+    this.duplicateModalUrl = '';
+    this.duplicateModalHeaders = null;
+  }
+
+  proceedWithNewDownload() {
+    const url = this.duplicateModalUrl;
+    const filename = this.duplicateModalData?.suggested_new_filename || '';
+    const headers = this.duplicateModalHeaders;
+    this.closeDuplicateModal();
+    this.openAddModal(url, filename, headers);
   }
 
   async openExternalUrl(url: string) {

@@ -25,12 +25,7 @@
     Folder,
     HardDrive,
     ShieldCheck,
-    Loader2,
-    AlertTriangle,
-    ExternalLink,
-    Play,
-    RotateCcw,
-    CopyPlus
+    Loader2
   } from '@lucide/svelte';
 
   let url = $state(store.initialAddUrl || '');
@@ -45,7 +40,6 @@
   let clipboardCopied = $state<boolean>(false);
   let autoOpenFile = $state<boolean>(false);
   let rememberFolder = $state<boolean>(true);
-  let duplicateInfo = $state<DuplicateCheckResult | null>(null);
   let isCheckingDuplicate = $state<boolean>(false);
 
   $effect(() => {
@@ -65,8 +59,6 @@
       } else if (url) {
         checkDuplicate();
       }
-    } else {
-      duplicateInfo = null;
     }
   });
 
@@ -113,56 +105,17 @@
   }
 
   async function checkDuplicate() {
-    if (!url.trim()) {
-      duplicateInfo = null;
-      return;
-    }
+    if (!url.trim()) return;
     isCheckingDuplicate = true;
     try {
       const res = await store.checkDuplicateDownload(url.trim(), filename.trim(), saveDir.trim());
-      duplicateInfo = res.is_duplicate ? res : null;
+      if (res.is_duplicate) {
+        store.openDuplicateModal(res, url.trim(), store.initialHeaders || null);
+      }
     } catch (e) {
       console.warn('Check duplicate error:', e);
-      duplicateInfo = null;
     } finally {
       isCheckingDuplicate = false;
-    }
-  }
-
-  async function handleOpenCompletedFile() {
-    if (duplicateInfo?.file_path) {
-      await store.openFile(duplicateInfo.file_path);
-      store.isAddModalOpen = false;
-    }
-  }
-
-  async function handleOpenCompletedFolder() {
-    if (duplicateInfo?.file_path) {
-      await store.openFolder(duplicateInfo.file_path);
-    }
-  }
-
-  function handleRenameAsNewFile() {
-    if (duplicateInfo?.suggested_new_filename) {
-      filename = duplicateInfo.suggested_new_filename;
-      duplicateInfo = null;
-    }
-  }
-
-  function handleOpenTransferProgress() {
-    if (duplicateInfo?.task_id) {
-      const id = duplicateInfo.task_id;
-      store.isAddModalOpen = false;
-      store.openTransferWindow(id);
-    }
-  }
-
-  async function handleResumeAndShow() {
-    if (duplicateInfo?.task_id) {
-      const id = duplicateInfo.task_id;
-      await store.resumeTask(id);
-      store.isAddModalOpen = false;
-      store.openTransferWindow(id);
     }
   }
 
@@ -198,15 +151,6 @@
 
   async function handleStartDownload(downloadNow: boolean) {
     if (!url.trim() || !saveDir.trim()) return;
-
-    // Safety guard: if duplicate is currently active, auto-use unique filename to avoid collision
-    if (duplicateInfo && duplicateInfo.is_duplicate && (duplicateInfo.status === 'downloading' || duplicateInfo.status === 'paused')) {
-      if (duplicateInfo.suggested_new_filename) {
-        filename = duplicateInfo.suggested_new_filename;
-        duplicateInfo = null;
-      }
-    }
-
     isSubmitting = true;
 
     try {
@@ -380,137 +324,6 @@
             </div>
           </div>
         </div>
-
-        {#if duplicateInfo && duplicateInfo.is_duplicate}
-          <!-- Duplicate Detection Alert Card (Kinetic Telemetry) -->
-          <div
-            id="duplicate-warning-banner"
-            class="rounded-xl p-3.5 space-y-3 transition-all duration-200 border animate-in fade-in slide-in-from-top-1 {duplicateInfo.status === 'completed'
-              ? 'bg-[#10b981]/10 border-[#10b981]/40 shadow-[0_0_15px_rgba(16,185,129,0.15)]'
-              : 'bg-[#f59e0b]/10 border-[#f59e0b]/40 shadow-[0_0_15px_rgba(245,158,11,0.15)]'}"
-          >
-            <!-- Card Header -->
-            <div class="flex items-start justify-between gap-3">
-              <div class="flex items-center gap-2">
-                {#if duplicateInfo.status === 'completed'}
-                  <div class="w-8 h-8 rounded-lg bg-[#10b981]/20 flex items-center justify-center text-[#4edea3] border border-[#10b981]/30 shrink-0">
-                    <CheckCircle2 class="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h4 class="font-sans text-xs font-bold text-[#4edea3] flex items-center gap-1.5">
-                      Berkas Sudah Pernah Diunduh
-                    </h4>
-                    <p class="font-sans text-[11px] text-[#c2c6d6]">
-                      Selesai: <span class="font-mono text-[10px] text-[#dee2ee]">{duplicateInfo.completed_at || 'Sebelumnya'}</span>
-                    </p>
-                  </div>
-                {:else}
-                  <div class="w-8 h-8 rounded-lg bg-[#f59e0b]/20 flex items-center justify-center text-[#fbbf24] border border-[#f59e0b]/30 shrink-0">
-                    <AlertTriangle class="w-4 h-4 animate-pulse" />
-                  </div>
-                  <div>
-                    <h4 class="font-sans text-xs font-bold text-[#fbbf24] flex items-center gap-1.5">
-                      {duplicateInfo.status === 'paused' ? 'Unduhan Sedang Dijeda' : 'Unduhan Sedang Berjalan'}
-                    </h4>
-                    <p class="font-sans text-[11px] text-[#c2c6d6]">
-                      Tugas aktif ditemukan dengan URL atau berkas tujuan yang sama.
-                    </p>
-                  </div>
-                {/if}
-              </div>
-
-              {#if duplicateInfo.status !== 'completed'}
-                <span class="px-2 py-0.5 rounded-full bg-[#f59e0b]/20 border border-[#f59e0b]/30 font-mono text-[11px] font-bold text-[#fbbf24] shrink-0">
-                  {duplicateInfo.percent.toFixed(1)}%
-                </span>
-              {/if}
-            </div>
-
-            <!-- In-progress mini telemetry bar -->
-            {#if duplicateInfo.status !== 'completed'}
-              <div class="space-y-1 bg-[#090e16]/60 p-2 rounded-lg border border-[#30353e]">
-                <div class="flex items-center justify-between text-[10px] font-mono text-[#8c909f]">
-                  <span>Progress Unduhan Saat Ini</span>
-                  <span class="text-[#dee2ee]">
-                    {formatBytes(duplicateInfo.downloaded_bytes)} / {duplicateInfo.total_bytes ? formatBytes(duplicateInfo.total_bytes) : 'Ukuran belum pasti'}
-                  </span>
-                </div>
-                <div class="w-full h-1.5 bg-[#171c24] rounded-full overflow-hidden border border-[#30353e]/40">
-                  <div
-                    class="h-full bg-gradient-to-r from-[#f59e0b] to-[#fbbf24] rounded-full transition-all duration-300"
-                    style="width: {duplicateInfo.percent}%"
-                  ></div>
-                </div>
-              </div>
-            {:else if duplicateInfo.file_path}
-              <div class="bg-[#090e16]/60 p-2 rounded-lg border border-[#30353e] text-[11px] font-mono text-[#8c909f] truncate">
-                <span class="text-[#8c909f]">Lokasi: </span>
-                <span class="text-[#dee2ee]">{duplicateInfo.file_path}</span>
-              </div>
-            {/if}
-
-            <!-- Action Buttons Row -->
-            <div class="flex items-center justify-end gap-2 pt-0.5 flex-wrap">
-              {#if duplicateInfo.status === 'completed'}
-                {#if duplicateInfo.file_path}
-                  <button
-                    onclick={() => handleOpenCompletedFile()}
-                    class="h-7 px-2.5 rounded-lg bg-[#10b981]/20 hover:bg-[#10b981]/30 text-[#4edea3] border border-[#10b981]/40 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-                    type="button"
-                  >
-                    <ExternalLink class="w-3 h-3" />
-                    <span>Buka Berkas</span>
-                  </button>
-                  <button
-                    onclick={() => handleOpenCompletedFolder()}
-                    class="h-7 px-2.5 rounded-lg bg-[#252a33] hover:bg-[#343942] text-[#dee2ee] border border-[#30353e] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
-                    type="button"
-                  >
-                    <FolderOpen class="w-3 h-3 text-[#4cd7f6]" />
-                    <span>Buka Folder</span>
-                  </button>
-                {/if}
-                <button
-                  onclick={() => handleRenameAsNewFile()}
-                  class="h-7 px-2.5 rounded-lg bg-[#4d8eff]/20 hover:bg-[#4d8eff]/30 text-[#adc6ff] border border-[#4d8eff]/40 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-                  title="Unduh sebagai berkas baru dengan nama salinan unik"
-                  type="button"
-                >
-                  <RotateCcw class="w-3 h-3" />
-                  <span>Unduh Ulang ({duplicateInfo.suggested_new_filename || 'Salinan Baru'})</span>
-                </button>
-              {:else}
-                <button
-                  onclick={() => handleOpenTransferProgress()}
-                  class="h-7 px-2.5 rounded-lg bg-gradient-to-r from-[#00e5ff] to-[#4cd7f6] text-[#00363d] hover:brightness-110 text-xs font-bold flex items-center gap-1.5 shadow-[0_0_10px_rgba(0,229,255,0.25)] transition-all cursor-pointer"
-                  type="button"
-                >
-                  <ExternalLink class="w-3 h-3" />
-                  <span>Lihat Progress</span>
-                </button>
-                {#if duplicateInfo.status === 'paused'}
-                  <button
-                    onclick={() => handleResumeAndShow()}
-                    class="h-7 px-2.5 rounded-lg bg-[#4edea3]/20 hover:bg-[#4edea3]/30 text-[#4edea3] border border-[#4edea3]/40 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-                    type="button"
-                  >
-                    <Play class="w-3 h-3 fill-current" />
-                    <span>Lanjutkan Unduhan</span>
-                  </button>
-                {/if}
-                <button
-                  onclick={() => handleRenameAsNewFile()}
-                  class="h-7 px-2.5 rounded-lg bg-[#252a33] hover:bg-[#343942] text-[#dee2ee] border border-[#30353e] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
-                  title="Otomatis beri nama baru dan izinkan download terpisah"
-                  type="button"
-                >
-                  <CopyPlus class="w-3 h-3 text-[#4cd7f6]" />
-                  <span>Unduh sebagai Berkas Baru ({duplicateInfo.suggested_new_filename || 'file (1)'})</span>
-                </button>
-              {/if}
-            </div>
-          </div>
-        {/if}
 
         <!-- 3. Storage Location (Simpan Ke) -->
         <div class="space-y-1">
