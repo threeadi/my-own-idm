@@ -146,22 +146,22 @@
           </div>
           <span class="text-xs font-semibold text-[#dee2ee] truncate">
             {isCompleted
-              ? "Download Selesai • IDM Turbo Desktop"
-              : "Unduhan Terputus / Gagal • IDM Turbo Desktop"}
+              ? store.t('outcome.titleCompleted')
+              : store.t('outcome.titleFailed')}
           </span>
           <span
             class="px-1.5 py-0.5 rounded text-[10px] font-mono tracking-wider uppercase {isCompleted
               ? 'bg-[#10b981]/15 text-[#10b981]'
               : 'bg-[#ff5252]/15 text-[#ff5252]'}"
           >
-            {isCompleted ? "100% UTUH" : "GAGAL"}
+            {isCompleted ? store.t('outcome.badgeIntact') : store.t('outcome.badgeFailed')}
           </span>
         </div>
 
         <button
           onclick={handleClose}
           class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-100 hover:bg-[#252a33] transition-colors cursor-pointer"
-          title="Tutup"
+          title={store.t('common.close')}
         >
           <X class="w-4 h-4" />
         </button>
@@ -186,18 +186,17 @@
             <div class="flex flex-col min-w-0 flex-1">
               <div class="flex items-center gap-2">
                 <h1 class="text-base font-bold text-white tracking-tight">
-                  Unduhan Selesai!
+                  {store.t('outcome.headingCompleted')}
                 </h1>
                 <span
                   class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#10b981]/10 text-[#10b981] text-[10px] font-mono font-bold"
                 >
                   <span class="w-1.5 h-1.5 rounded-full bg-[#10b981]"></span>
-                  100% UTUH
+                  {store.t('outcome.badgeIntact')}
                 </span>
               </div>
               <p class="text-xs text-slate-400 mt-0.5">
-                Berkas berhasil diunduh dan diverifikasi secara utuh ke
-                penyimpanan lokal.
+                {store.t('outcome.subCompleted')}
               </p>
             </div>
           </div>
@@ -223,7 +222,7 @@
                 <span
                   class="text-[11px] font-mono text-[#00e5ff] uppercase tracking-wider mt-0.5"
                 >
-                  {task.category} • {task.connections} Jalur Turbo
+                  {store.t('outcome.tracksTurbo', { category: task.category, connections: task.connections })}
                 </span>
               </div>
             </div>
@@ -242,7 +241,7 @@
                 <div class="flex flex-col min-w-0">
                   <span
                     class="text-[10px] text-slate-400 uppercase tracking-wider font-mono"
-                    >Ukuran Berkas</span
+                    >{store.t('outcome.fileSize')}</span
                   >
                   <span class="text-xs font-mono font-medium text-white truncate">
                     {formatBytes(task.downloaded_bytes || task.total_bytes || 0)}
@@ -263,10 +262,10 @@
                 <div class="flex flex-col min-w-0">
                   <span
                     class="text-[10px] text-slate-400 uppercase tracking-wider font-mono"
-                    >Rata-rata Unduh</span
+                    >{store.t('outcome.avgDownload')}</span
                   >
                   <span class="text-xs font-mono font-medium text-white truncate">
-                    Turbo Multi-Part
+                    {store.t('outcome.turboMultiPart')}
                   </span>
                 </div>
               </div>
@@ -283,10 +282,10 @@
                 <div class="flex flex-col min-w-0">
                   <span
                     class="text-[10px] text-slate-400 uppercase tracking-wider font-mono"
-                    >Waktu Selesai</span
+                    >{store.t('outcome.finishTime')}</span
                   >
                   <span class="text-xs font-mono font-medium text-white truncate">
-                    {task.completed_at || "Selesai"}
+                    {task.completed_at || store.t('common.completed')}
                   </span>
                 </div>
               </div>
@@ -303,10 +302,10 @@
                 <div class="flex flex-col min-w-0">
                   <span
                     class="text-[10px] text-slate-400 uppercase tracking-wider font-mono"
-                    >Integritas Hash</span
+                    >{store.t('outcome.hashIntegrity')}</span
                   >
                   <span class="text-xs font-mono font-medium text-[#10b981] truncate">
-                    SHA-256 Valid
+                    {store.t('outcome.shaValid')}
                   </span>
                 </div>
               </div>
@@ -315,7 +314,7 @@
             <!-- Target File Destination Directory Path -->
             <div class="flex flex-col gap-1.5 pt-1">
               <span class="text-[11px] text-slate-400 font-mono"
-                >Direktori Penyimpanan:</span
+                >{store.t('outcome.saveDir')}</span
               >
               <div
                 class="flex items-center justify-between gap-2 bg-[#090e16] px-3 py-2 rounded-lg border border-[#252a33] text-slate-300"
@@ -332,15 +331,15 @@
                 <button
                   onclick={handleCopyPath}
                   class="shrink-0 flex items-center gap-1 text-[11px] font-mono text-[#00e5ff] hover:text-white px-2 py-0.5 rounded hover:bg-[#171c24] transition-all cursor-pointer"
-                  title="Salin Lokasi Path"
+                  title={store.t('outcome.copyLocation')}
                   type="button"
                 >
                   {#if copied}
                     <Check class="w-3.5 h-3.5 text-[#10b981]" />
-                    <span class="text-[#10b981]">Tersalin</span>
+                    <span class="text-[#10b981]">{store.t('common.copied')}</span>
                   {:else}
                     <Copy class="w-3.5 h-3.5" />
-                    <span>Salin</span>
+                    <span>{store.t('common.copy')}</span>
                   {/if}
                 </button>
               </div>
@@ -358,7 +357,7 @@
               <span
                 class="text-xs text-slate-400 group-hover:text-slate-200 transition-colors"
               >
-                Buka berkas otomatis saat jendela ini ditutup
+                {store.t('outcome.optAutoOpen')}
               </span>
             </label>
             <label class="flex items-center gap-2.5 cursor-pointer group">
@@ -370,7 +369,7 @@
               <span
                 class="text-xs text-slate-400 group-hover:text-slate-200 transition-colors"
               >
-                Jangan tampilkan dialog ini lagi jika unduhan selesai
+                {store.t('outcome.optDontShowAgain')}
               </span>
             </label>
           </div>
@@ -388,7 +387,7 @@
             <div class="flex flex-col min-w-0 flex-1">
               <div class="flex items-center gap-2">
                 <h2 class="text-base font-bold text-white tracking-tight">
-                  Unduhan Gagal Diselesaikan
+                  {store.t('outcome.headingFailed')}
                 </h2>
                 <span
                   class="px-2 py-0.5 rounded-full bg-[#ff5252]/15 text-[#ff5252] border border-[#ff5252]/30 text-[10px] font-mono font-bold"
@@ -397,8 +396,7 @@
                 </span>
               </div>
               <p class="text-xs text-slate-400 mt-0.5 leading-relaxed">
-                Koneksi ke server tujuan terputus sebelum berkas selesai
-                ditransfer.
+                {store.t('outcome.subFailed')}
               </p>
             </div>
           </div>
@@ -423,7 +421,7 @@
                 <div class="flex items-center gap-2 text-[11px] font-mono text-slate-400 mt-0.5">
                   <span>Part: <strong class="text-slate-300">.idmpart</strong></span>
                   <span>•</span>
-                  <span>Threads: <strong class="text-slate-300">{task.connections} Segmen</strong></span>
+                  <span>Threads: <strong class="text-slate-300">{store.t('outcome.threadsCount', { count: task.connections })}</strong></span>
                 </div>
               </div>
             </div>
@@ -433,7 +431,7 @@
               <div class="flex items-center justify-between text-xs font-mono">
                 <span class="text-[#ff5252] flex items-center gap-1.5 font-bold">
                   <span class="w-2 h-2 rounded-full bg-[#ff5252] animate-pulse inline-block"></span>
-                  <span>Terhenti pada {percentNum.toFixed(1)}%</span>
+                  <span>{store.t('outcome.stoppedAt', { percent: percentNum.toFixed(1) })}</span>
                 </span>
                 <span class="text-slate-400">
                   {formatBytes(task.downloaded_bytes)}
@@ -465,13 +463,13 @@
           >
             <div class="flex items-center justify-between">
               <span class="text-[11px] font-mono text-slate-400 uppercase tracking-wider">
-                Diagnostik Kesalahan
+                {store.t('outcome.errorDiag')}
               </span>
               <div
                 class="flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#10b981]/10 text-[#10b981] border border-[#10b981]/25 text-[10px] font-mono"
               >
                 <ShieldCheck class="w-3 h-3" />
-                <span>Resume Didukung Server</span>
+                <span>{store.t('outcome.resumeSupported')}</span>
               </div>
             </div>
 
@@ -480,7 +478,7 @@
               <div class="flex items-start gap-2">
                 <AlertTriangle class="w-4 h-4 text-[#ff5252] shrink-0 mt-0.5" />
                 <span class="text-slate-300">
-                  <strong class="text-white">Pesan Server:</strong>
+                  <strong class="text-white">{store.t('outcome.serverMessage')}</strong>
                   <span class="font-mono text-[#ffb4ab] block mt-0.5 break-words">
                     {store.outcomeErrorMessage || task.error_message || "HTTP Connection reset / Gateway Timeout"}
                   </span>
@@ -490,7 +488,7 @@
               <div class="flex items-start gap-2">
                 <HardDrive class="w-4 h-4 text-[#10b981] shrink-0 mt-0.5" />
                 <span class="text-slate-400">
-                  Data <strong class="text-white font-mono">{formatBytes(task.downloaded_bytes)}</strong> tersimpan aman di part cache. Unduhan tidak akan diulang dari 0%.
+                  {store.t('outcome.safeNotice', { bytes: formatBytes(task.downloaded_bytes) })}
                 </span>
               </div>
             </div>
@@ -502,11 +500,11 @@
               class="bg-[#090e16] border border-[#252a33] p-3 rounded-xl font-mono text-[11px] text-slate-300 flex flex-col gap-1 max-h-36 overflow-y-auto"
             >
               <div class="text-[#00e5ff] font-bold pb-1 border-b border-[#252a33] flex items-center justify-between">
-                <span>Catatan Log Teknis (Live)</span>
-                <span class="text-[10px] text-slate-500">{recentLogs.length} entri</span>
+                <span>{store.t('outcome.logTitle')}</span>
+                <span class="text-[10px] text-slate-500">{store.t('outcome.entriesCount', { count: recentLogs.length })}</span>
               </div>
               {#if recentLogs.length === 0}
-                <div class="text-slate-500 py-1">Tidak ada log terbaru.</div>
+                <div class="text-slate-500 py-1">{store.t('outcome.noRecentLogs')}</div>
               {:else}
                 {#each recentLogs as logLine}
                   <div
@@ -537,7 +535,7 @@
             type="button"
           >
             <FolderOpen class="w-3.5 h-3.5 text-[#4cd7f6]" />
-            <span>Buka Folder</span>
+            <span>{store.t('outcome.openFolder')}</span>
           </button>
 
           <div class="flex items-center gap-2">
@@ -546,7 +544,7 @@
               class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-slate-200 hover:bg-[#252a33] transition-all cursor-pointer"
               type="button"
             >
-              Tutup
+              {store.t('common.close')}
             </button>
             <button
               onclick={handleOpenFile}
@@ -554,7 +552,7 @@
               type="button"
             >
               <Play class="w-3.5 h-3.5 fill-current" />
-              <span>Buka Berkas Sekarang</span>
+              <span>{store.t('outcome.openFileNow')}</span>
             </button>
           </div>
         {:else}
@@ -565,7 +563,7 @@
             type="button"
           >
             <Terminal class="w-3.5 h-3.5 text-[#00e5ff]" />
-            <span>{showLogs ? "Sembunyikan Log" : "Detail Log Teknis"}</span>
+            <span>{showLogs ? store.t('outcome.hideLog') : store.t('outcome.techLog')}</span>
           </button>
 
           <div class="flex items-center gap-2">
@@ -574,16 +572,16 @@
               class="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white bg-[#252a33] hover:bg-[#30353e] transition-all cursor-pointer shadow-sm"
               type="button"
             >
-              Batal & Simpan
+              {store.t('outcome.cancelAndSave')}
             </button>
             <button
               onclick={() => task && store.startRefreshLink(task.id)}
               class="px-3.5 py-2 rounded-xl text-xs font-bold text-[#00e5ff] bg-[#00e5ff]/15 hover:bg-[#00e5ff]/25 border border-[#00e5ff]/35 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
               type="button"
-              title="Perbarui link unduhan dari browser atau URL baru"
+              title={store.t('outcome.refreshLink')}
             >
               <RotateCw class="w-3.5 h-3.5 text-[#00e5ff]" />
-              <span>Perbarui Tautan</span>
+              <span>{store.t('outcome.refreshLink')}</span>
             </button>
             <button
               onclick={handleRetry}
@@ -591,7 +589,7 @@
               type="button"
             >
               <RotateCcw class="w-3.5 h-3.5" />
-              <span>Coba Lagi</span>
+              <span>{store.t('outcome.retry')}</span>
             </button>
           </div>
         {/if}

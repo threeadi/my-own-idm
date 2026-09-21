@@ -125,7 +125,7 @@
         directory: true,
         multiple: false,
         defaultPath: saveDir || undefined,
-        title: 'Pilih Folder Penyimpanan',
+        title: store.t('addModal.selectFolder'),
       });
       if (selected && typeof selected === 'string') {
         saveDir = selected;
@@ -174,7 +174,7 @@
         store.openTransferWindow(task.id);
       }
     } catch (e: any) {
-      probeError = `Gagal memulai unduhan: ${e}`;
+      probeError = store.t('addModal.errorStart', { error: String(e) });
     } finally {
       isSubmitting = false;
     }
@@ -200,14 +200,14 @@
             {store.t('addModal.title')}
           </span>
           <span class="px-1.5 py-0.2 rounded bg-[#090e16] text-[#4edea3] font-mono text-[10px] font-semibold">
-            Akrilik {formatDisplayVersion(store.appVersion)}
+            {store.t('addModal.acrylic', { version: formatDisplayVersion(store.appVersion) })}
           </span>
         </div>
         <div class="flex items-center gap-1">
           <button
             onclick={() => (store.isAddModalOpen = false)}
             class="w-6 h-6 rounded flex items-center justify-center text-[#8c909f] hover:bg-[#30353e] hover:text-[#dee2ee] transition-colors cursor-pointer"
-            title="Minimalkan"
+            title={store.t('common.minimize')}
             type="button"
           >
             <Minus class="w-3.5 h-3.5" />
@@ -215,7 +215,7 @@
           <button
             onclick={() => (store.isAddModalOpen = false)}
             class="w-6 h-6 rounded flex items-center justify-center text-[#8c909f] hover:bg-[#93000a] hover:text-white transition-colors cursor-pointer"
-            title="Tutup"
+            title={store.t('common.close')}
             type="button"
           >
             <X class="w-3.5 h-3.5" />
@@ -238,11 +238,11 @@
               type="button"
             >
               {#if clipboardCopied}
-                <Check class="w-3 h-3 text-[#4edea3]" />
-                <span class="text-[#4edea3]">Ditempel!</span>
+                <Check class="w-3.5 h-3.5 text-[#4edea3]" />
+                <span class="text-[#4edea3]">{store.t('addModal.pasted')}</span>
               {:else}
-                <ClipboardPaste class="w-3 h-3" />
-                <span>Tempel dari Clipboard</span>
+                <ClipboardPaste class="w-3.5 h-3.5" />
+                <span>{store.t('addModal.pasteFromClipboard')}</span>
               {/if}
             </button>
           </div>
@@ -262,15 +262,15 @@
                 onclick={() => probeUrl()}
                 disabled={isProbing}
                 class="px-2 py-1 bg-[#252a33] text-[#c2c6d6] hover:text-[#dee2ee] rounded text-[11px] flex items-center gap-1 transition-colors cursor-pointer border border-[#30353e]"
-                title="Uji Koneksi Tautan"
+                title={store.t('addModal.testLink')}
                 type="button"
               >
                 {#if isProbing}
                   <Loader2 class="w-3 h-3 animate-spin text-[#4cd7f6]" />
-                  <span>Cek...</span>
+                  <span>{store.t('addModal.checking')}</span>
                 {:else}
                   <CheckCircle2 class="w-3 h-3 text-[#4edea3]" />
-                  <span>Valid</span>
+                  <span>{store.t('addModal.valid')}</span>
                 {/if}
               </button>
             </div>
@@ -280,7 +280,7 @@
           <div class="flex items-center justify-between px-1 pt-0.5 text-[11px] text-[#8c909f] flex-wrap gap-1">
             <div class="flex items-center gap-1.5 text-[#4edea3] font-medium">
               <CheckCircle2 class="w-3.5 h-3.5" />
-              <span>Server Mendukung Resume (Bisa Dijeda)</span>
+              <span>{store.t('addModal.supportsResume')}</span>
             </div>
             <div class="flex items-center gap-1 text-[#8c909f] font-mono text-[10px]">
               <Lock class="w-3 h-3 text-[#4cd7f6]" />
@@ -297,7 +297,7 @@
           <div class="flex-1 min-w-0 space-y-1">
             <div class="flex items-center justify-between gap-2">
               <div class="flex-1 min-w-0">
-                <span class="text-[9px] text-[#8c909f] uppercase tracking-wider block font-semibold">Nama Berkas</span>
+                <span class="text-[9px] text-[#8c909f] uppercase tracking-wider block font-semibold">{store.t('addModal.filenameLabel')}</span>
                 <input
                   type="text"
                   bind:value={filename}
@@ -306,20 +306,20 @@
                 />
               </div>
               <div class="flex flex-col items-end shrink-0">
-                <span class="text-[9px] text-[#8c909f] uppercase tracking-wider font-semibold">Ukuran Berkas</span>
+                <span class="text-[9px] text-[#8c909f] uppercase tracking-wider font-semibold">{store.t('addModal.fileSize')}</span>
                 <span class="font-mono text-sm sm:text-base font-bold text-[#4cd7f6]">
-                  {probeResult?.total_bytes ? formatBytes(probeResult.total_bytes) : 'Tidak diketahui'}
+                  {probeResult?.total_bytes ? formatBytes(probeResult.total_bytes) : store.t('common.unknown')}
                 </span>
               </div>
             </div>
 
             <div class="flex items-center gap-2 pt-1 flex-wrap">
               <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#4d8eff]/15 text-[#adc6ff] text-[10px] font-semibold border border-[#4d8eff]/30">
-                Kategori: {category.toUpperCase()}
+                {store.t('addModal.categoryPill', { cat: category.toUpperCase() })}
               </span>
               <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#252a33] text-[#c2c6d6] text-[10px]">
                 <ShieldCheck class="w-3 h-3 text-[#4edea3]" />
-                SHA-256 Otomatis
+                {store.t('addModal.autoSha')}
               </span>
             </div>
           </div>
@@ -330,11 +330,11 @@
           <div class="flex items-center justify-between text-xs">
             <label class="font-sans text-[11px] uppercase tracking-wider text-[#8c909f] flex items-center gap-1.5 font-semibold" for="save-dir">
               <FolderOpen class="w-3 h-3 text-[#adc6ff]" />
-              Simpan Ke Folder
+              {store.t('addModal.saveToFolder')}
             </label>
             <span class="font-mono text-[10px] text-[#4edea3] flex items-center gap-1">
               <HardDrive class="w-3 h-3" />
-              Sisa Ruang Drive: Tersedia
+              {store.t('addModal.driveAvailable')}
             </span>
           </div>
           <div class="flex items-center gap-2">
@@ -350,7 +350,7 @@
               type="button"
             >
               <FolderPlus class="w-3.5 h-3.5 text-[#4cd7f6]" />
-              <span>Pilih Folder...</span>
+              <span>{store.t('addModal.browseFolder')}</span>
             </button>
           </div>
         </div>
@@ -360,9 +360,9 @@
           <div class="flex items-center justify-between text-xs">
             <span class="text-[11px] font-semibold uppercase tracking-wider text-[#8c909f] flex items-center gap-1.5">
               <Zap class="w-3.5 h-3.5 text-[#4cd7f6]" />
-              Akselerasi Kecepatan & Jalur Thread
+              {store.t('addModal.threadAccel')}
             </span>
-            <span class="text-[10px] text-[#4cd7f6] font-semibold font-mono">Turbo Engine Aktif</span>
+            <span class="text-[10px] text-[#4cd7f6] font-semibold font-mono">{store.t('addModal.turboEngineActive')}</span>
           </div>
 
           <!-- Segmented Control Threads -->
@@ -372,14 +372,14 @@
               class="h-7 rounded-md text-xs font-medium flex items-center justify-center gap-1 transition-all cursor-pointer {connections === 4 ? 'bg-[#4d8eff] text-white font-semibold shadow-sm' : 'text-[#8c909f] hover:text-[#dee2ee]'}"
               type="button"
             >
-              <span>Standar (4 Jalur)</span>
+              <span>{store.t('addModal.threadsStandard')}</span>
             </button>
             <button
               onclick={() => (connections = 8)}
               class="h-7 rounded-md text-xs font-medium flex items-center justify-center gap-1 transition-all cursor-pointer {connections === 8 ? 'bg-[#4d8eff] text-white font-semibold shadow-sm' : 'text-[#8c909f] hover:text-[#dee2ee]'}"
               type="button"
             >
-              <span>Cepat (8 Jalur)</span>
+              <span>{store.t('addModal.threadsFast')}</span>
             </button>
             <button
               onclick={() => (connections = 16)}
@@ -387,7 +387,7 @@
               type="button"
             >
               <Zap class="w-3 h-3" />
-              <span>Maksimal Turbo (16)</span>
+              <span>{store.t('addModal.threadsTurbo')}</span>
             </button>
           </div>
 
@@ -395,11 +395,11 @@
           <div class="pt-1 space-y-1 text-xs text-[#c2c6d6]">
             <label class="flex items-center gap-2 cursor-pointer select-none">
               <input type="checkbox" bind:checked={autoOpenFile} class="w-3.5 h-3.5 rounded bg-[#090e16] border-[#30353e] text-[#4d8eff] focus:ring-0 cursor-pointer" />
-              <span>Buka file otomatis setelah proses pengunduhan selesai</span>
+              <span>{store.t('addModal.optAutoOpen')}</span>
             </label>
             <label class="flex items-center gap-2 cursor-pointer select-none">
               <input type="checkbox" bind:checked={rememberFolder} class="w-3.5 h-3.5 rounded bg-[#090e16] border-[#30353e] text-[#4d8eff] focus:ring-0 cursor-pointer" />
-              <span>Ingat folder tujuan ini untuk berkas berkategori sejenis</span>
+              <span>{store.t('addModal.optRememberFolder')}</span>
             </label>
           </div>
         </div>
@@ -440,7 +440,7 @@
           >
             {#if isSubmitting}
               <Loader2 class="w-3.5 h-3.5 animate-spin" />
-              <span>Memproses...</span>
+              <span>{store.t('addModal.processing')}</span>
             {:else}
               <Download class="w-3.5 h-3.5" />
               <span>{store.t('addModal.btnDownloadNow')}</span>

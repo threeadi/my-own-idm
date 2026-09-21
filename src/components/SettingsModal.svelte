@@ -47,7 +47,7 @@
         directory: true,
         multiple: false,
         defaultPath: (target === 'default' ? draft.defaultDownloadDir : draft.tempDir) || undefined,
-        title: target === 'default' ? 'Pilih Folder Unduhan Utama' : 'Pilih Folder Berkas Sementara (.part)',
+        title: target === 'default' ? store.t('addModal.selectFolder') : store.t('settings.tempDirTitle'),
       });
       if (selected && typeof selected === 'string') {
         if (target === 'default') {
@@ -65,7 +65,7 @@
     isSaving = true;
     try {
       await store.saveAppSettings(draft);
-      saveSuccessMessage = 'Pengaturan berhasil diterapkan!';
+      saveSuccessMessage = store.t('settings.msgApplied');
       setTimeout(() => {
         saveSuccessMessage = null;
       }, 3000);
@@ -100,26 +100,26 @@
   }
 
   async function registerNativeHost() {
-    nativeHostRegisterStatus = 'Mendaftarkan...';
+    nativeHostRegisterStatus = store.t('common.processing');
     try {
       await invoke('register_native_host_manifest');
-      nativeHostRegisterStatus = 'Host Native Berhasil Didaftarkan!';
+      nativeHostRegisterStatus = store.t('settings.manifestRegistered');
       setTimeout(() => {
         nativeHostRegisterStatus = null;
       }, 4000);
     } catch (e) {
-      nativeHostRegisterStatus = `Gagal: ${e}`;
+      nativeHostRegisterStatus = `${store.t('common.error')}: ${e}`;
       setTimeout(() => {
         nativeHostRegisterStatus = null;
       }, 4000);
     }
   }
 
-  const connectionSpeeds = [
-    { label: 'Koneksi Cepat / Broadband (Fiber / 4G / 5G / LAN)', value: 'broadband' },
-    { label: 'Koneksi Standar / Wi-Fi Rumah (ADSL / 3G)', value: 'standard' },
-    { label: 'Jaringan Terbatas / Kuota Data Hemat', value: 'metered' },
-  ];
+  const connectionSpeeds = $derived([
+    { label: store.t('settings.speedBroadband'), value: 'broadband' },
+    { label: store.t('settings.speedStandard'), value: 'standard' },
+    { label: store.t('settings.speedMetered'), value: 'metered' },
+  ]);
 </script>
 
 {#if store.isSettingsModalOpen}
@@ -141,14 +141,14 @@
             class="w-5 h-5 rounded-md object-contain shadow-[0_0_8px_rgba(0,229,255,0.3)]"
           />
           <span class="font-sans text-xs sm:text-sm font-semibold text-[#dee2ee]">
-            IDM Turbo Desktop - Opsi & Pengaturan
+            {store.t('settings.title')}
           </span>
         </div>
         <div class="flex items-center gap-1">
           <button
             onclick={() => (store.isSettingsModalOpen = false)}
             class="w-6 h-6 rounded flex items-center justify-center text-[#8c909f] hover:bg-[#30353e] hover:text-[#dee2ee] transition-colors cursor-pointer"
-            title="Minimalkan"
+            title={store.t('common.minimize')}
             type="button"
           >
             <Minus class="w-3.5 h-3.5" />
@@ -156,7 +156,7 @@
           <button
             onclick={handleCancel}
             class="w-6 h-6 rounded flex items-center justify-center text-[#8c909f] hover:bg-[#93000a] hover:text-white transition-colors cursor-pointer"
-            title="Tutup"
+            title={store.t('common.close')}
             type="button"
           >
             <X class="w-3.5 h-3.5" />
@@ -171,15 +171,15 @@
             <Sliders class="w-4 h-4" />
           </div>
           <div>
-            <h2 class="text-sm font-bold text-[#dee2ee] tracking-tight">Pengaturan & Opsi Konfigurasi</h2>
-            <p class="text-[11px] text-[#8c909f]">Sesuaikan kapabilitas unduhan, modul peramban, dan jalur paralel jaringan.</p>
+            <h2 class="text-sm font-bold text-[#dee2ee] tracking-tight">{store.t('settings.configOptions')}</h2>
+            <p class="text-[11px] text-[#8c909f]">{store.t('settings.configSub')}</p>
           </div>
         </div>
 
         <div class="flex items-center gap-2">
           <span class="px-2 py-0.5 rounded bg-[#090e16] text-[#4edea3] font-mono text-[11px] font-semibold flex items-center gap-1.5 border border-[#4edea3]/20 shadow-[0_0_8px_rgba(78,222,163,0.15)]">
             <span class="w-1.5 h-1.5 rounded-full bg-[#4edea3] animate-pulse"></span>
-            {formatDisplayVersion(store.appVersion)} Aktif
+            {store.t('settings.activeStatus', { version: formatDisplayVersion(store.appVersion) })}
           </span>
           <span class="px-2 py-0.5 rounded bg-[#252a33] text-[#bac9cc] font-mono text-[11px] border border-[#30353e]">
             Build 2026.09
@@ -309,10 +309,10 @@
                     />
                     <div>
                       <span class="text-xs font-semibold text-[#dee2ee] group-hover:text-[#00e5ff] transition-colors">
-                        Jalankan IDM Turbo saat Windows dinyalakan
+                        {store.t('settings.autoStart')}
                       </span>
                       <p class="text-[11px] text-[#8c909f] leading-snug">
-                        Memuat layanan background optimizer dan tray monitor secara lekas.
+                        {store.t('settings.autoStartDesc')}
                       </p>
                     </div>
                   </label>
@@ -325,10 +325,10 @@
                     />
                     <div>
                       <span class="text-xs font-semibold text-[#dee2ee] group-hover:text-[#00e5ff] transition-colors">
-                        Tampilkan panel download melayang pada pemutar media
+                        {store.t('settings.mediaPanel')}
                       </span>
                       <p class="text-[11px] text-[#8c909f] leading-snug">
-                        Otomatis deteksi format m3u8, MP4, MKV, dan audio resolusi tinggi.
+                        {store.t('settings.mediaPanelDesc')}
                       </p>
                     </div>
                   </label>
@@ -341,10 +341,10 @@
                     />
                     <div>
                       <span class="text-xs font-semibold text-[#dee2ee] group-hover:text-[#00e5ff] transition-colors">
-                        Tangkap unduhan dari Clipboard secara otomatis
+                        {store.t('settings.clipboardCapture')}
                       </span>
                       <p class="text-[11px] text-[#8c909f] leading-snug">
-                        Buka dialog tambah tautan otomatis saat menyalin URL tautan valid.
+                        {store.t('settings.clipboardCaptureDesc')}
                       </p>
                     </div>
                   </label>
@@ -357,10 +357,10 @@
                     />
                     <div>
                       <span class="text-xs font-semibold text-[#dee2ee] group-hover:text-[#00e5ff] transition-colors">
-                        Putar audio lonceng notifikasi saat unduhan tuntas
+                        {store.t('settings.notifyComplete')}
                       </span>
                       <p class="text-[11px] text-[#8c909f] leading-snug">
-                        Kirim notifikasi sistem operasi saat berkas selesai diunduh.
+                        {store.t('settings.notifyCompleteDesc')}
                       </p>
                     </div>
                   </label>
@@ -372,7 +372,7 @@
                 <div class="flex items-center justify-between pb-2 border-b border-[#252a33]">
                   <div class="flex items-center gap-2">
                     <Globe class="w-4 h-4 text-[#00e5ff]" />
-                    <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">Integrasi Peramban Web</h3>
+                    <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">{store.t('settings.browserTitle')}</h3>
                   </div>
                   <span class="px-1.5 py-0.5 rounded bg-[#00e5ff]/10 text-[#00e5ff] font-mono text-[10px] font-semibold border border-[#00e5ff]/30">
                     Native Messaging Host
@@ -380,7 +380,7 @@
                 </div>
 
                 <p class="text-[11px] text-[#8c909f]">
-                  Pilih peramban web yang diizinkan untuk mengalihkan tautan unduhan langsung ke IDM Turbo Engine berkecepatan multi-channel.
+                  {store.t('settings.browserDesc')}
                 </p>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -390,7 +390,7 @@
                       <div class="w-2 h-2 rounded-full bg-[#10b981]"></div>
                       <div>
                         <span class="font-semibold text-xs text-[#dee2ee] block">Google Chrome</span>
-                        <span class="text-[10px] text-[#4edea3] font-mono">Terhubung</span>
+                        <span class="text-[10px] text-[#4edea3] font-mono">{store.t('settings.connected')}</span>
                       </div>
                     </div>
                     <input
@@ -406,7 +406,7 @@
                       <div class="w-2 h-2 rounded-full bg-[#10b981]"></div>
                       <div>
                         <span class="font-semibold text-xs text-[#dee2ee] block">Microsoft Edge</span>
-                        <span class="text-[10px] text-[#4edea3] font-mono">Terhubung</span>
+                        <span class="text-[10px] text-[#4edea3] font-mono">{store.t('settings.connected')}</span>
                       </div>
                     </div>
                     <input
@@ -422,7 +422,7 @@
                       <div class="w-2 h-2 rounded-full bg-[#10b981]"></div>
                       <div>
                         <span class="font-semibold text-xs text-[#dee2ee] block">Mozilla Firefox</span>
-                        <span class="text-[10px] text-[#4edea3] font-mono">Terpasang Aktif</span>
+                        <span class="text-[10px] text-[#4edea3] font-mono">{store.t('settings.installedActive')}</span>
                       </div>
                     </div>
                     <input
@@ -438,7 +438,7 @@
                       <div class="w-2 h-2 rounded-full bg-[#10b981]"></div>
                       <div>
                         <span class="font-semibold text-xs text-[#dee2ee] block">Brave Browser</span>
-                        <span class="text-[10px] text-[#4edea3] font-mono">Terhubung</span>
+                        <span class="text-[10px] text-[#4edea3] font-mono">{store.t('settings.connected')}</span>
                       </div>
                     </div>
                     <input
@@ -456,7 +456,7 @@
                     class="px-2.5 py-1.5 rounded bg-[#252a33] hover:bg-[#30353e] text-[#4cd7f6] font-medium text-[11px] flex items-center gap-1.5 transition-colors cursor-pointer border border-[#4cd7f6]/20"
                   >
                     <RefreshCw class="w-3 h-3" />
-                    <span>Periksa Pembaruan Ekstensi</span>
+                    <span>{store.t('settings.checkExtensionUpdates')}</span>
                   </button>
                   {#if nativeHostRegisterStatus}
                     <span class="text-[11px] font-mono text-[#4edea3]">{nativeHostRegisterStatus}</span>
@@ -470,13 +470,13 @@
               <div class="bg-[#1b2028] p-4 rounded-xl border border-[#30353e]/80 space-y-4">
                 <div class="flex items-center gap-2 pb-2 border-b border-[#252a33]">
                   <Zap class="w-4 h-4 text-[#00e5ff]" />
-                  <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">Jalur Paralel & Jaringan</h3>
+                  <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">{store.t('settings.networkParallel')}</h3>
                 </div>
 
                 <div class="space-y-3">
                   <div>
                     <label for="connection-type-select" class="block text-xs font-semibold text-[#dee2ee] mb-1">
-                      Jenis Tipe Sambungan Jaringan:
+                      {store.t('settings.connectionTypeLabel')}
                     </label>
                     <select
                       id="connection-type-select"
@@ -491,12 +491,12 @@
 
                   <div>
                     <div class="flex items-center justify-between mb-1.5">
-                      <span class="text-xs font-semibold text-[#dee2ee]">Maksimal Sambungan:</span>
+                      <span class="text-xs font-semibold text-[#dee2ee]">{store.t('settings.maxConnectionsLabel')}</span>
                       <span class="px-2 py-0.5 rounded bg-[#00e5ff]/15 text-[#00e5ff] font-mono text-xs font-bold border border-[#00e5ff]/30">
-                        {draft.defaultConnections} Jalur Turbo
+                        {store.t('settings.turboSuffix', { count: draft.defaultConnections })}
                       </span>
                     </div>
-                    <p class="text-[11px] text-[#8c909f] mb-2">Jumlah segmentasi paket paralel simultan per berkas.</p>
+                    <p class="text-[11px] text-[#8c909f] mb-2">{store.t('settings.simultaneousSegmentsDesc')}</p>
 
                     <input
                       type="range"
@@ -509,7 +509,7 @@
                     <div class="flex justify-between text-[10px] font-mono text-[#8c909f] px-1 mt-1">
                       <span>4</span>
                       <span>8</span>
-                      <span class="text-[#00e5ff] font-bold">16 (Turbo)</span>
+                      <span class="text-[#00e5ff] font-bold">{store.t('settings.turboPill')}</span>
                       <span>24</span>
                       <span>32</span>
                     </div>
@@ -523,17 +523,17 @@
                     />
                     <div>
                       <span class="text-xs font-semibold text-[#dee2ee] group-hover:text-[#00e5ff] transition-colors">
-                        Optimasi buffer TCP window auto-tuning
+                        {store.t('settings.tcpTuningTitle')}
                       </span>
                       <p class="text-[11px] text-[#8c909f] leading-snug">
-                        Mengurangi bottleneck latency round-trip pada throughput gigabit.
+                        {store.t('settings.tcpTuningSub')}
                       </p>
                     </div>
                   </label>
 
                   <div class="p-2.5 rounded-lg bg-[#090e16] border border-[#30353e] flex items-center justify-between">
-                    <span class="text-xs text-[#8c909f]">Estimasi Batas Puncak:</span>
-                    <span class="text-xs font-mono font-bold text-[#4edea3]">Tak Terbatas (Uncapped)</span>
+                    <span class="text-xs text-[#8c909f]">{store.t('settings.peakLimitEstimate')}</span>
+                    <span class="text-xs font-mono font-bold text-[#4edea3]">{store.t('settings.uncapped')}</span>
                   </div>
                 </div>
               </div>
@@ -542,18 +542,18 @@
               <div class="bg-[#1b2028] p-4 rounded-xl border border-[#30353e]/80 space-y-3">
                 <div class="flex items-center gap-2 pb-2 border-b border-[#252a33]">
                   <Layers class="w-4 h-4 text-[#00e5ff]" />
-                  <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">Kunci Tombol Cepat</h3>
+                  <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">{store.t('settings.hotkeysTitle')}</h3>
                 </div>
 
                 <div class="space-y-2">
                   <div class="flex items-center justify-between p-2 rounded-lg bg-[#090e16] border border-[#252a33]">
-                    <span class="text-xs text-[#dee2ee]">Cegah unduhan IDM saat klik tautan:</span>
+                    <span class="text-xs text-[#dee2ee]">{store.t('settings.preventDownload')}</span>
                     <kbd class="px-2 py-0.5 rounded bg-[#252a33] text-[#4cd7f6] font-mono text-[11px] font-bold border border-[#30353e]">
                       Alt
                     </kbd>
                   </div>
                   <div class="flex items-center justify-between p-2 rounded-lg bg-[#090e16] border border-[#252a33]">
-                    <span class="text-xs text-[#dee2ee]">Paksa tangkap unduhan secara langsung:</span>
+                    <span class="text-xs text-[#dee2ee]">{store.t('settings.forceCapture')}</span>
                     <kbd class="px-2 py-0.5 rounded bg-[#252a33] text-[#4cd7f6] font-mono text-[11px] font-bold border border-[#30353e]">
                       Insert
                     </kbd>
@@ -570,14 +570,14 @@
             <div class="bg-[#1b2028] p-4 rounded-xl border border-[#30353e]/80 space-y-4">
               <div class="flex items-center gap-2 pb-2 border-b border-[#252a33]">
                 <Zap class="w-4 h-4 text-[#00e5ff]" />
-                <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">Batas Kecepatan & Pengendali Bandwidth</h3>
+                <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">{store.t('settings.bandwidthLimiterTitle')}</h3>
               </div>
 
               <div class="space-y-3">
                 <div class="flex items-center justify-between">
                   <div>
-                    <span class="text-xs font-semibold text-[#dee2ee]">Aktifkan Pembatas Kecepatan Global</span>
-                    <p class="text-[11px] text-[#8c909f]">Batasi total bandwidth unduhan agar tidak mengganggu aktivitas browsing lain.</p>
+                    <span class="text-xs font-semibold text-[#dee2ee]">{store.t('settings.enableGlobalLimiter')}</span>
+                    <p class="text-[11px] text-[#8c909f]">{store.t('settings.enableGlobalLimiterDesc')}</p>
                   </div>
                   <input
                     type="checkbox"
@@ -588,7 +588,7 @@
 
                 {#if store.speedLimiterEnabled}
                   <div class="flex items-center gap-3 p-3 bg-[#090e16] rounded-lg border border-[#30353e]">
-                    <label for="speed-limit-val" class="text-xs font-medium text-[#dee2ee]">Batas Maksimal:</label>
+                    <label for="speed-limit-val" class="text-xs font-medium text-[#dee2ee]">{store.t('settings.maxLimitLabel')}</label>
                     <input
                       id="speed-limit-val"
                       type="number"
@@ -611,13 +611,13 @@
             <div class="bg-[#1b2028] p-4 rounded-xl border border-[#30353e]/80 space-y-4">
               <div class="flex items-center gap-2 pb-2 border-b border-[#252a33]">
                 <Clock class="w-4 h-4 text-[#00e5ff]" />
-                <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">Timeout Jaringan & Percobaan Ulang</h3>
+                <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">{store.t('settings.networkTimeoutTitle')}</h3>
               </div>
 
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label for="timeout-input" class="block text-xs font-semibold text-[#dee2ee] mb-1">
-                    Waktu Tunggu Sambungan (Detik):
+                    {store.t('settings.connTimeoutSeconds')}
                   </label>
                   <input
                     id="timeout-input"
@@ -627,12 +627,12 @@
                     bind:value={draft.connectionTimeoutSec}
                     class="w-full bg-[#090e16] border border-[#30353e] rounded-lg px-3 py-2 text-xs text-[#dee2ee] focus:outline-none focus:border-[#00e5ff]"
                   />
-                  <p class="text-[10px] text-[#8c909f] mt-1">Batas waktu sebelum thread dianggap timeout (Default: 60s).</p>
+                  <p class="text-[10px] text-[#8c909f] mt-1">{store.t('settings.connTimeoutDesc')}</p>
                 </div>
 
                 <div>
                   <label for="retries-input" class="block text-xs font-semibold text-[#dee2ee] mb-1">
-                    Maksimal Percobaan Ulang Otomatis:
+                    {store.t('settings.maxAutoRetries')}
                   </label>
                   <input
                     id="retries-input"
@@ -642,7 +642,7 @@
                     bind:value={draft.maxRetries}
                     class="w-full bg-[#090e16] border border-[#30353e] rounded-lg px-3 py-2 text-xs text-[#dee2ee] focus:outline-none focus:border-[#00e5ff]"
                   />
-                  <p class="text-[10px] text-[#8c909f] mt-1">Jumlah retry saat socket error atau gagal koneksi.</p>
+                  <p class="text-[10px] text-[#8c909f] mt-1">{store.t('settings.maxAutoRetriesDesc')}</p>
                 </div>
               </div>
             </div>
@@ -655,10 +655,10 @@
             <div class="bg-[#1b2028] p-4 rounded-xl border border-[#30353e]/80 space-y-3">
               <div class="flex items-center gap-2 pb-2 border-b border-[#252a33]">
                 <FileText class="w-4 h-4 text-[#00e5ff]" />
-                <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">Ekstensi Berkas Otomatis Ditangkap</h3>
+                <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">{store.t('settings.autoCapturedExtTitle')}</h3>
               </div>
               <p class="text-[11px] text-[#8c909f]">
-                Tautan unduhan dengan ekstensi di bawah ini akan dialihkan secara otomatis ke IDM Turbo saat Anda mengekliknya di peramban atau menyalinnya ke clipboard:
+                {store.t('settings.autoCapturedExtDesc')}
               </p>
 
               <textarea
@@ -667,16 +667,16 @@
                 class="w-full bg-[#090e16] border border-[#30353e] rounded-lg p-3 text-xs font-mono text-[#00e5ff] focus:outline-none focus:border-[#00e5ff] leading-relaxed resize-y"
                 placeholder="ZIP RAR 7Z EXE ISO MP4 MKV ..."
               ></textarea>
-              <p class="text-[10px] text-[#8c909f]">Pisahkan masing-masing ekstensi dengan spasi. Contoh: <code>ZIP RAR ISO MP4 MKV PDF EXE</code></p>
+              <p class="text-[10px] text-[#8c909f]">{store.t('settings.autoCapturedExtHelp')}</p>
             </div>
 
             <div class="bg-[#1b2028] p-4 rounded-xl border border-[#30353e]/80 space-y-3">
               <div class="flex items-center gap-2 pb-2 border-b border-[#252a33]">
                 <ShieldCheck class="w-4 h-4 text-[#ffb4ab]" />
-                <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">Daftar Situs Web yang Dikecualikan</h3>
+                <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">{store.t('settings.excludedSitesTitle')}</h3>
               </div>
               <p class="text-[11px] text-[#8c909f]">
-                IDM Turbo tidak akan menangkap unduhan otomatis dari situs-situs berikut (misal situs perbankan atau intranet lokal):
+                {store.t('settings.excludedSitesDesc')}
               </p>
 
               <textarea
@@ -685,7 +685,7 @@
                 class="w-full bg-[#090e16] border border-[#30353e] rounded-lg p-3 text-xs font-mono text-[#bac9cc] focus:outline-none focus:border-[#00e5ff] leading-relaxed resize-y"
                 placeholder="*.bank.co.id intranet.local example.org"
               ></textarea>
-              <p class="text-[10px] text-[#8c909f]">Pisahkan masing-masing domain dengan spasi atau baris baru.</p>
+              <p class="text-[10px] text-[#8c909f]">{store.t('settings.excludedSitesHelp')}</p>
             </div>
           </div>
         {/if}
@@ -696,19 +696,19 @@
             <div class="bg-[#1b2028] p-4 rounded-xl border border-[#30353e]/80 space-y-4">
               <div class="flex items-center gap-2 pb-2 border-b border-[#252a33]">
                 <FolderOpen class="w-4 h-4 text-[#00e5ff]" />
-                <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">Direktori Unduhan Utama</h3>
+                <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">{store.t('settings.mainDownloadDir')}</h3>
               </div>
 
               <div>
                 <label for="primary-save-dir" class="block text-xs font-semibold text-[#dee2ee] mb-1">
-                  Folder Penyimpanan Default:
+                  {store.t('settings.defaultFolderLabel')}
                 </label>
                 <div class="flex gap-2">
                   <input
                     id="primary-save-dir"
                     type="text"
                     bind:value={draft.defaultDownloadDir}
-                    placeholder="Contoh: C:\Users\Username\Downloads"
+                    placeholder="C:\Users\Username\Downloads"
                     class="flex-1 bg-[#090e16] border border-[#30353e] rounded-lg px-3 py-2 text-xs font-mono text-[#dee2ee] focus:outline-none focus:border-[#00e5ff]"
                   />
                   <button
@@ -717,7 +717,7 @@
                     class="px-3 py-2 rounded-lg bg-[#252a33] hover:bg-[#30353e] text-[#dee2ee] font-medium text-xs flex items-center gap-1.5 transition-colors cursor-pointer border border-[#30353e]"
                   >
                     <Folder class="w-3.5 h-3.5 text-[#00e5ff]" />
-                    <span>Pilih Folder...</span>
+                    <span>{store.t('common.browse')}</span>
                   </button>
                 </div>
               </div>
@@ -730,10 +730,10 @@
                 />
                 <div>
                   <span class="text-xs font-semibold text-[#dee2ee] group-hover:text-[#00e5ff] transition-colors">
-                    Atur subfolder otomatis berdasarkan kategori berkas
+                    {store.t('settings.autoCategorySubfolders')}
                   </span>
                   <p class="text-[11px] text-[#8c909f] leading-snug">
-                    Otomatis membuat folder terpisah (Documents, Video, Music, Programs, Compressed) di dalam folder utama.
+                    {store.t('settings.autoCategorySubfoldersDesc')}
                   </p>
                 </div>
               </label>
@@ -742,19 +742,19 @@
             <div class="bg-[#1b2028] p-4 rounded-xl border border-[#30353e]/80 space-y-4">
               <div class="flex items-center gap-2 pb-2 border-b border-[#252a33]">
                 <HardDrive class="w-4 h-4 text-[#00e5ff]" />
-                <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">Direktori Berkas Sementara (.part)</h3>
+                <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">{store.t('settings.tempDirTitle')}</h3>
               </div>
 
               <div>
                 <label for="temp-save-dir" class="block text-xs font-semibold text-[#dee2ee] mb-1">
-                  Folder Temporary Segmen Multi-Jalur:
+                  {store.t('settings.tempDirLabel')}
                 </label>
                 <div class="flex gap-2">
                   <input
                     id="temp-save-dir"
                     type="text"
                     bind:value={draft.tempDir}
-                    placeholder="Kosongkan untuk menggunakan folder sistem sementara bawaan"
+                    placeholder={store.t('settings.tempDirPlaceholder')}
                     class="flex-1 bg-[#090e16] border border-[#30353e] rounded-lg px-3 py-2 text-xs font-mono text-[#dee2ee] focus:outline-none focus:border-[#00e5ff]"
                   />
                   <button
@@ -763,11 +763,11 @@
                     class="px-3 py-2 rounded-lg bg-[#252a33] hover:bg-[#30353e] text-[#dee2ee] font-medium text-xs flex items-center gap-1.5 transition-colors cursor-pointer border border-[#30353e]"
                   >
                     <Folder class="w-3.5 h-3.5 text-[#00e5ff]" />
-                    <span>Pilih Folder...</span>
+                    <span>{store.t('common.browse')}</span>
                   </button>
                 </div>
                 <p class="text-[10px] text-[#8c909f] mt-1.5">
-                  Bagian berkas yang sedang diunduh akan disimpan di sini sebelum digabungkan menjadi berkas final.
+                  {store.t('settings.tempDirDesc')}
                 </p>
               </div>
             </div>
@@ -781,15 +781,15 @@
               <div class="flex items-center justify-between pb-2 border-b border-[#252a33]">
                 <div class="flex items-center gap-2">
                   <Globe class="w-4 h-4 text-[#00e5ff]" />
-                  <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">Integrasi Ekstensi Peramban</h3>
+                  <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">{store.t('settings.browserIntegrationTitle')}</h3>
                 </div>
                 <span class="px-2 py-0.5 rounded bg-[#10b981]/15 text-[#10b981] font-mono text-[10px] font-bold border border-[#10b981]/30">
-                  IPC Pipe Aktif
+                  {store.t('settings.ipcPipeActive')}
                 </span>
               </div>
 
               <p class="text-[11px] text-[#8c909f] leading-relaxed">
-                Ekstensi browser IDM Turbo Desktop mendeteksi tautan unduhan dan aliran video secara otomatis di Google Chrome, Microsoft Edge, Mozilla Firefox, dan Brave Browser.
+                {store.t('settings.browserIntegrationDesc')}
               </p>
 
               <div class="p-3 bg-[#090e16] rounded-lg border border-[#30353e] space-y-2 text-xs font-mono">
@@ -814,7 +814,7 @@
                   class="px-3 py-2 rounded-lg bg-[#00e5ff]/15 hover:bg-[#00e5ff]/25 text-[#00e5ff] font-semibold text-xs flex items-center gap-2 transition-all cursor-pointer border border-[#00e5ff]/40 shadow-[0_0_12px_rgba(0,229,255,0.15)]"
                 >
                   <RefreshCw class="w-3.5 h-3.5" />
-                  <span>Registrasikan Ulang Native Host Manifest</span>
+                  <span>{store.t('settings.reRegisterHost')}</span>
                 </button>
                 {#if nativeHostRegisterStatus}
                   <span class="text-xs font-mono text-[#4edea3]">{nativeHostRegisterStatus}</span>
@@ -823,9 +823,9 @@
             </div>
 
             <div class="bg-[#1b2028] p-4 rounded-xl border border-[#30353e]/80 space-y-2">
-              <span class="font-bold text-xs text-[#dee2ee] block">Panduan Instalasi Manual Ekstensi:</span>
+              <span class="font-bold text-xs text-[#dee2ee] block">{store.t('settings.manualInstallGuideTitle')}</span>
               <p class="text-[11px] text-[#8c909f] leading-relaxed">
-                Buka <code>chrome://extensions</code> di browser Chromium Anda, aktifkan <strong>Developer Mode</strong>, lalu klik <strong>Load unpacked</strong> dan pilih direktori <code>extension/</code> pada folder instalasi IDM Turbo.
+                {store.t('settings.manualInstallGuideDesc')}
               </p>
             </div>
           </div>

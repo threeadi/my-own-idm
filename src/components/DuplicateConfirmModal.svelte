@@ -75,14 +75,14 @@
               <CheckCircle2 class="w-3.5 h-3.5" />
             </div>
             <span class="font-sans text-xs font-semibold text-[#dee2ee]">
-              Berkas Sudah Selesai Diunduh
+              {store.t('dup.modalTitleCompleted')}
             </span>
           {:else}
             <div class="w-4 h-4 rounded-full bg-[#f59e0b]/20 flex items-center justify-center text-[#fbbf24]">
               <AlertTriangle class="w-3.5 h-3.5" />
             </div>
             <span class="font-sans text-xs font-semibold text-[#dee2ee]">
-              {isPaused ? 'Unduhan Sedang Dijeda' : 'Unduhan Sedang Berjalan'}
+              {isPaused ? store.t('dup.modalTitlePaused') : store.t('dup.modalTitleActive')}
             </span>
           {/if}
         </div>
@@ -90,7 +90,7 @@
         <button
           onclick={handleClose}
           class="w-6 h-6 rounded flex items-center justify-center text-[#8c909f] hover:text-[#dee2ee] hover:bg-[#30353e] transition-colors cursor-pointer"
-          aria-label="Tutup dialog"
+          aria-label={store.t('common.close')}
           type="button"
         >
           <X class="w-3.5 h-3.5" />
@@ -111,14 +111,14 @@
 
           <div class="flex-1 min-w-0 space-y-1">
             <h3 class="font-sans text-xs font-bold text-[#dee2ee] truncate" title={data.filename || ''}>
-              {data.filename || 'Nama berkas tidak diketahui'}
+              {data.filename || store.t('dup.unknownName')}
             </h3>
 
             {#if !isCompleted}
               <!-- Mini Telemetry Progress Bar -->
               <div class="space-y-1 pt-1">
                 <div class="flex items-center justify-between text-[10px] font-mono text-[#8c909f]">
-                  <span>{formatBytes(data.downloaded_bytes)} dari {data.total_bytes ? formatBytes(data.total_bytes) : 'Ukuran belum pasti'}</span>
+                  <span>{store.t('dup.sizeFrom', { downloaded: formatBytes(data.downloaded_bytes), total: data.total_bytes ? formatBytes(data.total_bytes) : store.t('dup.sizeUncertain') })}</span>
                   <span class="text-[#fbbf24] font-bold">{data.percent.toFixed(1)}%</span>
                 </div>
                 <div class="w-full h-1.5 bg-[#171c24] rounded-full overflow-hidden border border-[#30353e]/40">
@@ -130,7 +130,7 @@
               </div>
             {:else}
               <div class="flex items-center gap-2 text-[11px] font-mono text-[#8c909f] pt-0.5">
-                <span class="text-[#4edea3] font-medium">Ukuran: {formatBytes(data.downloaded_bytes)}</span>
+                <span class="text-[#4edea3] font-medium">{store.t('dup.sizeLabel', { size: formatBytes(data.downloaded_bytes) })}</span>
                 {#if data.completed_at}
                   <span>•</span>
                   <span>{data.completed_at}</span>
@@ -143,11 +143,11 @@
         <!-- Description Message -->
         <p class="font-sans text-xs text-[#c2c6d6] leading-relaxed">
           {#if isCompleted}
-            Berkas ini telah berhasil diunduh dan tersimpan di komputer Anda. Apakah Anda ingin membuka berkas tersebut sekarang atau mengunduh salinan baru?
+            {store.t('dup.descCompleted')}
           {:else if isPaused}
-            Unduhan untuk berkas ini sedang ada di antrean dalam status <strong>dijeda</strong>. Apakah Anda ingin melanjutkan proses unduhannya?
+            {store.t('dup.descPaused')}
           {:else}
-            Tautan berkas ini sedang aktif diunduh oleh sistem. Apakah Anda ingin melihat jendela progress unduhan atau mengunduh sebagai berkas terpisah?
+            {store.t('dup.descActive')}
           {/if}
         </p>
 
@@ -166,7 +166,7 @@
           class="h-8 px-3 rounded-lg text-[#8c909f] hover:text-[#dee2ee] hover:bg-[#252a33] text-xs font-medium transition-colors cursor-pointer"
           type="button"
         >
-          Batal
+          {store.t('common.cancel')}
         </button>
 
         <div class="flex items-center gap-2 flex-wrap">
@@ -178,7 +178,7 @@
                 type="button"
               >
                 <FolderOpen class="w-3.5 h-3.5 text-[#4cd7f6]" />
-                <span>Buka Folder</span>
+                <span>{store.t('dup.btnOpenFolder')}</span>
               </button>
               <button
                 onclick={handleOpenFile}
@@ -186,27 +186,27 @@
                 type="button"
               >
                 <CheckCircle2 class="w-3.5 h-3.5" />
-                <span>Buka Berkas</span>
+                <span>{store.t('dup.btnOpenFile')}</span>
               </button>
             {/if}
             <button
               onclick={handleProceedAsNew}
               class="h-8 px-3 rounded-lg bg-[#4d8eff]/15 hover:bg-[#4d8eff]/25 text-[#adc6ff] border border-[#4d8eff]/30 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-              title="Unduh sebagai salinan baru"
+              title={store.t('dup.titleNewCopy')}
               type="button"
             >
               <RotateCcw class="w-3 h-3" />
-              <span>Unduh Ulang</span>
+              <span>{store.t('dup.btnRedownload')}</span>
             </button>
           {:else}
             <button
               onclick={handleProceedAsNew}
               class="h-8 px-3 rounded-lg bg-[#252a33] hover:bg-[#343942] text-[#dee2ee] border border-[#30353e] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
-              title="Otomatis beri nama baru dan download terpisah"
+              title={store.t('dup.titleAutoRename')}
               type="button"
             >
               <CopyPlus class="w-3.5 h-3.5 text-[#4cd7f6]" />
-              <span>Unduh File Baru</span>
+              <span>{store.t('dup.btnDownloadNew')}</span>
             </button>
 
             {#if isPaused}
@@ -216,7 +216,7 @@
                 type="button"
               >
                 <Play class="w-3.5 h-3.5 fill-current" />
-                <span>Lanjutkan Unduhan</span>
+                <span>{store.t('dup.btnResume')}</span>
               </button>
             {:else}
               <button
@@ -225,7 +225,7 @@
                 type="button"
               >
                 <ExternalLink class="w-3.5 h-3.5" />
-                <span>Lihat Progress</span>
+                <span>{store.t('dup.btnViewProgress')}</span>
               </button>
             {/if}
           {/if}

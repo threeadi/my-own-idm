@@ -88,7 +88,7 @@
   const errorMessage = $derived(
     task && typeof task.status === 'object' && 'failed' in task.status
       ? (task.status as { failed: string }).failed
-      : task?.error_message || 'Koneksi terputus atau URL kadaluarsa (HTTP 403 / Timeout)'
+      : task?.error_message || store.t('transfer.defaultError')
   );
 
   function getFileIcon(cat?: string) {
@@ -200,12 +200,12 @@
       onmousedown={handleHeaderMouseDown}
       class="h-10 px-3 bg-[#0f141c] border-b border-[#252a33] flex items-center justify-between cursor-move shrink-0"
     >
-      <span class="text-xs font-medium text-slate-400">Transfer Unduhan</span>
+      <span class="text-xs font-medium text-slate-400">{store.t('transfer.downloading')}</span>
       <button
         type="button"
         onclick={closeWindow}
         class="w-7 h-7 flex items-center justify-center rounded text-slate-400 hover:text-white hover:bg-red-600/80 transition-colors cursor-pointer"
-        title="Tutup"
+        title={store.t('common.close')}
       >
         <X class="w-3.5 h-3.5 pointer-events-none" />
       </button>
@@ -214,7 +214,7 @@
       <div class="w-10 h-10 rounded-full bg-[#171c24] flex items-center justify-center text-[#00e5ff] mb-3 animate-spin">
         <RotateCw class="w-5 h-5" />
       </div>
-      <p class="text-sm text-slate-300 font-medium">Memuat rincian unduhan...</p>
+      <p class="text-sm text-slate-300 font-medium">{store.t('transferWindow.loadingDetails')}</p>
       <p class="text-xs text-slate-500 mt-1 font-mono">{taskId}</p>
     </div>
   {:else}
@@ -268,7 +268,7 @@
         <button
           onclick={minimizeWindow}
           class="w-7 h-7 flex items-center justify-center rounded text-slate-400 hover:text-slate-100 hover:bg-[#1a2236] transition-colors cursor-pointer"
-          title="Minimalkan"
+          title={store.t('common.minimize')}
           type="button"
         >
           <Minus class="w-3.5 h-3.5 pointer-events-none" />
@@ -276,7 +276,7 @@
         <button
           onclick={closeWindow}
           class="w-7 h-7 flex items-center justify-center rounded text-slate-400 hover:text-white hover:bg-red-600/80 transition-colors cursor-pointer"
-          title="Tutup"
+          title={store.t('common.close')}
           type="button"
         >
           <X class="w-3.5 h-3.5 pointer-events-none" />
@@ -295,9 +295,9 @@
               <CheckCircle2 class="w-6 h-6" />
             </div>
             <div class="min-w-0">
-              <h2 class="text-sm font-bold text-white tracking-wide">Unduhan Selesai Sempurna</h2>
+              <h2 class="text-sm font-bold text-white tracking-wide">{store.t('transferWindow.completeHeader')}</h2>
               <p class="text-xs text-slate-300 truncate font-mono">
-                {formatBytes(task.downloaded_bytes)} • Berhasil disimpan ke disk
+                {store.t('transferWindow.savedToDisk', { bytes: formatBytes(task.downloaded_bytes) })}
               </p>
             </div>
           </div>
@@ -305,17 +305,17 @@
           <!-- File Info Card -->
           <div class="bg-[#0f141c] p-3 rounded-xl border border-[#1f242e] space-y-2 text-xs">
             <div class="flex items-center justify-between">
-              <span class="text-slate-400">Nama Berkas:</span>
+              <span class="text-slate-400">{store.t('addModal.filenameLabel')}</span>
               <span class="font-medium text-slate-200 truncate max-w-[320px]" title={task.filename}>
                 {task.filename}
               </span>
             </div>
             <div class="flex items-center justify-between">
-              <span class="text-slate-400">Ukuran Akhir:</span>
+              <span class="text-slate-400">{store.t('transferWindow.finalSize')}</span>
               <span class="font-mono text-emerald-400 font-semibold">{formatBytes(task.downloaded_bytes)}</span>
             </div>
             <div class="flex items-start justify-between gap-2 pt-1 border-t border-[#1f242e]">
-              <span class="text-slate-400 shrink-0">Lokasi:</span>
+              <span class="text-slate-400 shrink-0">{store.t('transferWindow.location')}</span>
               <div class="flex items-center gap-1.5 min-w-0">
                 <span class="font-mono text-[11px] text-[#4cd7f6] truncate max-w-[280px]" title={task.file_path}>
                   {task.file_path}
@@ -323,8 +323,8 @@
                 <button
                   type="button"
                   onclick={handleCopyPath}
-                  class="p-1 rounded hover:bg-[#1f242e] text-slate-400 hover:text-white transition-colors shrink-0"
-                  title="Salin lokasi berkas"
+                  class="p-1 rounded hover:bg-[#1f242e] text-slate-400 hover:text-white transition-colors shrink-0 cursor-pointer"
+                  title={store.t('transferWindow.copyLocation')}
                 >
                   {#if copied}
                     <Check class="w-3.5 h-3.5 text-emerald-400" />
@@ -345,7 +345,7 @@
             class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-[#171c24] hover:bg-[#252a33] text-slate-200 border border-[#252a33] flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <FolderOpen class="w-4 h-4 text-[#00e5ff]" />
-            <span>Buka Folder</span>
+            <span>{store.t('transfer.btnOpenFolder')}</span>
           </button>
 
           <div class="flex items-center gap-2">
@@ -377,7 +377,7 @@
               <AlertTriangle class="w-6 h-6" />
             </div>
             <div class="min-w-0">
-              <h2 class="text-sm font-bold text-white tracking-wide">Unduhan Terputus atau Gagal</h2>
+              <h2 class="text-sm font-bold text-white tracking-wide">{store.t('transferWindow.failedHeader')}</h2>
               <p class="text-xs text-[#ffb4ab] truncate font-mono">
                 {errorMessage}
               </p>
@@ -387,15 +387,15 @@
           <!-- Diagnostic Details -->
           <div class="bg-[#0f141c] p-3 rounded-xl border border-[#1f242e] space-y-2 text-xs">
             <div class="flex items-center justify-between">
-              <span class="text-slate-400">Telah Diunduh:</span>
+              <span class="text-slate-400">{store.t('progress.downloaded')}</span>
               <span class="font-mono text-slate-200">{formatBytes(task.downloaded_bytes)} ({pct.toFixed(1)}%)</span>
             </div>
             <div class="flex items-center justify-between">
-              <span class="text-slate-400">Status Server:</span>
-              <span class="text-amber-400 font-medium">Tautan mungkin perlu diperbarui dari web</span>
+              <span class="text-slate-400">{store.t('transferWindow.serverStatus')}</span>
+              <span class="text-amber-400 font-medium">{store.t('transferWindow.needRefreshNotice')}</span>
             </div>
             <div class="pt-1.5 border-t border-[#1f242e] text-[11px] text-slate-400">
-              Progres unduhan parsial Anda tetap aman dan tidak akan hilang saat tautan diperbarui.
+              {store.t('transferWindow.progressSafeNotice')}
             </div>
           </div>
         </div>
@@ -408,7 +408,7 @@
             class="px-3.5 py-1.5 text-xs font-bold rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 flex items-center gap-1.5 shadow-[0_0_10px_rgba(245,158,11,0.2)] transition-colors cursor-pointer"
           >
             <RotateCw class="w-3.5 h-3.5" />
-            <span>Perbarui Tautan Unduhan...</span>
+            <span>{store.t('transferWindow.refreshBtn')}</span>
           </button>
 
           <div class="flex items-center gap-2">
@@ -417,7 +417,7 @@
               onclick={closeWindow}
               class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-[#171c24] hover:bg-[#252a33] text-slate-300 border border-[#252a33] transition-colors cursor-pointer"
             >
-              Tutup
+              {store.t('common.close')}
             </button>
             <button
               type="button"
@@ -425,7 +425,7 @@
               class="px-4 py-1.5 text-xs font-bold rounded-lg bg-[#00e5ff] hover:bg-[#00e5ff]/90 text-slate-950 flex items-center gap-1.5 shadow-glow-cyan transition-all cursor-pointer"
             >
               <RotateCcw class="w-3.5 h-3.5" />
-              <span>Coba Lagi</span>
+              <span>{store.t('common.retry')}</span>
             </button>
           </div>
         </div>
@@ -467,19 +467,19 @@
               <section class="space-y-1.5 text-xs">
                 <div class="bg-[#0f1420]/70 p-3 rounded-xl border border-[#1a2236] space-y-1.5">
                   <div class="flex items-center justify-between">
-                    <span class="text-slate-400">Status:</span>
+                    <span class="text-slate-400">{store.t('progress.status')}</span>
                     <span class="font-medium {isDownloading ? 'text-[#00e5ff]' : 'text-amber-400'} capitalize">
-                      {typeof task.status === 'string' ? task.status : 'Menghubungkan'}
+                      {typeof task.status === 'string' ? task.status : store.t('progress.connecting')}
                     </span>
                   </div>
 
                   <div class="flex items-center justify-between">
-                    <span class="text-slate-400">Ukuran Berkas:</span>
+                    <span class="text-slate-400">{store.t('progress.fileSize')}</span>
                     <span class="font-mono text-slate-200">{formatBytes(task.total_bytes)}</span>
                   </div>
 
                   <div class="flex items-center justify-between">
-                    <span class="text-slate-400">Telah Diunduh:</span>
+                    <span class="text-slate-400">{store.t('progress.downloaded')}</span>
                     <span class="font-mono text-slate-200">
                       {formatBytes(task.downloaded_bytes)}
                       {#if task.total_bytes}
@@ -489,24 +489,24 @@
                   </div>
 
                   <div class="flex items-center justify-between">
-                    <span class="text-slate-400">Kecepatan Transfer:</span>
+                    <span class="text-slate-400">{store.t('progress.transferRate')}</span>
                     <span class="font-mono font-bold text-emerald-400">
                       {isDownloading ? formatSpeed(task.speed_bps) : '0 B/s'}
                     </span>
                   </div>
 
                   <div class="flex items-center justify-between">
-                    <span class="text-slate-400">Waktu Tersisa:</span>
+                    <span class="text-slate-400">{store.t('progress.timeLeft')}</span>
                     <span class="font-mono font-medium text-amber-300">
                       {isDownloading ? `± ${formatEta(task.eta_seconds)}` : '--'}
                     </span>
                   </div>
 
                   <div class="flex items-center justify-between pt-1 border-t border-[#1a2236]/60">
-                    <span class="text-slate-400">Dukungan Lanjutkan (Resume):</span>
+                    <span class="text-slate-400">{store.t('progress.resumeCapability')}</span>
                     <span class="inline-flex items-center gap-1 text-[#10b981] font-medium">
                       <CheckCircle2 class="w-3.5 h-3.5" />
-                      <span>{task.supports_range ? 'Ya (Multi-Thread)' : 'Tidak (Single Stream)'}</span>
+                      <span>{task.supports_range ? store.t('progress.serverSupported') : store.t('progress.singleStream')}</span>
                     </span>
                   </div>
                 </div>
@@ -515,7 +515,7 @@
               <section class="space-y-2.5 text-xs">
                 <div class="bg-[#0f1420]/70 p-3 rounded-xl border border-[#1a2236] space-y-3">
                   <div class="flex items-center justify-between">
-                    <span class="text-slate-300 font-medium">Tingkat transfer saat ini:</span>
+                    <span class="text-slate-300 font-medium">{store.t('progress.currentRate')}</span>
                     <span class="font-mono text-[#00e5ff] font-bold">{formatSpeed(task.speed_bps)}</span>
                   </div>
 
@@ -526,12 +526,12 @@
                       onchange={applyTaskLimit}
                       class="w-4 h-4 rounded bg-[#0b0f17] border-[#222d45] text-[#00e5ff] focus:ring-0 cursor-pointer"
                     />
-                    <span class="text-slate-200 font-medium">Batasi Kecepatan Khusus Unduhan Ini</span>
+                    <span class="text-slate-200 font-medium">{store.t('progress.limitThisDownload')}</span>
                   </label>
 
                   {#if taskLimiterEnabled}
                     <div class="space-y-2 pl-6 pt-1 border-t border-[#1a2236]/60">
-                      <span class="block text-slate-400 text-[11px]">Batas kecepatan maksimum berkas ini:</span>
+                      <span class="block text-slate-400 text-[11px]">{store.t('progress.maxLimit')}</span>
                       <div class="flex items-center gap-2">
                         <input
                           type="number"
@@ -561,7 +561,7 @@
                       </div>
 
                       <div class="flex items-center gap-1.5 pt-1 flex-wrap">
-                        <span class="text-[10px] text-slate-400">Pilihan Cepat:</span>
+                        <span class="text-[10px] text-slate-400">{store.t('progress.quickChoice')}</span>
                         <button
                           type="button"
                           onclick={() => { taskLimiterEnabled = true; taskLimitValue = 500; taskLimitUnit = 'KB/s'; applyTaskLimit(); }}
@@ -595,9 +595,9 @@
                   {/if}
 
                   <div class="pt-2 border-t border-[#1a2236] flex items-center justify-between text-[11px]">
-                    <span class="text-slate-400">Batas Global Keseluruhan:</span>
+                    <span class="text-slate-400">{store.t('progress.globalLimitStatus')}</span>
                     <span class="font-mono {store.speedLimiterEnabled ? 'text-[#00e5ff] font-semibold' : 'text-slate-400'}">
-                      {store.speedLimiterEnabled ? `Aktif (${store.globalSpeedLimitValue} ${store.globalSpeedLimitUnit})` : 'Tak Terbatas'}
+                      {store.speedLimiterEnabled ? store.t('progress.globalLimitActive', { val: `${store.globalSpeedLimitValue} ${store.globalSpeedLimitUnit}` }) : store.t('progress.unlimited')}
                     </span>
                   </div>
                 </div>
@@ -606,13 +606,13 @@
               <section class="space-y-2 text-xs">
                 <div class="bg-[#0f1420]/70 p-3 rounded-xl border border-[#1a2236] space-y-2">
                   <div class="flex items-start gap-1.5 text-slate-300 truncate">
-                    <span class="text-slate-400 shrink-0 font-medium">Simpan Ke:</span>
+                    <span class="text-slate-400 shrink-0 font-medium">{store.t('props.saveTo')}</span>
                     <span class="font-mono text-[11px] text-[#00e5ff] truncate" title={task.file_path}>
                       {task.file_path}
                     </span>
                   </div>
                   <div class="pt-1.5 border-t border-[#1a2236] text-[11px] text-slate-400">
-                    Unduhan akan disimpan otomatis ke folder di atas saat progres 100%.
+                    {store.t('transferWindow.autoSaveNotice')}
                   </div>
                 </div>
               </section>
@@ -624,7 +624,7 @@
             <!-- Overall Download Progress -->
             <div class="space-y-1">
               <div class="flex justify-between items-center text-[11px] text-slate-400 px-0.5">
-                <span class="font-medium text-slate-300">Total Progres</span>
+                <span class="font-medium text-slate-300">{store.t('progress.totalProgress')}</span>
                 <span class="font-mono text-[#00e5ff] font-bold">{pct.toFixed(1)}%</span>
               </div>
               <div class="relative w-full h-4 bg-[#07090e] rounded border border-[#222d45] overflow-hidden flex items-center">
@@ -646,10 +646,10 @@
               >
                 {#if showDetails}
                   <ChevronUp class="w-3.5 h-3.5 text-[#00e5ff]" />
-                  <span>Sembunyikan detail</span>
+                  <span>{store.t('progress.hideDetails')}</span>
                 {:else}
                   <ChevronDown class="w-3.5 h-3.5 text-[#00e5ff]" />
-                  <span>Tampilkan detail</span>
+                  <span>{store.t('progress.showDetails')}</span>
                 {/if}
               </button>
             </div>
@@ -657,8 +657,8 @@
             <!-- IDM Segmented Multi-Thread Bar (Stitch Kinetic Telemetry) -->
             <div class="space-y-1 pt-0.5">
               <div class="flex justify-between items-center text-[10px] text-slate-400">
-                <span>Multi-Thread Chunk Buffers</span>
-                <span class="font-mono text-[#00e5ff]">{task.connections || 1} Jalur</span>
+                <span>{store.t('transferWindow.chunkBuffers')}</span>
+                <span class="font-mono text-[#00e5ff]">{store.t('transferWindow.tracksCount', { count: task.connections || 1 })}</span>
               </div>
               <div class="w-full h-3.5 bg-[#07090e] border border-[#222d45] rounded overflow-hidden flex items-center p-0.5 gap-0.5">
                 {#if task.segments && task.segments.length > 0}
@@ -667,7 +667,7 @@
                     {@const segPct = segTotal > 0 ? Math.min(100, Math.max(0, (seg.downloaded_bytes / segTotal) * 100)) : 0}
                     <div
                       class="h-full bg-[#141b2b] rounded-xs overflow-hidden flex-1 relative border border-[#222d45]/50 flex items-center"
-                      title="Jalur #{seg.index + 1}: {segPct.toFixed(0)}% ({formatBytes(seg.downloaded_bytes)} / {formatBytes(segTotal)})"
+                      title={store.t('progress.segmentPart', { num: seg.index + 1, pct: segPct.toFixed(0), dl: formatBytes(seg.downloaded_bytes), total: formatBytes(segTotal) })}
                     >
                       <div
                         class="h-full transition-[width] duration-150 ease-out {seg.is_finished ? 'bg-[#10b981]' : isDownloading && segPct > 0 ? 'bg-gradient-to-r from-blue-700 to-[#00e5ff] shadow-[0_0_6px_rgba(0,229,255,0.4)]' : 'bg-transparent'}"
@@ -693,9 +693,9 @@
                   <table class="w-full text-left border-collapse text-xs">
                     <thead class="bg-[#0f1420] text-slate-400 border-b border-[#1a2236] text-[10px] uppercase select-none sticky top-0">
                       <tr>
-                        <th class="py-1 px-3 w-12 text-center">N.</th>
-                        <th class="py-1 px-3 w-32">Diunduh</th>
-                        <th class="py-1 px-3">Info</th>
+                        <th class="py-1 px-3 w-12 text-center">{store.t('progress.colNumber')}</th>
+                        <th class="py-1 px-3 w-32">{store.t('progress.colDownloaded')}</th>
+                        <th class="py-1 px-3">{store.t('progress.colInfo')}</th>
                       </tr>
                     </thead>
                     <tbody class="font-mono divide-y divide-[#141b2b] text-slate-300 text-xs">
@@ -709,17 +709,17 @@
                             {#if seg.is_finished}
                               <span class="inline-flex items-center gap-1 text-[#10b981] font-sans">
                                 <CheckCircle2 class="w-3.5 h-3.5" />
-                                <span>Selesai</span>
+                                <span>{store.t('common.completed')}</span>
                               </span>
                             {:else if isDownloading && segPct > 0}
                               <span class="inline-flex items-center gap-1.5 text-emerald-400 font-sans">
                                 <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
-                                <span>Mengunduh... ({segPct.toFixed(0)}%)</span>
+                                <span>{store.t('progress.downloadingActive')} ({segPct.toFixed(0)}%)</span>
                               </span>
                             {:else if isDownloading}
-                              <span class="text-slate-500 font-sans">Menunggu...</span>
+                              <span class="text-slate-500 font-sans">{store.t('progress.waiting')}</span>
                             {:else}
-                              <span class="text-amber-400 font-sans">Dijeda</span>
+                              <span class="text-amber-400 font-sans">{store.t('common.paused')}</span>
                             {/if}
                           </td>
                         </tr>
@@ -735,7 +735,7 @@
         <!-- In-Flight Transfer Bottom Control Toolbar -->
         <div class="p-3 border-t border-[#1f242e] bg-[#0b0f17] flex items-center justify-between gap-2">
           <div class="text-[11px] font-mono text-slate-400 truncate">
-            {isDownloading ? formatSpeed(task.speed_bps) : 'Dijeda'}
+            {isDownloading ? formatSpeed(task.speed_bps) : store.t('common.paused')}
           </div>
 
           <div class="flex items-center gap-2">

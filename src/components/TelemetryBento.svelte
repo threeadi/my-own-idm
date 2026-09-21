@@ -66,9 +66,9 @@
       return { value: '0.0', unit: 'KB/s' };
     }
     if (totalSpeed >= 1024 * 1024) {
-      return { value: (totalSpeed / (1024 * 1024)).toFixed(1), unit: 'MB/detik' };
+      return { value: (totalSpeed / (1024 * 1024)).toFixed(1), unit: store.t('bento.unitMbS') };
     }
-    return { value: (totalSpeed / 1024).toFixed(0), unit: 'KB/detik' };
+    return { value: (totalSpeed / 1024).toFixed(0), unit: store.t('bento.unitKbS') };
   });
 </script>
 
@@ -84,11 +84,11 @@
       <div class="flex items-center gap-2 flex-wrap">
         <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#10b981]/15 text-[#4edea3] font-sans text-xs border border-[#10b981]/30">
           <span class="w-1.5 h-1.5 rounded-full bg-[#4edea3] animate-pulse"></span>
-          Koneksi Sangat Cepat & Stabil
+          {store.t('bento.connStable')}
         </span>
         <span class="inline-flex items-center gap-1 text-[#8c909f] font-mono text-xs">
           <HardDrive class="w-3.5 h-3.5 text-[#4cd7f6]" />
-          <span>Ruang Drive: <strong class="text-[#dee2ee] font-sans font-semibold">Tersedia</strong></span>
+          <span>{store.t('bento.driveSpace')} <strong class="text-[#dee2ee] font-sans font-semibold">{store.t('bento.driveAvailable')}</strong></span>
         </span>
       </div>
 
@@ -102,12 +102,12 @@
         </span>
         <span class="ml-2 text-[#8c909f] font-sans text-xs flex items-center gap-1">
           <ArrowUp class="w-3.5 h-3.5 text-[#4edea3]" />
-          Turbo Multi-Part
+          {store.t('bento.turboMultiPart')}
         </span>
       </div>
 
       <p class="font-sans text-xs text-[#8c909f] line-clamp-1">
-        Mesin multi-thread mengoptimalkan pembagian berkas secara paralel. Bebas lag tanpa membebani browsing.
+        {store.t('bento.engineDescription')}
       </p>
     </div>
 
@@ -116,10 +116,10 @@
       <div class="flex items-center justify-between text-[11px] text-[#8c909f]">
         <span class="flex items-center gap-1">
           <Activity class="w-3 h-3 text-[#4cd7f6]" />
-          Fluktuasi 60 Detik
+          {store.t('bento.fluctuation60s')}
         </span>
         <span class="text-[#4cd7f6] font-mono text-[10px] font-semibold">
-          {totalSpeed > 0 ? `Aktif (${store.settings.defaultConnections} Jalur)` : 'Siap'}
+          {totalSpeed > 0 ? store.t('bento.activeConnections', { count: store.settings.defaultConnections }) : store.t('bento.ready')}
         </span>
       </div>
       <div class="h-10 w-full flex items-end">
@@ -148,7 +148,7 @@
           class="inline-flex items-center gap-1 text-[11px] font-medium transition-colors cursor-pointer {store.speedLimiterEnabled ? 'text-[#00e5ff] font-semibold' : 'text-[#8c909f] hover:text-[#dee2ee]'}"
         >
           <span class="w-1.5 h-1.5 rounded-full {store.speedLimiterEnabled ? 'bg-[#00e5ff] shadow-[0_0_8px_#00e5ff]' : 'bg-[#30353e]'}"></span>
-          {store.speedLimiterEnabled ? store.t('common.active') : 'Off'}
+          {store.speedLimiterEnabled ? store.t('common.active') : store.t('common.off')}
         </button>
       </div>
 
@@ -226,13 +226,13 @@
         >
           <span class="flex items-center gap-1.5 truncate">
             <Zap class="w-3 h-3 text-[#4edea3]" />
-            Tak Terbatas (Maksimal)
+            {store.t('bento.unlimitedMax')}
           </span>
-          <span class="text-[10px] text-[#4cd7f6] font-medium">Batasi</span>
+          <span class="text-[10px] text-[#4cd7f6] font-medium">{store.t('bento.limitBtn')}</span>
         </button>
         <span class="font-sans text-[11px] text-[#8c909f] flex items-center gap-1 mt-0.5">
           <ShieldCheck class="w-3.5 h-3.5 text-[#4edea3]" />
-          Prioritas Bandwidth Penuh
+          {store.t('bento.fullBandwidth')}
         </span>
       {/if}
     </div>
@@ -245,8 +245,8 @@
         <Download class="w-3.5 h-3.5" />
       </div>
       <div class="flex flex-col">
-        <span class="font-sans text-[10px] text-[#8c909f]">Sedang Mengunduh</span>
-        <span class="font-sans text-xs font-bold text-[#dee2ee]">{counts.downloading || 0} Berkas</span>
+        <span class="font-sans text-[10px] text-[#8c909f]">{store.t('sidebar.statusDownloading')}</span>
+        <span class="font-sans text-xs font-bold text-[#dee2ee]">{store.t('table.filesCount', { count: counts.downloading || 0 })}</span>
       </div>
     </div>
 
@@ -255,8 +255,8 @@
         <PauseCircle class="w-3.5 h-3.5" />
       </div>
       <div class="flex flex-col">
-        <span class="font-sans text-[10px] text-[#8c909f]">Dijeda</span>
-        <span class="font-sans text-xs font-bold text-[#dee2ee]">{counts.paused || 0} Berkas</span>
+        <span class="font-sans text-[10px] text-[#8c909f]">{store.t('sidebar.statusPaused')}</span>
+        <span class="font-sans text-xs font-bold text-[#dee2ee]">{store.t('table.filesCount', { count: counts.paused || 0 })}</span>
       </div>
     </div>
 
@@ -265,8 +265,8 @@
         <CheckCircle2 class="w-3.5 h-3.5" />
       </div>
       <div class="flex flex-col">
-        <span class="font-sans text-[10px] text-[#8c909f]">Selesai</span>
-        <span class="font-sans text-xs font-bold text-[#4edea3]">{counts.completed || 0} Berkas</span>
+        <span class="font-sans text-[10px] text-[#8c909f]">{store.t('sidebar.statusCompleted')}</span>
+        <span class="font-sans text-xs font-bold text-[#4edea3]">{store.t('table.filesCount', { count: counts.completed || 0 })}</span>
       </div>
     </div>
 
@@ -275,7 +275,7 @@
         <Database class="w-3.5 h-3.5" />
       </div>
       <div class="flex flex-col">
-        <span class="font-sans text-[10px] text-[#8c909f]">Total Volume Unduhan</span>
+        <span class="font-sans text-[10px] text-[#8c909f]">{store.t('bento.totalVolume')}</span>
         <span class="font-sans text-xs font-bold text-[#dee2ee]">{formatBytes(totalVolumeBytes)}</span>
       </div>
     </div>

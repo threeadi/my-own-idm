@@ -13,10 +13,10 @@
       <div class="flex items-center gap-2 min-w-0">
         <Activity class="w-4 h-4 text-[#4cd7f6] shrink-0" />
         <span class="text-xs font-semibold text-[#dee2ee] truncate">
-          Pemantau Multi-Jalur: <span class="text-[#4cd7f6] font-mono">{task.filename}</span>
+          {store.t('segment.monitorTitle')} <span class="text-[#4cd7f6] font-mono">{task.filename}</span>
         </span>
         <span class="px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-[#090e16] text-[#4cd7f6] border border-[#30353e]">
-          {task.connections || 1} {task.connections > 1 ? 'Jalur Paralel' : 'Single Stream'}
+          {task.connections || 1} {task.connections > 1 ? store.t('segment.parallelTracks') : store.t('segment.singleStream')}
         </span>
       </div>
 
@@ -43,11 +43,11 @@
             <!-- Part Header -->
             <div class="flex items-center justify-between text-[10px]">
               <span class="font-mono font-semibold {seg.is_finished ? 'text-[#4edea3]' : 'text-[#8c909f]'}">
-                Bagian #{seg.index + 1}
+                {store.t('segment.partNumber', { num: seg.index + 1 })}
               </span>
               {#if seg.is_finished}
                 <span class="flex items-center gap-0.5 text-[#4edea3] text-[10px] font-sans">
-                  <Check class="w-3 h-3 stroke-[3]" /> Selesai
+                  <Check class="w-3 h-3 stroke-[3]" /> {store.t('common.completed')}
                 </span>
               {:else}
                 <span class="font-mono text-slate-300 text-[10px]">

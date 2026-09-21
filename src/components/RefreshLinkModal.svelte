@@ -107,7 +107,7 @@
           </div>
           <div>
             <div class="flex items-center gap-2">
-              <h2 class="text-sm font-semibold tracking-wide text-white">Perbarui Alamat Unduhan</h2>
+              <h2 class="text-sm font-semibold tracking-wide text-white">{store.t('refresh.titleBar')}</h2>
               <span class="text-[10px] px-1.5 py-0.5 rounded font-mono font-bold bg-[#00e5ff]/15 text-[#00e5ff] border border-[#00e5ff]/30">
                 REFRESH LINK
               </span>
@@ -118,9 +118,9 @@
 
         <button
           onclick={() => store.cancelRefreshLink()}
-          class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-[#252a33] transition"
-          title="Tutup (Esc)"
-          aria-label="Tutup"
+          class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-[#252a33] transition cursor-pointer"
+          title={store.t('common.close')}
+          aria-label={store.t('common.close')}
         >
           <X class="w-4 h-4" />
         </button>
@@ -133,7 +133,7 @@
           <div class="min-w-0">
             <p class="font-medium text-slate-200 truncate font-mono text-[12px]">{task.filename}</p>
             <p class="text-[11px] text-slate-400">
-              Progres Tersimpan: <span class="font-mono text-emerald-400 font-medium">{formatBytes(task.downloaded_bytes)}</span>
+              {store.t('refresh.savedProgress')} <span class="font-mono text-emerald-400 font-medium">{formatBytes(task.downloaded_bytes)}</span>
               {#if task.total_bytes}
                 / {formatBytes(task.total_bytes)} ({getPercent(task).toFixed(1)}%)
               {/if}
@@ -150,7 +150,7 @@
         <div class="mx-5 mt-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-2.5">
           <AlertCircle class="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
           <div>
-            <p class="font-medium">Validasi Tautan Gagal</p>
+            <p class="font-medium">{store.t('refresh.validationFailed')}</p>
             <p class="text-[11px] text-rose-300/80 mt-0.5">{store.refreshError}</p>
           </div>
         </div>
@@ -171,10 +171,10 @@
             </div>
 
             <h3 class="text-sm font-semibold text-white tracking-wide">
-              Menunggu Tautan Baru dari Browser...
+              {store.t('refresh.waitingTitle')}
             </h3>
             <p class="text-xs text-slate-400 mt-1 max-w-sm leading-relaxed">
-              Buka halaman web yang telah dimuat di browser Anda, lalu klik <span class="text-[#00e5ff] font-medium">Download</span> kembali. IDM Turbo akan langsung menangkap link baru dan melanjutkan unduhan.
+              {store.t('refresh.waitingBody')}
             </p>
           </div>
 
@@ -183,35 +183,35 @@
             <div class="flex items-center justify-between text-slate-400 text-[11px]">
               <span class="flex items-center gap-1.5 font-medium text-slate-300">
                 <Globe class="w-3.5 h-3.5 text-[#00e5ff]" />
-                Halaman Sumber Unduhan
+                {store.t('refresh.sourcePage')}
               </span>
               <button
                 onclick={copySourceUrl}
-                class="hover:text-white flex items-center gap-1 transition"
-                title="Salin URL Halaman"
+                class="hover:text-white flex items-center gap-1 transition cursor-pointer"
+                title={store.t('refresh.copyPageUrl')}
               >
                 {#if isCopied}
                   <Check class="w-3.5 h-3.5 text-emerald-400" />
-                  <span class="text-emerald-400">Tersalin</span>
+                  <span class="text-emerald-400">{store.t('common.copied')}</span>
                 {:else}
                   <Copy class="w-3.5 h-3.5" />
-                  <span>Salin URL</span>
+                  <span>{store.t('common.copy')}</span>
                 {/if}
               </button>
             </div>
 
             <div class="p-2 rounded bg-[#090e16] border border-[#252a33] font-mono text-[11px] text-slate-300 truncate select-all">
-              {targetUrl || 'Tidak ada referer URL yang tercatat'}
+              {targetUrl || store.t('refresh.noReferer')}
             </div>
 
             <div class="flex items-center justify-end gap-2 pt-1">
               {#if targetUrl}
                 <button
                   onclick={() => store.openExternalUrl(targetUrl)}
-                  class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#252a33] hover:bg-[#30353e] text-slate-200 font-medium text-xs border border-[#30353e] transition"
+                  class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#252a33] hover:bg-[#30353e] text-slate-200 font-medium text-xs border border-[#30353e] transition cursor-pointer"
                 >
                   <ExternalLink class="w-3.5 h-3.5 text-[#00e5ff]" />
-                  <span>Buka Ulang Halaman di Browser</span>
+                  <span>{store.t('refresh.reopenInBrowser')}</span>
                 </button>
               {/if}
             </div>
@@ -221,9 +221,9 @@
           <div class="border-t border-[#252a33] pt-3">
             <button
               onclick={() => (isManualOpen = !isManualOpen)}
-              class="text-xs text-slate-400 hover:text-[#00e5ff] flex items-center gap-1.5 transition font-medium"
+              class="text-xs text-slate-400 hover:text-[#00e5ff] flex items-center gap-1.5 transition font-medium cursor-pointer"
             >
-              <span>{isManualOpen ? '▼ Sembunyikan input URL manual' : '▶ Atau tempel URL unduhan baru secara manual'}</span>
+              <span>{isManualOpen ? store.t('refresh.hideManual') : store.t('refresh.showManual')}</span>
             </button>
 
             {#if isManualOpen}
@@ -237,9 +237,9 @@
                 <button
                   onclick={handleManualApply}
                   disabled={!manualUrl.trim()}
-                  class="px-3 py-1.5 rounded-lg bg-[#00e5ff]/20 hover:bg-[#00e5ff]/30 text-[#00e5ff] border border-[#00e5ff]/40 text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition"
+                  class="px-3 py-1.5 rounded-lg bg-[#00e5ff]/20 hover:bg-[#00e5ff]/30 text-[#00e5ff] border border-[#00e5ff]/40 text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
                 >
-                  Terapkan
+                  {store.t('refresh.apply')}
                 </button>
               </div>
             {/if}
@@ -251,9 +251,9 @@
               <CheckCircle2 class="w-5 h-5" />
             </div>
             <div class="min-w-0 flex-1">
-              <h3 class="text-sm font-semibold text-white">Tautan Baru Berhasil Ditangkap!</h3>
+              <h3 class="text-sm font-semibold text-white">{store.t('refresh.detectedTitle')}</h3>
               <p class="text-xs text-emerald-200/90 mt-1 leading-relaxed">
-                Alamat unduhan baru dari browser siap diterapkan. Progres sebesar <span class="font-mono font-bold text-white">{formatBytes(task.downloaded_bytes)}</span> akan langsung dilanjutkan tanpa mengulang dari 0%.
+                {store.t('refresh.detectedBody', { bytes: formatBytes(task.downloaded_bytes) })}
               </p>
 
               <div class="mt-2.5 p-2 bg-[#090e16] border border-[#252a33] rounded font-mono text-[11px] text-slate-300 truncate">
@@ -263,13 +263,13 @@
               <div class="mt-3 flex items-center justify-between text-xs text-slate-400">
                 <span class="flex items-center gap-1.5">
                   <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                  Lanjut otomatis dalam <strong class="text-white font-mono text-sm">{countdown}s</strong>
+                  {store.t('refresh.autoResumeIn', { countdown })}
                 </span>
                 <button
                   onclick={cancelAutoResume}
-                  class="hover:text-white underline text-[11px] transition"
+                  class="hover:text-white underline text-[11px] transition cursor-pointer"
                 >
-                  Batal / Ganti Tautan
+                  {store.t('refresh.cancelOrChange')}
                 </button>
               </div>
             </div>
@@ -281,18 +281,18 @@
       <div class="px-5 py-3.5 bg-[#0f141c] border-t border-[#252a33] flex items-center justify-between">
         <button
           onclick={() => store.cancelRefreshLink()}
-          class="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-[#252a33] transition"
+          class="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-[#252a33] transition cursor-pointer"
         >
-          Batal
+          {store.t('common.cancel')}
         </button>
 
         {#if store.refreshDetectedUrl}
           <button
             onclick={handleApply}
-            class="flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold bg-[#00e5ff] hover:bg-[#4cd7f6] text-[#090e16] shadow-lg shadow-[#00e5ff]/25 transition active:scale-95"
+            class="flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold bg-[#00e5ff] hover:bg-[#4cd7f6] text-[#090e16] shadow-lg shadow-[#00e5ff]/25 transition active:scale-95 cursor-pointer"
           >
             <Play class="w-3.5 h-3.5 fill-current" />
-            <span>Lanjutkan Unduhan Sekarang</span>
+            <span>{store.t('refresh.resumeNow')}</span>
           </button>
         {:else}
           <span class="text-[11px] text-slate-500 font-mono flex items-center gap-1.5">

@@ -32,7 +32,7 @@
   let isMoving = $state(false);
   let moveSuccess = $state(false);
   let moveError = $state<string | null>(null);
-  let description = $state("Arsip unduhan IDM Turbo Desktop");
+  let description = $state(store.t('props.defaultDescription'));
   let taskLimiterEnabled = $state(false);
   let taskLimitValue = $state(1);
   let taskLimitUnit = $state<SpeedLimitUnit>('MB/s');
@@ -96,7 +96,7 @@
         directory: true,
         multiple: false,
         defaultPath: task.save_dir || undefined,
-        title: "Pilih Folder Tujuan Pemindahan",
+        title: store.t('addModal.selectFolder'),
       });
 
       if (selected && typeof selected === "string" && selected !== task.save_dir) {
@@ -109,7 +109,7 @@
       }
     } catch (e: any) {
       console.error("Move file error:", e);
-      moveError = e?.message || "Gagal memindahkan berkas.";
+      moveError = e?.message || store.t('props.moveError');
     } finally {
       isMoving = false;
     }
@@ -164,14 +164,14 @@
           <span
             class="text-[10px] font-mono text-slate-400 px-1.5 py-0.5 rounded bg-[#252a33] uppercase"
           >
-            Properti Berkas
+            {store.t('props.title')}
           </span>
         </div>
 
         <button
           onclick={() => store.closePropertiesModal()}
           class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-100 hover:bg-[#252a33] transition-colors cursor-pointer"
-          title="Tutup"
+          title={store.t('common.close')}
           type="button"
         >
           <X class="w-4 h-4" />
@@ -202,14 +202,14 @@
                   class="text-[10px] font-mono font-bold text-[#10b981] bg-[#10b981]/10 border border-[#10b981]/25 px-2 py-0.5 rounded-full flex items-center gap-1"
                 >
                   <CheckCircle2 class="w-3 h-3" />
-                  Selesai Diunduh
+                  {store.t('props.completedBadge')}
                 </span>
               {:else}
                 <span
                   class="text-[10px] font-mono font-bold text-[#00e5ff] bg-[#00e5ff]/10 border border-[#00e5ff]/25 px-2 py-0.5 rounded-full flex items-center gap-1"
                 >
                   <Clock class="w-3 h-3" />
-                  {typeof task.status === 'string' ? task.status.toUpperCase() : 'GAGAL'}
+                  {typeof task.status === 'string' ? task.status.toUpperCase() : store.t('common.failed').toUpperCase()}
                 </span>
               {/if}
               <span class="text-[11px] font-mono text-slate-400">
@@ -229,8 +229,7 @@
               {task.filename}
             </h1>
             <p class="text-xs text-slate-400 truncate mt-1">
-              Disimpan di pustaka lokal • Segmen 1-{task.connections} utuh
-              gabungan sempurna
+              {store.t('props.savedInLocal', { count: task.connections })}
             </p>
           </div>
         </div>
@@ -241,7 +240,7 @@
         >
           <div class="p-2.5 rounded-lg bg-[#171c24] border border-[#252a33]/60 flex flex-col">
             <span class="text-[10px] font-mono text-slate-400 uppercase tracking-wider">
-              Jenis Berkas
+              {store.t('props.fileType')}
             </span>
             <span class="text-xs font-semibold text-white truncate mt-1 uppercase">
               {task.category}
@@ -250,7 +249,7 @@
 
           <div class="p-2.5 rounded-lg bg-[#171c24] border border-[#252a33]/60 flex flex-col">
             <span class="text-[10px] font-mono text-slate-400 uppercase tracking-wider">
-              Ukuran Utuh
+              {store.t('props.fullSize')}
             </span>
             <span class="text-xs font-mono font-bold text-[#4cd7f6] truncate mt-1">
               {formatBytes(task.total_bytes || task.downloaded_bytes)}
@@ -259,19 +258,19 @@
 
           <div class="p-2.5 rounded-lg bg-[#171c24] border border-[#252a33]/60 flex flex-col">
             <span class="text-[10px] font-mono text-slate-400 uppercase tracking-wider">
-              Koneksi Thread
+              {store.t('props.threadConnections')}
             </span>
             <span class="text-xs font-mono font-medium text-white truncate mt-1">
-              {task.connections} Jalur Turbo
+              {store.t('props.tracksTurbo', { count: task.connections })}
             </span>
           </div>
 
           <div class="p-2.5 rounded-lg bg-[#171c24] border border-[#252a33]/60 flex flex-col">
             <span class="text-[10px] font-mono text-slate-400 uppercase tracking-wider">
-              Status Part
+              {store.t('props.partStatus')}
             </span>
             <span class="text-xs font-semibold text-[#10b981] truncate mt-1">
-              {task.status === "completed" ? "100% Selesai" : "Part Cache"}
+              {task.status === "completed" ? store.t('props.completed100') : store.t('props.partCache')}
             </span>
           </div>
         </div>
@@ -284,7 +283,7 @@
               class="font-medium text-white flex items-center gap-1.5"
             >
               <FolderOpen class="w-3.5 h-3.5 text-[#4cd7f6]" />
-              Simpan Ke:
+              {store.t('props.saveTo')}
             </label>
             <span class="font-mono text-[11px] text-slate-400">
               {task.save_dir}
@@ -306,13 +305,13 @@
               type="button"
             >
               <MoveRight class="w-3.5 h-3.5" />
-              <span>{isMoving ? "Memindahkan..." : "Pindah..."}</span>
+              <span>{isMoving ? store.t('props.moving') : store.t('props.move')}</span>
             </button>
           </div>
 
           {#if moveSuccess}
             <div class="text-[11px] text-[#10b981] flex items-center gap-1 font-mono pt-0.5">
-              <Check class="w-3.5 h-3.5" /> Berkas berhasil dipindahkan ke folder baru!
+              <Check class="w-3.5 h-3.5" /> {store.t('props.moveSuccess')}
             </div>
           {/if}
           {#if moveError}
@@ -330,11 +329,11 @@
               class="font-medium text-white flex items-center gap-1.5"
             >
               <Link class="w-3.5 h-3.5 text-[#00e5ff]" />
-              Alamat Unduh (Direct URL):
+              {store.t('props.directUrl')}
             </label>
             {#if copiedUrl}
               <span class="text-[#10b981] text-[11px] font-mono flex items-center gap-1">
-                <Check class="w-3 h-3" /> Tersalin
+                <Check class="w-3 h-3" /> {store.t('common.copied')}
               </span>
             {/if}
           </div>
@@ -350,7 +349,7 @@
             <button
               onclick={handleCopyUrl}
               class="h-9 w-9 rounded-lg bg-[#252a33] hover:bg-[#30353e] text-slate-300 hover:text-white flex items-center justify-center transition-colors shrink-0 cursor-pointer active:scale-95"
-              title="Salin Alamat URL"
+              title={store.t('common.copy')}
               type="button"
             >
               <Copy class="w-4 h-4" />
@@ -365,13 +364,13 @@
             class="text-xs font-medium text-white flex items-center gap-1.5"
           >
             <FileCode class="w-3.5 h-3.5 text-slate-400" />
-            Deskripsi:
+            {store.t('props.description')}
           </label>
           <input
             id="prop-desc"
             type="text"
             bind:value={description}
-            placeholder="Tambahkan catatan untuk arsip ini..."
+            placeholder={store.t('props.descPlaceholder')}
             class="w-full h-9 bg-[#090e16] border border-[#252a33] text-slate-200 text-xs px-3 rounded-lg outline-none focus:border-[#00e5ff] transition-all"
           />
         </div>
@@ -381,7 +380,7 @@
           <div class="flex items-center justify-between">
             <label class="font-medium text-white flex items-center gap-1.5 cursor-pointer">
               <Gauge class="w-3.5 h-3.5 text-[#00e5ff]" />
-              Batas Kecepatan Berkas Ini:
+              {store.t('props.limitThisFile')}
             </label>
             <label class="flex items-center gap-2 cursor-pointer select-none">
               <input
@@ -391,7 +390,7 @@
                 class="w-4 h-4 rounded bg-[#090e16] border-[#252a33] text-[#00e5ff] focus:ring-0 cursor-pointer"
               />
               <span class="text-xs font-mono {taskLimiterEnabled ? 'text-[#00e5ff] font-semibold' : 'text-slate-400'}">
-                {taskLimiterEnabled ? 'Aktif' : 'Mati'}
+                {taskLimiterEnabled ? store.t('common.on') : store.t('common.off')}
               </span>
             </label>
           </div>
@@ -456,7 +455,7 @@
         <div class="p-3.5 rounded-xl bg-[#171c24] border border-[#252a33] flex flex-col gap-2 shadow-sm text-xs">
           <div class="flex flex-col gap-0.5">
             <span class="text-[11px] font-mono text-slate-400">
-              Host / Sumber Web:
+              {store.t('props.hostWeb')}
             </span>
             <span class="text-xs font-medium text-[#4cd7f6] flex items-center gap-1 truncate">
               {hostname}
@@ -477,7 +476,7 @@
           type="button"
         >
           <FolderOpen class="w-3.5 h-3.5 text-[#4cd7f6]" />
-          <span>Buka Folder</span>
+          <span>{store.t('dup.btnOpenFolder')}</span>
         </button>
 
         <div class="flex items-center gap-2">
@@ -486,7 +485,7 @@
             class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-slate-200 hover:bg-[#252a33] transition-all cursor-pointer"
             type="button"
           >
-            Tutup
+            {store.t('common.close')}
           </button>
           <button
             onclick={handleOpenFile}
@@ -494,7 +493,7 @@
             type="button"
           >
             <Play class="w-3.5 h-3.5 fill-current" />
-            <span>Buka Berkas</span>
+            <span>{store.t('dup.btnOpenFile')}</span>
           </button>
         </div>
       </footer>

@@ -243,7 +243,7 @@ export class IdmStore {
             is_hls: false,
             created_at: "2026-09-20 14:10:00",
             completed_at: null,
-            error_message: "HTTP 504 Gateway Timeout / Sambungan Ditolak oleh Host Server",
+            error_message: "HTTP 504 Gateway Timeout / Connection Refused by Host Server",
             segments: [],
             speed_bps: 0,
             eta_seconds: 0,
@@ -348,8 +348,8 @@ export class IdmStore {
         try {
           if (Notification.permission === 'granted') {
             const finishedTask = this.tasks[idx];
-            new Notification('Unduhan Selesai - IDM Turbo', {
-              body: finishedTask ? finishedTask.filename : 'Berkas berhasil diunduh.',
+            new Notification(this.t('notify.completedTitle'), {
+              body: finishedTask ? finishedTask.filename : this.t('notify.completedBody'),
               icon: '/favicon.png',
             });
           }
@@ -373,7 +373,7 @@ export class IdmStore {
     await listen<string>('download-failed', (event) => {
       const id = event.payload;
       const idx = this.tasks.findIndex((t) => t.id === id);
-      let errMsg = 'Gagal mengunduh berkas atau koneksi terputus.';
+      let errMsg = this.t('notify.failedDefault');
       if (idx !== -1) {
         if (typeof this.tasks[idx].status === 'object' && 'failed' in this.tasks[idx].status) {
           errMsg = (this.tasks[idx].status as any).failed;
@@ -627,7 +627,7 @@ export class IdmStore {
       await this.resumeTask(taskId);
     } catch (e: any) {
       console.error('Failed to refresh download URL:', e);
-      this.refreshError = typeof e === 'string' ? e : (e?.message || 'Gagal memperbarui URL');
+      this.refreshError = typeof e === 'string' ? e : (e?.message || this.t('notify.refreshFailedDefault'));
       throw e;
     }
   }

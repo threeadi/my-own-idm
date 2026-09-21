@@ -80,7 +80,7 @@
           <button
             onclick={() => store.closeProgressModal()}
             class="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-slate-200 hover:bg-[#1a2236] transition-colors cursor-pointer"
-            title="Minimalkan"
+            title={store.t('common.minimize')}
             type="button"
           >
             <Minus class="w-3.5 h-3.5" />
@@ -88,7 +88,7 @@
           <button
             onclick={() => store.closeProgressModal()}
             class="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-white hover:bg-red-600/80 transition-colors cursor-pointer"
-            title="Tutup"
+            title={store.t('common.close')}
             type="button"
           >
             <X class="w-3.5 h-3.5" />
@@ -103,7 +103,7 @@
           class="flex items-center gap-1.5 px-3 py-1.5 font-medium transition-all cursor-pointer {activeTab === 'status' ? 'text-[#00e5ff] border-b-2 border-[#00e5ff] bg-[#0f1420]/80 rounded-t-md font-semibold' : 'text-slate-400 hover:text-slate-200 border-b-2 border-transparent'}"
         >
           <Download class="w-3.5 h-3.5" />
-          <span>Status unduhan</span>
+          <span>{store.t('progress.tabStatus')}</span>
         </button>
 
         <button
@@ -111,7 +111,7 @@
           class="flex items-center gap-1.5 px-3 py-1.5 font-medium transition-all cursor-pointer {activeTab === 'limiter' ? 'text-[#00e5ff] border-b-2 border-[#00e5ff] bg-[#0f1420]/80 rounded-t-md font-semibold' : 'text-slate-400 hover:text-slate-200 border-b-2 border-transparent'}"
         >
           <Gauge class="w-3.5 h-3.5" />
-          <span>Pembatas Kecepatan</span>
+          <span>{store.t('progress.tabLimiter')}</span>
         </button>
 
         <button
@@ -119,7 +119,7 @@
           class="flex items-center gap-1.5 px-3 py-1.5 font-medium transition-all cursor-pointer {activeTab === 'options' ? 'text-[#00e5ff] border-b-2 border-[#00e5ff] bg-[#0f1420]/80 rounded-t-md font-semibold' : 'text-slate-400 hover:text-slate-200 border-b-2 border-transparent'}"
         >
           <Settings class="w-3.5 h-3.5" />
-          <span>Opsi saat selesai</span>
+          <span>{store.t('progress.tabOptions')}</span>
         </button>
       </nav>
 
@@ -130,19 +130,19 @@
           <section class="space-y-1.5 text-xs">
             <div class="bg-[#0f1420]/70 p-3 rounded-lg border border-[#1a2236] space-y-1.5">
               <div class="flex items-center justify-between">
-                <span class="text-slate-400">Status:</span>
+                <span class="text-slate-400">{store.t('progress.status')}</span>
                 <span class="font-medium {isCompleted ? 'text-emerald-400' : isDownloading ? 'text-[#00e5ff]' : 'text-amber-400'} capitalize">
-                  {typeof task.status === 'string' ? task.status : 'Gagal'}
+                  {typeof task.status === 'string' ? task.status : store.t('common.failed')}
                 </span>
               </div>
 
               <div class="flex items-center justify-between">
-                <span class="text-slate-400">Ukuran Berkas:</span>
+                <span class="text-slate-400">{store.t('progress.fileSize')}</span>
                 <span class="font-mono text-slate-200">{formatBytes(task.total_bytes)}</span>
               </div>
 
               <div class="flex items-center justify-between">
-                <span class="text-slate-400">Telah Diunduh:</span>
+                <span class="text-slate-400">{store.t('progress.downloaded')}</span>
                 <span class="font-mono text-slate-200">
                   {formatBytes(task.downloaded_bytes)}
                   {#if task.total_bytes}
@@ -152,24 +152,24 @@
               </div>
 
               <div class="flex items-center justify-between">
-                <span class="text-slate-400">Kecepatan Transfer:</span>
+                <span class="text-slate-400">{store.t('progress.transferRate')}</span>
                 <span class="font-mono font-bold text-emerald-400">
                   {isDownloading ? formatSpeed(task.speed_bps) : '0 B/s'}
                 </span>
               </div>
 
               <div class="flex items-center justify-between">
-                <span class="text-slate-400">Waktu Tersisa:</span>
+                <span class="text-slate-400">{store.t('progress.timeLeft')}</span>
                 <span class="font-mono font-medium text-amber-300">
                   {isDownloading ? `± ${formatEta(task.eta_seconds)}` : '--'}
                 </span>
               </div>
 
               <div class="flex items-center justify-between pt-1 border-t border-[#1a2236]/60">
-                <span class="text-slate-400">Kemampuan Melanjutkan:</span>
+                <span class="text-slate-400">{store.t('progress.resumeCapability')}</span>
                 <span class="inline-flex items-center gap-1 text-[#10b981] font-medium">
                   <CheckCircle2 class="w-3.5 h-3.5" />
-                  <span>{task.supports_range ? 'Ya (Didukung Server)' : 'Tidak (Single Stream)'}</span>
+                  <span>{task.supports_range ? store.t('progress.serverSupported') : store.t('progress.singleStream')}</span>
                 </span>
               </div>
             </div>
@@ -178,7 +178,7 @@
           <section class="space-y-2.5 text-xs">
             <div class="bg-[#0f1420]/70 p-3 rounded-lg border border-[#1a2236] space-y-3">
               <div class="flex items-center justify-between">
-                <span class="text-slate-300 font-medium">Tingkat transfer saat ini:</span>
+                <span class="text-slate-300 font-medium">{store.t('progress.currentRate')}</span>
                 <span class="font-mono text-[#00e5ff] font-bold">{formatSpeed(task.speed_bps)}</span>
               </div>
 
@@ -190,12 +190,12 @@
                   onchange={applyTaskLimit}
                   class="w-4 h-4 rounded bg-[#0b0f17] border-[#222d45] text-[#00e5ff] focus:ring-0 cursor-pointer"
                 />
-                <span class="text-slate-200 font-medium">Batasi Kecepatan Khusus Unduhan Ini</span>
+                <span class="text-slate-200 font-medium">{store.t('progress.limitThisDownload')}</span>
               </label>
 
               {#if taskLimiterEnabled}
                 <div class="space-y-2 pl-6 pt-1 border-t border-[#1a2236]/60">
-                  <span class="block text-slate-400 text-[11px]">Batas kecepatan maksimum berkas ini:</span>
+                  <span class="block text-slate-400 text-[11px]">{store.t('progress.maxLimit')}</span>
                   <div class="flex items-center gap-2">
                     <input
                       type="number"
@@ -226,7 +226,7 @@
 
                   <!-- Quick Presets -->
                   <div class="flex items-center gap-1.5 pt-1 flex-wrap">
-                    <span class="text-[10px] text-slate-400">Pilihan Cepat:</span>
+                    <span class="text-[10px] text-slate-400">{store.t('progress.quickChoice')}</span>
                     <button
                       type="button"
                       onclick={() => { taskLimiterEnabled = true; taskLimitValue = 500; taskLimitUnit = 'KB/s'; applyTaskLimit(); }}
@@ -261,9 +261,9 @@
 
               <!-- Global Limiter Status Notice -->
               <div class="pt-2 border-t border-[#1a2236] flex items-center justify-between text-[11px]">
-                <span class="text-slate-400">Batas Global Keseluruhan:</span>
+                <span class="text-slate-400">{store.t('progress.globalLimitStatus')}</span>
                 <span class="font-mono {store.speedLimiterEnabled ? 'text-[#00e5ff] font-semibold' : 'text-slate-400'}">
-                  {store.speedLimiterEnabled ? `Aktif (${store.globalSpeedLimitValue} ${store.globalSpeedLimitUnit})` : 'Tak Terbatas'}
+                  {store.speedLimiterEnabled ? store.t('progress.globalLimitActive', { val: `${store.globalSpeedLimitValue} ${store.globalSpeedLimitUnit}` }) : store.t('progress.unlimited')}
                 </span>
               </div>
             </div>
@@ -272,7 +272,7 @@
           <section class="space-y-2 text-xs">
             <div class="bg-[#0f1420]/70 p-3 rounded-lg border border-[#1a2236] space-y-2">
               <div class="flex items-start gap-1.5 text-slate-300 truncate">
-                <span class="text-slate-400 shrink-0 font-medium">Simpan Ke:</span>
+                <span class="text-slate-400 shrink-0 font-medium">{store.t('props.saveTo')}</span>
                 <span class="font-mono text-[11px] text-[#00e5ff] truncate" title={task.file_path}>
                   {task.file_path}
                 </span>
@@ -284,11 +284,11 @@
                   bind:checked={showCompleteDialog}
                   class="w-4 h-4 rounded bg-[#0b0f17] border-[#222d45] text-[#00e5ff] focus:ring-0 cursor-pointer"
                 />
-                <span class="text-slate-200">Tampilkan dialog unduhan selesai</span>
+                <span class="text-slate-200">{store.t('progress.showCompleteDialog')}</span>
               </label>
 
               <div class="pt-1.5 border-t border-[#1a2236] text-[11px] text-slate-400">
-                <span>Tindakan otomatis pasca unduh:</span>
+                <span>{store.t('progress.postDownloadActions')}</span>
               </div>
 
               <div class="space-y-1 pl-1 text-[11px]">
@@ -298,7 +298,7 @@
                     bind:checked={shutdownAfterComplete}
                     class="w-3.5 h-3.5 rounded bg-[#0b0f17] border-[#222d45] text-[#00e5ff] focus:ring-0 cursor-pointer"
                   />
-                  <span class="text-slate-300">Buka berkas secara otomatis setelah selesai</span>
+                  <span class="text-slate-300">{store.t('progress.autoOpenFile')}</span>
                 </label>
               </div>
             </div>
@@ -311,7 +311,7 @@
         <!-- Bar 1: Main Overall Download Progress -->
         <div class="space-y-1">
           <div class="flex justify-between items-center text-[11px] text-slate-400 px-0.5">
-            <span class="font-medium text-slate-300">Total Progres</span>
+            <span class="font-medium text-slate-300">{store.t('progress.totalProgress')}</span>
             <span class="font-mono text-[#00e5ff] font-bold">{pct.toFixed(1)}%</span>
           </div>
           <div class="relative w-full h-5 bg-[#07090e] rounded border border-[#222d45] overflow-hidden flex items-center">
@@ -332,10 +332,10 @@
           >
             {#if showDetails}
               <ChevronUp class="w-3.5 h-3.5 text-[#00e5ff]" />
-              <span>Sembunyikan detail</span>
+              <span>{store.t('progress.hideDetails')}</span>
             {:else}
               <ChevronDown class="w-3.5 h-3.5 text-[#00e5ff]" />
-              <span>Tampilkan detail</span>
+              <span>{store.t('progress.showDetails')}</span>
             {/if}
           </button>
 
@@ -346,7 +346,7 @@
                 class="px-3 py-1 text-xs font-semibold bg-[#141b2b] hover:bg-[#1a2236] text-amber-300 hover:text-amber-200 rounded border border-[#222d45] transition cursor-pointer"
                 type="button"
               >
-                Jeda
+                {store.t('transfer.btnPause')}
               </button>
             {:else if !isCompleted}
               <button
@@ -354,7 +354,7 @@
                 class="px-3 py-1 text-xs font-semibold bg-[#141b2b] hover:bg-[#1a2236] text-emerald-400 hover:text-emerald-300 rounded border border-[#222d45] transition cursor-pointer"
                 type="button"
               >
-                Mulai
+                {store.t('transfer.btnResume')}
               </button>
             {/if}
 
@@ -363,7 +363,7 @@
               class="px-3 py-1 text-xs font-semibold bg-red-950/40 hover:bg-red-900/60 text-red-200 rounded border border-red-800/60 transition cursor-pointer"
               type="button"
             >
-              Batal
+              {store.t('common.cancel')}
             </button>
           </div>
         </div>
@@ -371,7 +371,7 @@
         <!-- Bar 2: IDM Multi-Connection Segmented Buffer Bar -->
         <div class="space-y-1 pt-1">
           <div class="flex justify-between items-center text-[11px] text-slate-400">
-            <span>Progres posisi mulai dan unduh berdasarkan koneksi</span>
+            <span>{store.t('progress.segmentProgressTitle')}</span>
             <span class="text-[10px] font-mono text-[#00e5ff]">{task.connections || 1} Threads</span>
           </div>
           <div class="w-full h-4 bg-[#07090e] border border-[#222d45] rounded overflow-hidden flex items-center p-0.5 gap-0.5">
@@ -381,7 +381,7 @@
                 {@const segPct = segTotal > 0 ? Math.min(100, Math.max(0, (seg.downloaded_bytes / segTotal) * 100)) : 0}
                 <div
                   class="h-full bg-[#141b2b] rounded-xs overflow-hidden flex-1 relative border border-[#222d45]/50 flex items-center"
-                  title="Bagian #{seg.index + 1}: {segPct.toFixed(0)}% ({formatBytes(seg.downloaded_bytes)} / {formatBytes(segTotal)})"
+                  title={store.t('progress.segmentPart', { num: seg.index + 1, pct: segPct.toFixed(0), dl: formatBytes(seg.downloaded_bytes), total: formatBytes(segTotal) })}
                 >
                   <div
                     class="h-full transition-[width] duration-150 ease-out {seg.is_finished ? 'bg-[#10b981]' : isDownloading && segPct > 0 ? 'bg-gradient-to-r from-blue-700 to-[#00e5ff] shadow-[0_0_6px_rgba(0,229,255,0.4)]' : 'bg-transparent'}"
@@ -408,9 +408,9 @@
             <table class="w-full text-left border-collapse text-xs">
               <thead class="bg-[#0f1420] text-slate-400 border-b border-[#1a2236] text-[10px] uppercase select-none">
                 <tr>
-                  <th class="py-1 px-3 w-12 text-center">N.</th>
-                  <th class="py-1 px-3 w-32">Diunduh</th>
-                  <th class="py-1 px-3">Info</th>
+                  <th class="py-1 px-3 w-12 text-center">{store.t('progress.colNumber')}</th>
+                  <th class="py-1 px-3 w-32">{store.t('progress.colDownloaded')}</th>
+                  <th class="py-1 px-3">{store.t('progress.colInfo')}</th>
                 </tr>
               </thead>
               <tbody class="font-mono divide-y divide-[#141b2b] text-slate-300 text-xs">
@@ -423,17 +423,17 @@
                       {#if isCompleted || seg.is_finished}
                         <span class="inline-flex items-center gap-1 text-[#10b981] font-sans text-[11px]">
                           <Check class="w-3 h-3" />
-                          <span>Selesai.</span>
+                          <span>{store.t('progress.finished')}</span>
                         </span>
                       {:else if isDownloading && seg.downloaded_bytes > 0}
                         <span class="inline-flex items-center gap-1 text-emerald-400 font-sans text-[11px]">
                           <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
-                          <span>Mengunduh... (Aktif)</span>
+                          <span>{store.t('progress.downloadingActive')}</span>
                         </span>
                       {:else}
                         <span class="inline-flex items-center gap-1 text-slate-500 font-sans text-[11px]">
                           <span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
-                          <span>Siap.</span>
+                          <span>{store.t('progress.ready')}</span>
                         </span>
                       {/if}
                     </td>

@@ -132,7 +132,7 @@
           title={store.t('transfer.windowTitle')}
         >
           <Zap class="w-3 h-3 text-[#4cd7f6]" />
-          <span class="hidden xl:inline">Detail Transfer</span>
+          <span class="hidden xl:inline">{store.t('toolbar.transferDetails')}</span>
         </button>
 
         {#if selected.status === 'completed'}

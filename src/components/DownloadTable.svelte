@@ -152,7 +152,7 @@
           value={store.sortBy}
           onchange={(e) => store.setSort(e.currentTarget.value as SortCriterion, store.sortOrder)}
           class="bg-transparent text-xs text-[#dee2ee] font-medium py-1 pr-1.5 pl-0.5 border-none outline-none cursor-pointer focus:ring-0 [&>option]:bg-[#171c24] [&>option]:text-[#dee2ee]"
-          title="Pilih Kriteria Pengurutan"
+          title={store.t('table.sortBy')}
         >
           <option value="date">{store.t('table.sortDate')}</option>
           <option value="size">{store.t('table.sortSize')}</option>
@@ -182,14 +182,14 @@
         <button
           onclick={() => (store.viewMode = 'cards')}
           class="w-6 h-6 flex items-center justify-center rounded transition-colors cursor-pointer {viewMode === 'cards' ? 'bg-[#252a33] text-[#4cd7f6]' : 'text-[#8c909f] hover:text-[#dee2ee]'}"
-          title="Tampilan Kartu Telemetri"
+          title={store.t('table.viewCards')}
         >
           <LayoutGrid class="w-3.5 h-3.5" />
         </button>
         <button
           onclick={() => (store.viewMode = 'table')}
           class="w-6 h-6 flex items-center justify-center rounded transition-colors cursor-pointer {viewMode === 'table' ? 'bg-[#252a33] text-[#4cd7f6]' : 'text-[#8c909f] hover:text-[#dee2ee]'}"
-          title="Tampilan Tabel Rinci"
+          title={store.t('table.viewTable')}
         >
           <List class="w-3.5 h-3.5" />
         </button>
@@ -252,25 +252,25 @@
                   {#if isDownloading}
                     <span class="shrink-0 px-2 py-0.2 rounded-full bg-[#03b5d3]/15 text-[#4cd7f6] font-sans text-[10px] font-semibold flex items-center gap-1 border border-[#03b5d3]/30">
                       <span class="w-1.5 h-1.5 rounded-full bg-[#4cd7f6] animate-ping"></span>
-                      Mengunduh
+                      {store.t('sidebar.statusDownloading')}
                     </span>
                   {:else if isCompleted}
                     <span class="shrink-0 px-2 py-0.2 rounded-full bg-[#10b981]/15 text-[#4edea3] font-sans text-[10px] font-semibold border border-[#10b981]/30">
-                      Selesai
+                      {store.t('sidebar.statusCompleted')}
                     </span>
                   {:else if isPaused}
                     <span class="shrink-0 px-2 py-0.2 rounded-full bg-[#f59e0b]/15 text-[#f59e0b] font-sans text-[10px] font-semibold border border-[#f59e0b]/30">
-                      Dijeda
+                      {store.t('sidebar.statusPaused')}
                     </span>
                   {:else}
                     <span class="shrink-0 px-2 py-0.2 rounded-full bg-[#93000a]/20 text-[#ffb4ab] font-sans text-[10px] font-semibold border border-[#ffb4ab]/30">
-                      Gagal
+                      {store.t('common.failed')}
                     </span>
                   {/if}
 
                   {#if task.speed_limit_bps && task.speed_limit_bps > 0}
                     {@const limitParsed = bpsToUnit(task.speed_limit_bps)}
-                    <span class="shrink-0 px-2 py-0.2 rounded-full bg-[#00e5ff]/10 text-[#00e5ff] font-mono text-[10px] font-semibold border border-[#00e5ff]/30 flex items-center gap-1" title="Batas Kecepatan Berkas Ini">
+                    <span class="shrink-0 px-2 py-0.2 rounded-full bg-[#00e5ff]/10 text-[#00e5ff] font-mono text-[10px] font-semibold border border-[#00e5ff]/30 flex items-center gap-1" title={store.t('table.limitFileTooltip')}>
                       <Gauge class="w-3 h-3 text-[#00e5ff]" />
                       {limitParsed.value} {limitParsed.unit}
                     </span>
@@ -303,7 +303,7 @@
                 <button
                   onclick={(e) => { e.stopPropagation(); store.pauseTask(task.id); }}
                   class="w-7 h-7 rounded-lg bg-[#252a33] text-[#dee2ee] hover:text-[#ffb4ab] hover:bg-[#343942] flex items-center justify-center transition-colors cursor-pointer"
-                  title="Jeda Unduhan"
+                  title={store.t('menu.pause')}
                 >
                   <Pause class="w-3.5 h-3.5 fill-[#dee2ee]" />
                 </button>
@@ -311,14 +311,14 @@
                 <button
                   onclick={(e) => { e.stopPropagation(); store.resumeTask(task.id); }}
                   class="w-7 h-7 rounded-lg bg-[#252a33] text-[#dee2ee] hover:text-[#4edea3] hover:bg-[#343942] flex items-center justify-center transition-colors cursor-pointer"
-                  title="Lanjutkan Unduhan"
+                  title={store.t('menu.resume')}
                 >
                   <Play class="w-3.5 h-3.5 fill-[#dee2ee]" />
                 </button>
                 <button
                   onclick={(e) => { e.stopPropagation(); store.startRefreshLink(task.id); }}
                   class="w-7 h-7 rounded-lg bg-[#252a33] text-[#00e5ff] hover:bg-[#00e5ff]/20 flex items-center justify-center transition-colors cursor-pointer"
-                  title="Perbarui Tautan Unduhan (Refresh Link)"
+                  title={store.t('menu.refreshLink')}
                 >
                   <RotateCw class="w-3.5 h-3.5" />
                 </button>
@@ -327,7 +327,7 @@
               <button
                 onclick={(e) => { e.stopPropagation(); store.openTransferWindow(task.id); }}
                 class="w-7 h-7 rounded-lg bg-[#252a33] text-[#4cd7f6] hover:bg-[#343942] flex items-center justify-center transition-colors cursor-pointer"
-                title="Buka Jendela Rincian Transfer"
+                title={store.t('table.openTransferWindow')}
               >
                 <Zap class="w-3.5 h-3.5" />
               </button>
@@ -335,7 +335,7 @@
               <button
                 onclick={(e) => { e.stopPropagation(); store.openPropertiesModal(task.id); }}
                 class="w-7 h-7 rounded-lg bg-[#252a33] text-[#8c909f] hover:text-[#00e5ff] hover:bg-[#343942] flex items-center justify-center transition-colors cursor-pointer"
-                title="Buka Properti Berkas"
+                title={store.t('menu.properties')}
               >
                 <Info class="w-3.5 h-3.5" />
               </button>
@@ -343,7 +343,7 @@
               <button
                 onclick={(e) => { e.stopPropagation(); store.openFolder(task.file_path); }}
                 class="w-7 h-7 rounded-lg bg-[#252a33] text-[#dee2ee] hover:text-[#4cd7f6] hover:bg-[#343942] flex items-center justify-center transition-colors cursor-pointer"
-                title="Buka Folder Penyimpanan"
+                title={store.t('menu.openFolder')}
               >
                 <FolderOpen class="w-3.5 h-3.5" />
               </button>
@@ -351,7 +351,7 @@
               <button
                 onclick={(e) => { e.stopPropagation(); store.cancelTask(task.id, true); }}
                 class="w-7 h-7 rounded-lg bg-[#252a33] text-[#8c909f] hover:text-[#ffb4ab] hover:bg-[#343942] flex items-center justify-center transition-colors cursor-pointer"
-                title="Hapus Unduhan"
+                title={store.t('menu.delete')}
               >
                 <Trash2 class="w-3.5 h-3.5" />
               </button>
@@ -370,10 +370,10 @@
             <div class="flex items-center justify-between text-[10px] text-[#8c909f] px-0.5">
               <span class="flex items-center gap-1.5 font-sans">
                 <span class="w-1.5 h-1.5 rounded-full {isDownloading ? 'bg-[#4cd7f6] animate-pulse' : isCompleted ? 'bg-[#4edea3]' : 'bg-[#8c909f]'}"></span>
-                {task.connections || 1} Jalur Koneksi Aktif
+                {store.t('table.connectionsActive', { count: task.connections || 1 })}
               </span>
               <span class="font-mono text-[9px] text-[#8c909f]">
-                {task.is_hls ? 'HLS Stream Remux' : 'Multi-Part Parallel'}
+                {task.is_hls ? store.t('table.hlsStream') : store.t('table.multiPart')}
               </span>
             </div>
           </div>
@@ -531,11 +531,11 @@
               <td class="py-2 px-3">
                 <div class="flex items-center gap-1 flex-wrap">
                   <span class="text-[10px] px-1.5 py-0.5 rounded font-medium {task.status === 'completed' ? 'bg-[#10b981]/20 text-[#4edea3]' : task.status === 'downloading' ? 'bg-[#03b5d3]/20 text-[#4cd7f6]' : 'bg-[#252a33] text-[#8c909f]'}">
-                    {task.status === 'downloading' ? 'Mengunduh' : task.status === 'completed' ? 'Selesai' : 'Dijeda'}
+                    {task.status === 'downloading' ? store.t('sidebar.statusDownloading') : task.status === 'completed' ? store.t('sidebar.statusCompleted') : task.status === 'paused' ? store.t('sidebar.statusPaused') : store.t('common.failed')}
                   </span>
                   {#if task.speed_limit_bps && task.speed_limit_bps > 0}
                     {@const lp = bpsToUnit(task.speed_limit_bps)}
-                    <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#00e5ff]/10 text-[#00e5ff] border border-[#00e5ff]/30 flex items-center gap-0.5" title="Batas Kecepatan: {lp.value} {lp.unit}">
+                    <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#00e5ff]/10 text-[#00e5ff] border border-[#00e5ff]/30 flex items-center gap-0.5" title="{store.t('bento.speedLimit')}: {lp.value} {lp.unit}">
                       <Gauge class="w-2.5 h-2.5 text-[#00e5ff]" />
                       {lp.value} {lp.unit}
                     </span>
@@ -548,24 +548,24 @@
                     <button
                       onclick={(e) => { e.stopPropagation(); store.startRefreshLink(task.id); }}
                       class="px-2 py-0.5 rounded bg-[#00e5ff]/15 hover:bg-[#00e5ff]/25 text-[#00e5ff] text-[10px] font-semibold cursor-pointer flex items-center gap-1"
-                      title="Perbarui Tautan Unduhan"
+                      title={store.t('menu.refreshLink')}
                     >
                       <RotateCw class="w-3 h-3" />
-                      <span>Refresh</span>
+                      <span>{store.t('common.refresh')}</span>
                     </button>
                   {/if}
                   <button
                     onclick={(e) => { e.stopPropagation(); store.openPropertiesModal(task.id); }}
                     class="px-2 py-0.5 rounded bg-[#252a33] text-slate-300 hover:text-[#00e5ff] hover:bg-[#343942] text-[10px] font-semibold cursor-pointer"
-                    title="Properti Berkas"
+                    title={store.t('menu.properties')}
                   >
-                    Properti
+                    {store.t('table.btnProperties')}
                   </button>
                   <button
                     onclick={(e) => { e.stopPropagation(); store.openTransferWindow(task.id); }}
                     class="px-2 py-0.5 rounded bg-[#252a33] text-[#4cd7f6] hover:bg-[#343942] text-[10px] font-semibold cursor-pointer"
                   >
-                    Detail
+                    {store.t('table.btnDetails')}
                   </button>
                 </div>
               </td>
@@ -588,8 +588,8 @@
     >
       <div class="px-3 py-1.5 border-b border-[#252a33] mb-1">
         <p class="font-mono text-[11px] font-semibold text-white truncate">{contextTask.filename}</p>
-        <p class="text-[10px] text-slate-400 font-mono capitalize">
-          Status: {typeof contextTask.status === 'string' ? contextTask.status : 'Gagal'}
+        <p class="text-[10px] text-slate-400 font-mono">
+          {store.t('table.colStatus')}: {contextTask.status === 'downloading' ? store.t('sidebar.statusDownloading') : contextTask.status === 'completed' ? store.t('sidebar.statusCompleted') : contextTask.status === 'paused' ? store.t('sidebar.statusPaused') : store.t('common.failed')}
         </p>
       </div>
 

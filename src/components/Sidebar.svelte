@@ -101,7 +101,7 @@
         >
           <span class="flex items-center gap-2">
             <CalendarClock class="w-3.5 h-3.5 text-[#4cd7f6]" />
-            <span>Antrean & Jadwal</span>
+            <span>{store.t('sidebar.queueSchedule')}</span>
           </span>
           <span class="w-2 h-2 rounded-full bg-[#4edea3] shadow-[0_0_6px_rgba(78,222,163,0.5)]"></span>
         </button>
@@ -113,15 +113,15 @@
   <div class="p-2.5 rounded-xl bg-[#252a33]/60 border border-[#30353e]/80 flex items-center justify-between mt-3">
     <div class="flex flex-col">
       <span class="font-sans text-[9px] text-[#8c909f] uppercase tracking-wider font-semibold">
-        Status Mesin
+        {store.t('sidebar.engineStatus')}
       </span>
       <span class="font-sans text-[11px] font-semibold text-[#4edea3] flex items-center gap-1.5 mt-0.5">
         <span class="w-1.5 h-1.5 rounded-full {store.totalSpeedBps > 0 ? 'bg-[#4edea3] animate-ping' : 'bg-[#4cd7f6]'}"></span>
-        {store.totalSpeedBps > 0 ? 'Multi-Thread Aktif' : 'Multi-Thread Siap'}
+        {store.totalSpeedBps > 0 ? store.t('sidebar.engineActive') : store.t('sidebar.engineReady')}
       </span>
     </div>
     <span class="font-mono text-xs text-[#4cd7f6] bg-[#090e16] px-2 py-0.5 rounded border border-[#30353e]">
-      {store.settings.defaultConnections} Bagian
+      {store.t('sidebar.segmentsCount', { count: store.settings.defaultConnections })}
     </span>
   </div>
 </aside>

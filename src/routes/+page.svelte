@@ -24,7 +24,7 @@
         store.openOutcomeModal(
           'mock-3',
           'failed',
-          'HTTP 504 Gateway Timeout / Sambungan Ditolak oleh Host Server'
+          'HTTP 504 Gateway Timeout / Connection Refused by Host Server'
         );
       } else if (urlParams.get('test_refresh') === 'listening') {
         store.startRefreshLink('mock-4');
