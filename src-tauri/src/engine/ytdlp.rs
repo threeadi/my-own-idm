@@ -108,8 +108,6 @@ impl YtDlpRunner {
 
         cmd.arg("--no-warnings")
             .arg("--no-playlist")
-            .arg("--extractor-args")
-            .arg("youtube:player_client=android,web")
             .arg("--print")
             .arg("%(title)s\t%(filesize,filesize_approx)s")
             .arg(url)
@@ -221,8 +219,6 @@ impl YtDlpRunner {
                 .arg("mp4")
                 .arg("--concurrent-fragments")
                 .arg("4")
-                .arg("--extractor-args")
-                .arg("youtube:player_client=android,web")
                 .arg("--progress-template")
                 .arg("IDM_PROGRESS:%(progress.downloaded_bytes)s")
                 .arg("-o")
@@ -231,7 +227,7 @@ impl YtDlpRunner {
             if let Some(ref hdrs) = headers {
                 for (k, v) in hdrs {
                     let k_lower = k.to_ascii_lowercase();
-                    if k_lower == "cookie" || k_lower == "referer" || k_lower == "user-agent" {
+                    if k_lower == "referer" && !v.is_empty() {
                         cmd.arg("--add-header").arg(format!("{}: {}", k, v));
                     }
                 }
