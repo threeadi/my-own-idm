@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -6,6 +7,9 @@ use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::mpsc::Sender;
+
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 use crate::engine::limiter::TokenBucketRateLimiter;
 use crate::engine::types::{format_bytes, DownloadCategory, ProbeResult};
@@ -99,8 +103,13 @@ impl YtDlpRunner {
         let yt_dlp_exe = Self::find_yt_dlp()?;
 
         let mut cmd = Command::new(&yt_dlp_exe);
+        #[cfg(windows)]
+        cmd.creation_flags(CREATE_NO_WINDOW);
+
         cmd.arg("--no-warnings")
             .arg("--no-playlist")
+            .arg("--extractor-args")
+            .arg("youtube:player_client=android,web")
             .arg("--print")
             .arg("%(title)s\t%(filesize,filesize_approx)s")
             .arg(url)
@@ -183,6 +192,7 @@ impl YtDlpRunner {
     pub async fn run_download(
         url: String,
         output_file: String,
+        headers: Option<HashMap<String, String>>,
         cancel_flag: Arc<AtomicBool>,
         progress_tx: Sender<(usize, u64)>,
         task_limiter: Option<Arc<TokenBucketRateLimiter>>,
@@ -198,6 +208,9 @@ impl YtDlpRunner {
             }
 
             let mut cmd = Command::new(&yt_dlp_exe);
+            #[cfg(windows)]
+            cmd.creation_flags(CREATE_NO_WINDOW);
+
             cmd.arg("--no-warnings")
                 .arg("--no-playlist")
                 .arg("--newline")
@@ -207,11 +220,22 @@ impl YtDlpRunner {
                 .arg("--merge-output-format")
                 .arg("mp4")
                 .arg("--concurrent-fragments")
-                .arg("8")
+                .arg("4")
+                .arg("--extractor-args")
+                .arg("youtube:player_client=android,web")
                 .arg("--progress-template")
                 .arg("IDM_PROGRESS:%(progress.downloaded_bytes)s")
                 .arg("-o")
                 .arg(&output_file);
+
+            if let Some(ref hdrs) = headers {
+                for (k, v) in hdrs {
+                    let k_lower = k.to_ascii_lowercase();
+                    if k_lower == "cookie" || k_lower == "referer" || k_lower == "user-agent" {
+                        cmd.arg("--add-header").arg(format!("{}: {}", k, v));
+                    }
+                }
+            }
 
             if let Some(rate) = current_rate {
                 if rate > 0 {
@@ -232,7 +256,25 @@ impl YtDlpRunner {
                 .map_err(|e| format!("Failed to spawn yt-dlp: {}", e))?;
 
             let stdout = child.stdout.take().ok_or("Failed to capture stdout")?;
+            let stderr = child.stderr.take();
             let reader = BufReader::new(stdout).lines();
+
+            let err_task = tokio::spawn(async move {
+                let mut last_lines = Vec::new();
+                if let Some(err) = stderr {
+                    let mut lines = BufReader::new(err).lines();
+                    while let Ok(Some(line)) = lines.next_line().await {
+                        let trimmed = line.trim();
+                        if !trimmed.is_empty() {
+                            if last_lines.len() >= 10 {
+                                last_lines.remove(0);
+                            }
+                            last_lines.push(trimmed.to_string());
+                        }
+                    }
+                }
+                last_lines.join(" | ")
+            });
 
             let task_notify = task_limiter.as_ref().map(|l| l.get_notify());
             let global_notify = global_limiter.as_ref().map(|l| l.get_notify());
@@ -257,22 +299,31 @@ impl YtDlpRunner {
                         .await
                         .map_err(|e| format!("Failed to wait for yt-dlp: {}", e))?;
 
+                    let stderr_output = err_task.await.unwrap_or_default();
+
                     if status.success() {
                         return Ok(());
                     } else {
-                        return Err("yt-dlp download failed".to_string());
+                        let msg = if !stderr_output.is_empty() {
+                            format!("yt-dlp error: {}", stderr_output)
+                        } else {
+                            "yt-dlp download failed".to_string()
+                        };
+                        crate::log_error!("ytdlp", "{}", msg);
+                        return Err(msg);
                     }
                 }
                 StreamOutcome::Cancelled => {
                     let _ = child.kill().await;
+                    let _ = err_task.await;
                     return Ok(());
                 }
                 StreamOutcome::RateChanged(new_rate) => {
                     crate::log_info!("ytdlp", "Speed limit dynamically changed to {:?} bps, restarting stream with resume", new_rate);
                     let _ = child.kill().await;
                     let _ = child.wait().await;
+                    let _ = err_task.await;
                     current_rate = new_rate;
-                    // Debounce slightly in case user is actively clicking presets
                     tokio::time::sleep(Duration::from_millis(150)).await;
                     continue;
                 }
@@ -604,6 +655,7 @@ mod tests {
         let res = YtDlpRunner::run_download(
             "http://127.0.0.1:9999/dummy".to_string(),
             out,
+            None,
             cancel,
             tx,
             Some(Arc::new(TokenBucketRateLimiter::new(500_000))),

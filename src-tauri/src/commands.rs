@@ -116,7 +116,9 @@ pub fn build_open_in_folder_command(path: &str) -> std::process::Command {
 pub fn build_open_file_command(path: &str) -> std::process::Command {
     #[cfg(target_os = "windows")]
     {
+        use std::os::windows::process::CommandExt;
         let mut cmd = std::process::Command::new("cmd");
+        cmd.creation_flags(0x08000000);
         cmd.args(["/C", "start", "", path]);
         cmd
     }
@@ -216,7 +218,9 @@ pub async fn move_downloaded_file(
 pub fn build_open_url_command(url: &str) -> std::process::Command {
     #[cfg(target_os = "windows")]
     {
+        use std::os::windows::process::CommandExt;
         let mut cmd = std::process::Command::new("cmd");
+        cmd.creation_flags(0x08000000);
         cmd.args(["/C", "start", "", url]);
         cmd
     }

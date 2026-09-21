@@ -271,7 +271,6 @@ fn trigger_download_popup(app: &AppHandle, val: &serde_json::Value) {
 
     // 2. Focus, unminimize, and bring window to front over Chrome
     if let Some(win) = app.get_webview_window("main") {
-        let _ = win.emit("browser-download-requested", val);
         let _ = win.show();
         let _ = win.unminimize();
         let _ = win.set_always_on_top(true);

@@ -673,6 +673,8 @@ impl DownloadManager {
         let is_youtube = effective_url.contains("youtube.com") || effective_url.contains("youtu.be");
         let is_stream = is_youtube || task.is_hls || effective_url.contains(".m3u8");
 
+        let mut stream_err_rx = None;
+
         if is_stream {
             // Stream mode via YtDlpRunner (handles YouTube + HLS m3u8 streams with ffmpeg remuxing)
             let out_file = task.file_path.clone();
@@ -681,20 +683,23 @@ impl DownloadManager {
             let tx_clone = tx.clone();
             let task_limiter_clone = task_limiter.clone();
             let global_limiter_clone = global_limiter.clone();
+            let headers_clone = custom_headers.clone();
+
+            let (stream_err_tx, err_rx) = tokio::sync::oneshot::channel();
+            stream_err_rx = Some(err_rx);
 
             tauri::async_runtime::spawn(async move {
                 let res = crate::engine::ytdlp::YtDlpRunner::run_download(
                     url_clone,
                     out_file,
+                    headers_clone,
                     cancel_clone,
                     tx_clone,
                     task_limiter_clone,
                     global_limiter_clone,
                 )
                 .await;
-                if let Err(e) = res {
-                    eprintln!("Stream runner error: {}", e);
-                }
+                let _ = stream_err_tx.send(res);
             });
         } else {
             // Regular Multi-part or Single-part Download mode
@@ -815,13 +820,27 @@ impl DownloadManager {
             .map(|m| m.len())
             .unwrap_or(0);
 
-        let outcome = evaluate_task_outcome(
-            task.total_bytes,
-            task.downloaded_bytes,
-            file_len,
-            is_stream,
-            is_cancelled,
-        );
+        let stream_err = if let Some(ref mut rx) = stream_err_rx {
+            rx.try_recv().ok().and_then(|r| r.err())
+        } else {
+            None
+        };
+
+        let outcome = if let Some(err) = stream_err {
+            if is_cancelled {
+                Err("paused".to_string())
+            } else {
+                Err(err)
+            }
+        } else {
+            evaluate_task_outcome(
+                task.total_bytes,
+                task.downloaded_bytes,
+                file_len,
+                is_stream,
+                is_cancelled,
+            )
+        };
 
         match outcome {
             Ok(final_bytes) => {

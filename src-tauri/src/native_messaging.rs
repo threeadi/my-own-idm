@@ -126,48 +126,51 @@ pub fn register_native_messaging_manifests(exe_path: &Path) -> Result<(), String
 
         // 3. Write Windows Registry keys
         use std::process::Command;
+        #[cfg(windows)]
+        use std::os::windows::process::CommandExt;
+
+        let run_reg = |args: &[&str]| {
+            let mut cmd = Command::new("reg");
+            #[cfg(windows)]
+            cmd.creation_flags(0x08000000);
+            let _ = cmd.args(args).output();
+        };
 
         // Chrome
-        let _ = Command::new("reg")
-            .args([
-                "add",
-                &format!(r"HKCU\Software\Google\Chrome\NativeMessagingHosts\{}", HOST_NAME),
-                "/ve",
-                "/t",
-                "REG_SZ",
-                "/d",
-                &chrome_manifest_path.to_string_lossy(),
-                "/f",
-            ])
-            .output();
+        run_reg(&[
+            "add",
+            &format!(r"HKCU\Software\Google\Chrome\NativeMessagingHosts\{}", HOST_NAME),
+            "/ve",
+            "/t",
+            "REG_SZ",
+            "/d",
+            &chrome_manifest_path.to_string_lossy(),
+            "/f",
+        ]);
 
         // Edge
-        let _ = Command::new("reg")
-            .args([
-                "add",
-                &format!(r"HKCU\Software\Microsoft\Edge\NativeMessagingHosts\{}", HOST_NAME),
-                "/ve",
-                "/t",
-                "REG_SZ",
-                "/d",
-                &chrome_manifest_path.to_string_lossy(),
-                "/f",
-            ])
-            .output();
+        run_reg(&[
+            "add",
+            &format!(r"HKCU\Software\Microsoft\Edge\NativeMessagingHosts\{}", HOST_NAME),
+            "/ve",
+            "/t",
+            "REG_SZ",
+            "/d",
+            &chrome_manifest_path.to_string_lossy(),
+            "/f",
+        ]);
 
         // Firefox
-        let _ = Command::new("reg")
-            .args([
-                "add",
-                &format!(r"HKCU\Software\Mozilla\NativeMessagingHosts\{}", HOST_NAME),
-                "/ve",
-                "/t",
-                "REG_SZ",
-                "/d",
-                &firefox_manifest_path.to_string_lossy(),
-                "/f",
-            ])
-            .output();
+        run_reg(&[
+            "add",
+            &format!(r"HKCU\Software\Mozilla\NativeMessagingHosts\{}", HOST_NAME),
+            "/ve",
+            "/t",
+            "REG_SZ",
+            "/d",
+            &firefox_manifest_path.to_string_lossy(),
+            "/f",
+        ]);
 
         Ok(())
     }

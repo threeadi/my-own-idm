@@ -41,6 +41,7 @@
   let autoOpenFile = $state<boolean>(false);
   let rememberFolder = $state<boolean>(true);
   let isCheckingDuplicate = $state<boolean>(false);
+  let lastProbedUrl = $state<string>('');
 
   $effect(() => {
     if (store.isAddModalOpen) {
@@ -55,10 +56,14 @@
         if (store.initialFilename) {
           filename = store.initialFilename;
         }
-        probeUrl(store.initialHeaders);
+        if (url.trim() !== lastProbedUrl) {
+          probeUrl(store.initialHeaders);
+        }
       } else if (url) {
         checkDuplicate();
       }
+    } else {
+      lastProbedUrl = '';
     }
   });
 
@@ -79,7 +84,12 @@
   }
 
   async function probeUrl(customHeaders?: any) {
-    if (!url.trim()) return;
+    const trimmedUrl = url.trim();
+    if (!trimmedUrl) return;
+    if (isProbing) return;
+    if (trimmedUrl === lastProbedUrl && probeResult) return;
+
+    lastProbedUrl = trimmedUrl;
     isProbing = true;
     probeError = null;
     probeResult = null;
@@ -87,7 +97,7 @@
     const headers = customHeaders || store.initialHeaders || null;
 
     try {
-      const res = await invoke<ProbeResult>('probe_url', { url: url.trim(), headers });
+      const res = await invoke<ProbeResult>('probe_url', { url: trimmedUrl, headers });
       probeResult = res;
       if (!filename || filename === 'download.bin') {
         filename = res.filename;
