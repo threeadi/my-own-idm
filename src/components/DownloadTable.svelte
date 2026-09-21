@@ -483,7 +483,7 @@
                 {/if}
               </div>
             </th>
-            <th class="py-2.5 px-3 w-32 text-right">{store.t('table.colActions')}</th>
+            <th class="py-2.5 px-3 w-48 text-right">{store.t('table.colActions')}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-[#252a33]/60 font-sans">
@@ -491,6 +491,9 @@
             {@const isSelected = store.selectedTaskId === task.id}
             {@const Icon = getFileIcon(task.category)}
             {@const pct = getPercent(task)}
+            {@const isDownloading = task.status === 'downloading'}
+            {@const isCompleted = task.status === 'completed'}
+            {@const isPaused = task.status === 'paused'}
             <tr
               onclick={() => handleTaskClick(task)}
               ondblclick={() => handleTaskDoubleClick(task)}
@@ -515,7 +518,7 @@
                 <div class="space-y-1">
                   <div class="w-full bg-[#090e16] rounded-full h-1.5 overflow-hidden">
                     <div
-                      class="h-full rounded-full transition-all {task.status === 'completed' ? 'bg-[#10b981]' : task.status === 'downloading' ? 'bg-[#00e5ff]' : 'bg-[#30353e]'}"
+                      class="h-full rounded-full transition-all {isCompleted ? 'bg-[#10b981]' : isDownloading ? 'bg-[#00e5ff]' : 'bg-[#30353e]'}"
                       style="width: {pct}%"
                     ></div>
                   </div>
@@ -523,15 +526,15 @@
                 </div>
               </td>
               <td class="py-2 px-3 font-mono text-[11px] text-[#4edea3]">
-                {task.status === 'downloading' ? formatSpeed(task.speed_bps) : '--'}
+                {isDownloading ? formatSpeed(task.speed_bps) : '--'}
               </td>
               <td class="py-2 px-3 font-mono text-[11px] text-[#8c909f]">
-                {task.status === 'downloading' ? formatEta(task.eta_seconds) : '--'}
+                {isDownloading ? formatEta(task.eta_seconds) : '--'}
               </td>
               <td class="py-2 px-3">
                 <div class="flex items-center gap-1 flex-wrap">
-                  <span class="text-[10px] px-1.5 py-0.5 rounded font-medium {task.status === 'completed' ? 'bg-[#10b981]/20 text-[#4edea3]' : task.status === 'downloading' ? 'bg-[#03b5d3]/20 text-[#4cd7f6]' : 'bg-[#252a33] text-[#8c909f]'}">
-                    {task.status === 'downloading' ? store.t('sidebar.statusDownloading') : task.status === 'completed' ? store.t('sidebar.statusCompleted') : task.status === 'paused' ? store.t('sidebar.statusPaused') : store.t('common.failed')}
+                  <span class="text-[10px] px-1.5 py-0.5 rounded font-medium {isCompleted ? 'bg-[#10b981]/20 text-[#4edea3]' : isDownloading ? 'bg-[#03b5d3]/20 text-[#4cd7f6]' : isPaused ? 'bg-[#f59e0b]/20 text-[#f59e0b]' : 'bg-[#93000a]/20 text-[#ffb4ab]'}">
+                    {isDownloading ? store.t('sidebar.statusDownloading') : isCompleted ? store.t('sidebar.statusCompleted') : isPaused ? store.t('sidebar.statusPaused') : store.t('common.failed')}
                   </span>
                   {#if task.speed_limit_bps && task.speed_limit_bps > 0}
                     {@const lp = bpsToUnit(task.speed_limit_bps)}
@@ -544,28 +547,61 @@
               </td>
               <td class="py-2 px-3 text-right">
                 <div class="flex items-center justify-end gap-1">
-                  {#if task.status !== 'completed'}
+                  {#if isDownloading}
+                    <button
+                      onclick={(e) => { e.stopPropagation(); store.pauseTask(task.id); }}
+                      class="w-6.5 h-6.5 rounded-lg bg-[#252a33] text-[#dee2ee] hover:text-[#ffb4ab] hover:bg-[#343942] flex items-center justify-center transition-colors cursor-pointer"
+                      title={store.t('menu.pause')}
+                    >
+                      <Pause class="w-3 h-3 fill-[#dee2ee]" />
+                    </button>
+                  {:else if !isCompleted}
+                    <button
+                      onclick={(e) => { e.stopPropagation(); store.resumeTask(task.id); }}
+                      class="w-6.5 h-6.5 rounded-lg bg-[#252a33] text-[#dee2ee] hover:text-[#4edea3] hover:bg-[#343942] flex items-center justify-center transition-colors cursor-pointer"
+                      title={store.t('menu.resume')}
+                    >
+                      <Play class="w-3 h-3 fill-[#dee2ee]" />
+                    </button>
                     <button
                       onclick={(e) => { e.stopPropagation(); store.startRefreshLink(task.id); }}
-                      class="px-2 py-0.5 rounded bg-[#00e5ff]/15 hover:bg-[#00e5ff]/25 text-[#00e5ff] text-[10px] font-semibold cursor-pointer flex items-center gap-1"
+                      class="w-6.5 h-6.5 rounded-lg bg-[#252a33] text-[#00e5ff] hover:bg-[#00e5ff]/20 flex items-center justify-center transition-colors cursor-pointer"
                       title={store.t('menu.refreshLink')}
                     >
                       <RotateCw class="w-3 h-3" />
-                      <span>{store.t('common.refresh')}</span>
                     </button>
                   {/if}
-                  <button
-                    onclick={(e) => { e.stopPropagation(); store.openPropertiesModal(task.id); }}
-                    class="px-2 py-0.5 rounded bg-[#252a33] text-slate-300 hover:text-[#00e5ff] hover:bg-[#343942] text-[10px] font-semibold cursor-pointer"
-                    title={store.t('menu.properties')}
-                  >
-                    {store.t('table.btnProperties')}
-                  </button>
+
                   <button
                     onclick={(e) => { e.stopPropagation(); store.openTransferWindow(task.id); }}
-                    class="px-2 py-0.5 rounded bg-[#252a33] text-[#4cd7f6] hover:bg-[#343942] text-[10px] font-semibold cursor-pointer"
+                    class="w-6.5 h-6.5 rounded-lg bg-[#252a33] text-[#4cd7f6] hover:bg-[#343942] flex items-center justify-center transition-colors cursor-pointer"
+                    title={store.t('table.openTransferWindow')}
                   >
-                    {store.t('table.btnDetails')}
+                    <Zap class="w-3 h-3" />
+                  </button>
+
+                  <button
+                    onclick={(e) => { e.stopPropagation(); store.openPropertiesModal(task.id); }}
+                    class="w-6.5 h-6.5 rounded-lg bg-[#252a33] text-[#8c909f] hover:text-[#00e5ff] hover:bg-[#343942] flex items-center justify-center transition-colors cursor-pointer"
+                    title={store.t('menu.properties')}
+                  >
+                    <Info class="w-3 h-3" />
+                  </button>
+
+                  <button
+                    onclick={(e) => { e.stopPropagation(); store.openFolder(task.file_path); }}
+                    class="w-6.5 h-6.5 rounded-lg bg-[#252a33] text-[#dee2ee] hover:text-[#4cd7f6] hover:bg-[#343942] flex items-center justify-center transition-colors cursor-pointer"
+                    title={store.t('menu.openFolder')}
+                  >
+                    <FolderOpen class="w-3 h-3" />
+                  </button>
+
+                  <button
+                    onclick={(e) => { e.stopPropagation(); store.cancelTask(task.id, true); }}
+                    class="w-6.5 h-6.5 rounded-lg bg-[#252a33] text-[#8c909f] hover:text-[#ffb4ab] hover:bg-[#343942] flex items-center justify-center transition-colors cursor-pointer"
+                    title={store.t('menu.delete')}
+                  >
+                    <Trash2 class="w-3 h-3" />
                   </button>
                 </div>
               </td>
