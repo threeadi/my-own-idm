@@ -197,7 +197,7 @@
             class="w-5 h-5 rounded-md object-contain shadow-[0_0_8px_rgba(0,229,255,0.3)]"
           />
           <span class="font-sans text-xs sm:text-sm font-semibold text-[#dee2ee]">
-            Tambah Unduhan Baru - IDM Turbo
+            {store.t('addModal.title')}
           </span>
           <span class="px-1.5 py-0.2 rounded bg-[#090e16] text-[#4edea3] font-mono text-[10px] font-semibold">
             Akrilik {formatDisplayVersion(store.appVersion)}
@@ -230,7 +230,7 @@
           <div class="flex items-center justify-between text-xs">
             <label class="font-sans text-[11px] uppercase tracking-wider text-[#8c909f] flex items-center gap-1.5 font-semibold" for="modal-url">
               <Link class="w-3 h-3 text-[#4cd7f6]" />
-              Tautan Sumber (URL)
+              {store.t('addModal.urlLabel')}
             </label>
             <button
               onclick={pasteFromClipboard}
@@ -420,7 +420,7 @@
             class="h-8 px-3 rounded-lg bg-[#1b2028] text-[#dee2ee] hover:bg-[#343942] hover:text-[#adc6ff] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer border border-[#30353e]"
             type="button"
           >
-            <span>Masukkan Antrean</span>
+            <span>{store.t('addModal.btnDownloadLater')}</span>
           </button>
         </div>
 
@@ -430,7 +430,7 @@
             class="h-8 px-3 rounded-lg text-[#8c909f] hover:text-[#dee2ee] hover:bg-[#252a33] text-xs font-medium transition-colors cursor-pointer"
             type="button"
           >
-            Batal
+            {store.t('common.cancel')}
           </button>
           <button
             onclick={() => handleStartDownload(true)}
@@ -443,7 +443,7 @@
               <span>Memproses...</span>
             {:else}
               <Download class="w-3.5 h-3.5" />
-              <span>Mulai Download Sekarang</span>
+              <span>{store.t('addModal.btnDownloadNow')}</span>
             {/if}
           </button>
         </div>

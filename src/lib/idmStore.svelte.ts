@@ -1,8 +1,9 @@
 import { invoke, isTauri as coreIsTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import type { DownloadCategory, DownloadTask, SpeedMetrics, SpeedLimitUnit, GlobalSpeedLimitConfig, AppSettings, DuplicateCheckResult, SortCriterion, SortOrder } from './types';
+import type { DownloadCategory, DownloadTask, SpeedMetrics, SpeedLimitUnit, GlobalSpeedLimitConfig, AppSettings, DuplicateCheckResult, SortCriterion, SortOrder, SupportedLanguage } from './types';
 import { unitToBps, bpsToUnit, DEFAULT_APP_SETTINGS, matchesDownloadExtension } from './types';
 import { getCompileTimeVersion, fetchRuntimeAppVersion } from './version';
+import { getTranslation, type TranslationKey } from './i18n';
 
 export function isTauri(): boolean {
   if (typeof window === 'undefined') return false;
@@ -549,6 +550,14 @@ export class IdmStore {
     this.sortBy = criteria[nextIdx];
   }
 
+  t(key: TranslationKey, params?: Record<string, string | number>): string {
+    return getTranslation(this.settings.language, key, params);
+  }
+
+  async setLanguage(lang: SupportedLanguage) {
+    await this.saveAppSettings({ language: lang });
+  }
+
   async moveTaskFile(taskId: string, newDir: string) {
     if (!isTauri()) return;
     try {
@@ -798,6 +807,9 @@ export class IdmStore {
 
   applyRawSettings(raw: Record<string, string>) {
     const s = { ...this.settings };
+    if ('language' in raw && (raw.language === 'id' || raw.language === 'en')) {
+      s.language = raw.language;
+    }
     if ('autoStartWindows' in raw) s.autoStartWindows = raw.autoStartWindows === 'true';
     if ('mediaPanelOverlay' in raw) s.mediaPanelOverlay = raw.mediaPanelOverlay === 'true';
     if ('clipboardAutoCapture' in raw) s.clipboardAutoCapture = raw.clipboardAutoCapture === 'true';
@@ -830,6 +842,7 @@ export class IdmStore {
 
   settingsToRaw(s: AppSettings): Record<string, string> {
     return {
+      language: s.language || 'id',
       autoStartWindows: String(s.autoStartWindows),
       mediaPanelOverlay: String(s.mediaPanelOverlay),
       clipboardAutoCapture: String(s.clipboardAutoCapture),

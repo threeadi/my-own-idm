@@ -354,7 +354,7 @@
               onclick={closeWindow}
               class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-[#171c24] hover:bg-[#252a33] text-slate-300 border border-[#252a33] transition-colors cursor-pointer"
             >
-              Tutup
+              {store.t('common.close')}
             </button>
             <button
               type="button"
@@ -362,7 +362,7 @@
               class="px-4 py-1.5 text-xs font-bold rounded-lg bg-[#10b981] hover:bg-[#10b981]/90 text-slate-950 flex items-center gap-1.5 shadow-[0_0_12px_rgba(16,185,129,0.4)] transition-all cursor-pointer"
             >
               <Play class="w-3.5 h-3.5 fill-current" />
-              <span>Buka Berkas</span>
+              <span>{store.t('transfer.btnOpenFile')}</span>
             </button>
           </div>
         </div>
@@ -440,8 +440,8 @@
               onclick={() => (activeTab = 'status')}
               class="flex items-center gap-1.5 px-3 py-1.5 font-medium transition-all cursor-pointer {activeTab === 'status' ? 'text-[#00e5ff] border-b-2 border-[#00e5ff] bg-[#0f1420]/80 rounded-t-md font-semibold' : 'text-slate-400 hover:text-slate-200 border-b-2 border-transparent'}"
             >
-              <Download class="w-3.5 h-3.5" />
-              <span>Status Unduhan</span>
+              <Sliders class="w-3.5 h-3.5" />
+              <span>{store.t('transfer.tabStatus')}</span>
             </button>
 
             <button
@@ -449,7 +449,7 @@
               class="flex items-center gap-1.5 px-3 py-1.5 font-medium transition-all cursor-pointer {activeTab === 'limiter' ? 'text-[#00e5ff] border-b-2 border-[#00e5ff] bg-[#0f1420]/80 rounded-t-md font-semibold' : 'text-slate-400 hover:text-slate-200 border-b-2 border-transparent'}"
             >
               <Gauge class="w-3.5 h-3.5" />
-              <span>Pembatas Kecepatan</span>
+              <span>{store.t('transfer.tabLimiter')}</span>
             </button>
 
             <button
@@ -457,7 +457,7 @@
               class="flex items-center gap-1.5 px-3 py-1.5 font-medium transition-all cursor-pointer {activeTab === 'options' ? 'text-[#00e5ff] border-b-2 border-[#00e5ff] bg-[#0f1420]/80 rounded-t-md font-semibold' : 'text-slate-400 hover:text-slate-200 border-b-2 border-transparent'}"
             >
               <Settings class="w-3.5 h-3.5" />
-              <span>Opsi</span>
+              <span>{store.t('transfer.tabOptions')}</span>
             </button>
           </nav>
 
@@ -746,7 +746,7 @@
                 class="px-3.5 py-1.5 text-xs font-semibold bg-[#141b2b] hover:bg-[#1a2236] text-amber-300 hover:text-amber-200 rounded-lg border border-[#222d45] transition cursor-pointer flex items-center gap-1"
               >
                 <Pause class="w-3.5 h-3.5" />
-                <span>Jeda</span>
+                <span>{store.t('transfer.btnPause')}</span>
               </button>
             {:else}
               <button
@@ -755,7 +755,7 @@
                 class="px-3.5 py-1.5 text-xs font-semibold bg-[#141b2b] hover:bg-[#1a2236] text-emerald-400 hover:text-emerald-300 rounded-lg border border-[#222d45] transition cursor-pointer flex items-center gap-1"
               >
                 <Play class="w-3.5 h-3.5 fill-current" />
-                <span>Lanjutkan</span>
+                <span>{store.t('transfer.btnResume')}</span>
               </button>
             {/if}
 
@@ -764,7 +764,7 @@
               onclick={() => { store.cancelTask(task.id, false); closeWindow(); }}
               class="px-3.5 py-1.5 text-xs font-semibold bg-red-950/40 hover:bg-red-900/60 text-red-200 rounded-lg border border-red-800/60 transition cursor-pointer"
             >
-              Batal
+              {store.t('common.cancel')}
             </button>
           </div>
         </div>

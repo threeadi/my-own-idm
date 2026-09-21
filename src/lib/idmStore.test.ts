@@ -1236,6 +1236,45 @@ describe('IdmStore State & Filtering', () => {
       expect(store.sortBy).toBe('date');
     });
   });
+
+  describe('Language Settings & Translation', () => {
+    it('initializes with default language id', () => {
+      const store = new IdmStore();
+      expect(store.settings.language).toBe('id');
+      expect(store.t('common.save')).toBe('Simpan');
+    });
+
+    it('translates reactively when language changes', async () => {
+      const store = new IdmStore();
+      expect(store.t('common.cancel')).toBe('Batal');
+
+      await store.setLanguage('en');
+      expect(store.settings.language).toBe('en');
+      expect(store.t('common.cancel')).toBe('Cancel');
+      expect(store.t('toolbar.addUrl')).toBe('+ Add URL');
+
+      await store.setLanguage('id');
+      expect(store.settings.language).toBe('id');
+      expect(store.t('common.cancel')).toBe('Batal');
+      expect(store.t('toolbar.addUrl')).toBe('+ Tambah URL');
+    });
+
+    it('persists and loads language in raw settings conversion', () => {
+      const store = new IdmStore();
+      const raw = store.settingsToRaw({ ...store.settings, language: 'en' });
+      expect(raw.language).toBe('en');
+
+      store.applyRawSettings({ language: 'en' });
+      expect(store.settings.language).toBe('en');
+
+      store.applyRawSettings({ language: 'id' });
+      expect(store.settings.language).toBe('id');
+
+      // Invalid language in raw settings is ignored
+      store.applyRawSettings({ language: 'invalid' });
+      expect(store.settings.language).toBe('id');
+    });
+  });
 });
 
 

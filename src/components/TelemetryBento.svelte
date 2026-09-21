@@ -140,7 +140,7 @@
     <div class="flex flex-col gap-1.5 w-full sm:w-auto min-w-[220px] bg-[#1b2028] p-2.5 rounded-lg border border-[#252a33]">
       <div class="flex items-center justify-between">
         <span class="font-sans text-[10px] text-[#8c909f] uppercase tracking-wider font-semibold">
-          Batas Kecepatan Global
+          {store.t('bento.speedLimit')}
         </span>
         <button
           type="button"
@@ -148,7 +148,7 @@
           class="inline-flex items-center gap-1 text-[11px] font-medium transition-colors cursor-pointer {store.speedLimiterEnabled ? 'text-[#00e5ff] font-semibold' : 'text-[#8c909f] hover:text-[#dee2ee]'}"
         >
           <span class="w-1.5 h-1.5 rounded-full {store.speedLimiterEnabled ? 'bg-[#00e5ff] shadow-[0_0_8px_#00e5ff]' : 'bg-[#30353e]'}"></span>
-          {store.speedLimiterEnabled ? 'Aktif' : 'Mati'}
+          {store.speedLimiterEnabled ? store.t('common.active') : 'Off'}
         </button>
       </div>
 

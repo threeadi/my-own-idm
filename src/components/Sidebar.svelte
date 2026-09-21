@@ -17,20 +17,20 @@
 
   const counts = $derived(store.categoryCounts);
 
-  const statusFilters = [
-    { id: 'all', label: 'Semua Unduhan', icon: ListFilter, countKey: 'all', color: 'text-[#adc6ff]' },
-    { id: 'downloading', label: 'Sedang Mengunduh', icon: ArrowDownCircle, countKey: 'downloading', color: 'text-[#4cd7f6]', pulse: true },
-    { id: 'paused', label: 'Dijeda', icon: PauseCircle, countKey: 'paused', color: 'text-[#8c909f]' },
-    { id: 'completed', label: 'Selesai', icon: CheckCircle2, countKey: 'completed', color: 'text-[#4edea3]' },
-  ];
+  const statusFilters = $derived([
+    { id: 'all', label: store.t('sidebar.statusAll'), icon: ListFilter, countKey: 'all', color: 'text-[#adc6ff]' },
+    { id: 'downloading', label: store.t('sidebar.statusDownloading'), icon: ArrowDownCircle, countKey: 'downloading', color: 'text-[#4cd7f6]', pulse: true },
+    { id: 'paused', label: store.t('sidebar.statusPaused'), icon: PauseCircle, countKey: 'paused', color: 'text-[#8c909f]' },
+    { id: 'completed', label: store.t('sidebar.statusCompleted'), icon: CheckCircle2, countKey: 'completed', color: 'text-[#4edea3]' },
+  ]);
 
-  const categoryFilters = [
-    { id: 'programs', label: 'Aplikasi', icon: Cpu, ext: '.exe / .dmg', color: 'text-[#4cd7f6]' },
-    { id: 'documents', label: 'Dokumen', icon: FileText, ext: '.pdf / .docx', color: 'text-[#adc6ff]' },
-    { id: 'video', label: 'Video', icon: Video, ext: '.mp4 / .mkv', color: 'text-[#4edea3]' },
-    { id: 'audio', label: 'Musik', icon: Music, ext: '.mp3 / .flac', color: 'text-[#4cd7f6]' },
-    { id: 'compressed', label: 'Arsip ZIP', icon: Archive, ext: '.zip / .rar', color: 'text-[#adc6ff]' },
-  ];
+  const categoryFilters = $derived([
+    { id: 'programs', label: store.t('sidebar.catPrograms'), icon: Cpu, ext: '.exe / .dmg', color: 'text-[#4cd7f6]' },
+    { id: 'documents', label: store.t('sidebar.catDocuments'), icon: FileText, ext: '.pdf / .docx', color: 'text-[#adc6ff]' },
+    { id: 'video', label: store.t('sidebar.catVideo'), icon: Video, ext: '.mp4 / .mkv', color: 'text-[#4edea3]' },
+    { id: 'audio', label: store.t('sidebar.catAudio'), icon: Music, ext: '.mp3 / .flac', color: 'text-[#4cd7f6]' },
+    { id: 'compressed', label: store.t('sidebar.catCompressed'), icon: Archive, ext: '.zip / .rar', color: 'text-[#adc6ff]' },
+  ]);
 </script>
 
 <aside class="w-60 shrink-0 select-none bg-[#171c24]/90 backdrop-blur-xl border-r border-[#30353e]/70 p-3 flex flex-col justify-between overflow-y-auto">
@@ -39,7 +39,7 @@
     <div>
       <div class="px-2 py-1 mb-1">
         <span class="font-sans text-[10px] font-bold uppercase tracking-wider text-[#8c909f]">
-          Status Unduhan
+          {store.t('sidebar.downloadStatus')}
         </span>
       </div>
       <nav class="flex flex-col gap-1">
@@ -65,7 +65,7 @@
     <div>
       <div class="px-2 py-1 mb-1">
         <span class="font-sans text-[10px] font-bold uppercase tracking-wider text-[#8c909f]">
-          Kategori Berkas
+          {store.t('sidebar.fileCategories')}
         </span>
       </div>
       <nav class="flex flex-col gap-1">
@@ -91,7 +91,7 @@
     <div>
       <div class="px-2 py-1 mb-1">
         <span class="font-sans text-[10px] font-bold uppercase tracking-wider text-[#8c909f]">
-          Otomasi
+          {store.t('sidebar.automation')}
         </span>
       </div>
       <nav class="flex flex-col gap-1">

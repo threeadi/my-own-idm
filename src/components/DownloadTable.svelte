@@ -76,12 +76,12 @@
 
   function getCategoryLabel(category: string): string {
     switch (category) {
-      case 'video': return 'Video';
-      case 'audio': return 'Musik';
-      case 'compressed': return 'Arsip ZIP';
-      case 'programs': return 'Aplikasi';
-      case 'documents': return 'Dokumen';
-      default: return 'Berkas';
+      case 'video': return store.t('sidebar.catVideo');
+      case 'audio': return store.t('sidebar.catAudio');
+      case 'compressed': return store.t('sidebar.catCompressed');
+      case 'programs': return store.t('sidebar.catPrograms');
+      case 'documents': return store.t('sidebar.catDocuments');
+      default: return store.t('sidebar.catGeneral');
     }
   }
 
@@ -112,10 +112,10 @@
   <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-3 shrink-0">
     <div class="flex items-center gap-2">
       <h3 class="font-sans font-bold text-sm text-[#dee2ee]">
-        Daftar Antrean Berkas
+        {store.t('table.queueTitle')}
       </h3>
       <span class="px-2 py-0.5 rounded-full bg-[#252a33] text-[#8c909f] font-mono text-[11px]">
-        {tasks.length} Berkas
+        {store.t('table.filesCount', { count: tasks.length })}
       </span>
     </div>
 
@@ -126,19 +126,19 @@
           onclick={() => (store.activeCategory = 'all')}
           class="px-2.5 py-1 rounded text-xs transition-colors cursor-pointer {store.activeCategory === 'all' ? 'bg-[#252a33] text-[#dee2ee] font-semibold' : 'text-[#8c909f] hover:text-[#dee2ee]'}"
         >
-          Semua
+          {store.t('table.filterAll')}
         </button>
         <button
           onclick={() => (store.activeCategory = 'downloading')}
           class="px-2.5 py-1 rounded text-xs transition-colors cursor-pointer {store.activeCategory === 'downloading' ? 'bg-[#252a33] text-[#4cd7f6] font-semibold' : 'text-[#8c909f] hover:text-[#dee2ee]'}"
         >
-          Aktif
+          {store.t('table.filterActive')}
         </button>
         <button
           onclick={() => (store.activeCategory = 'completed')}
           class="px-2.5 py-1 rounded text-xs transition-colors cursor-pointer {store.activeCategory === 'completed' ? 'bg-[#252a33] text-[#4edea3] font-semibold' : 'text-[#8c909f] hover:text-[#dee2ee]'}"
         >
-          Selesai
+          {store.t('table.filterCompleted')}
         </button>
       </div>
 
@@ -146,7 +146,7 @@
       <div class="flex items-center bg-[#171c24] rounded-lg border border-[#252a33] p-0.5">
         <div class="flex items-center pl-1.5 pr-0.5 gap-1 text-[#8c909f]">
           <ArrowUpDown class="w-3 h-3 text-[#00e5ff]" />
-          <span class="text-[11px] text-[#8c909f] font-sans">Urut:</span>
+          <span class="text-[11px] text-[#8c909f] font-sans">{store.t('table.sortLabel')}</span>
         </div>
         <select
           value={store.sortBy}
@@ -154,25 +154,25 @@
           class="bg-transparent text-xs text-[#dee2ee] font-medium py-1 pr-1.5 pl-0.5 border-none outline-none cursor-pointer focus:ring-0 [&>option]:bg-[#171c24] [&>option]:text-[#dee2ee]"
           title="Pilih Kriteria Pengurutan"
         >
-          <option value="date">Tanggal</option>
-          <option value="size">Ukuran</option>
-          <option value="name">Nama</option>
-          <option value="progress">Progres</option>
-          <option value="speed">Kecepatan</option>
-          <option value="status">Status</option>
+          <option value="date">{store.t('table.sortDate')}</option>
+          <option value="size">{store.t('table.sortSize')}</option>
+          <option value="name">{store.t('table.sortName')}</option>
+          <option value="progress">{store.t('table.sortProgress')}</option>
+          <option value="speed">{store.t('table.sortSpeed')}</option>
+          <option value="status">{store.t('table.sortStatus')}</option>
         </select>
         <div class="w-[1px] h-3.5 bg-[#252a33] mx-0.5"></div>
         <button
           onclick={() => store.toggleSortOrder()}
           class="h-6 px-1.5 text-xs font-mono flex items-center gap-1 text-[#8c909f] hover:text-[#dee2ee] hover:bg-[#252a33] rounded transition-colors cursor-pointer"
-          title={store.sortOrder === 'asc' ? 'Urutan: Menaik (ASC) — Klik untuk Menurun (DESC)' : 'Urutan: Menurun (DESC) — Klik untuk Menaik (ASC)'}
+          title={store.sortOrder === 'asc' ? store.t('table.orderAscTooltip') : store.t('table.orderDescTooltip')}
         >
           {#if store.sortOrder === 'asc'}
             <ArrowUp class="w-3 h-3 text-[#10b981]" />
-            <span class="text-[10px] font-bold text-[#10b981]">ASC</span>
+            <span class="text-[10px] font-bold text-[#10b981]">{store.t('table.orderAsc')}</span>
           {:else}
             <ArrowDown class="w-3 h-3 text-[#00e5ff]" />
-            <span class="text-[10px] font-bold text-[#00e5ff]">DESC</span>
+            <span class="text-[10px] font-bold text-[#00e5ff]">{store.t('table.orderDesc')}</span>
           {/if}
         </button>
       </div>
@@ -204,14 +204,14 @@
         <Folder class="w-6 h-6" />
       </div>
       <div class="text-center">
-        <p class="text-xs font-semibold text-[#dee2ee]">Tidak ada unduhan dalam kategori ini</p>
-        <p class="text-[11px] text-[#8c909f] mt-0.5">Klik "+ Tambah URL" untuk mulai mengunduh file dengan akselerasi multi-thread</p>
+        <p class="text-xs font-semibold text-[#dee2ee]">{store.t('table.emptyTitle')}</p>
+        <p class="text-[11px] text-[#8c909f] mt-0.5">{store.t('table.emptySubtitle')}</p>
       </div>
       <button
         onclick={() => store.openAddModal()}
         class="mt-1 px-3 py-1.5 rounded-lg bg-[#4d8eff] hover:bg-[#3b82f6] text-white font-semibold text-xs transition-all shadow-[0_0_12px_rgba(77,142,255,0.3)] cursor-pointer"
       >
-        + Tambah Unduhan Baru
+        {store.t('table.emptyBtn')}
       </button>
     </div>
   {:else if viewMode === 'cards'}
@@ -389,10 +389,10 @@
             <th
               class="py-2.5 px-3 w-12 text-center cursor-pointer hover:text-[#dee2ee] transition-colors select-none"
               onclick={() => store.setSort('date')}
-              title="Urutkan berdasarkan Tanggal Ditambahkan"
+              title={store.t('table.sortDate')}
             >
               <div class="flex items-center justify-center gap-1">
-                <span>#</span>
+                <span>{store.t('table.colIndex')}</span>
                 {#if store.sortBy === 'date'}
                   {#if store.sortOrder === 'asc'}
                     <ArrowUp class="w-2.5 h-2.5 text-[#10b981]" />
@@ -405,10 +405,10 @@
             <th
               class="py-2.5 px-3 cursor-pointer hover:text-[#dee2ee] transition-colors select-none"
               onclick={() => store.setSort('name')}
-              title="Urutkan berdasarkan Nama Berkas"
+              title={store.t('table.sortName')}
             >
               <div class="flex items-center gap-1">
-                <span>Nama Berkas</span>
+                <span>{store.t('table.colName')}</span>
                 {#if store.sortBy === 'name'}
                   {#if store.sortOrder === 'asc'}
                     <ArrowUp class="w-3 h-3 text-[#10b981]" />
@@ -421,10 +421,10 @@
             <th
               class="py-2.5 px-3 w-28 cursor-pointer hover:text-[#dee2ee] transition-colors select-none"
               onclick={() => store.setSort('size')}
-              title="Urutkan berdasarkan Ukuran Berkas"
+              title={store.t('table.sortSize')}
             >
               <div class="flex items-center gap-1">
-                <span>Ukuran</span>
+                <span>{store.t('table.colSize')}</span>
                 {#if store.sortBy === 'size'}
                   {#if store.sortOrder === 'asc'}
                     <ArrowUp class="w-3 h-3 text-[#10b981]" />
@@ -437,10 +437,10 @@
             <th
               class="py-2.5 px-3 w-44 cursor-pointer hover:text-[#dee2ee] transition-colors select-none"
               onclick={() => store.setSort('progress')}
-              title="Urutkan berdasarkan Persentase Progres"
+              title={store.t('table.sortProgress')}
             >
               <div class="flex items-center gap-1">
-                <span>Progres</span>
+                <span>{store.t('table.colProgress')}</span>
                 {#if store.sortBy === 'progress'}
                   {#if store.sortOrder === 'asc'}
                     <ArrowUp class="w-3 h-3 text-[#10b981]" />
@@ -453,10 +453,10 @@
             <th
               class="py-2.5 px-3 w-24 cursor-pointer hover:text-[#dee2ee] transition-colors select-none"
               onclick={() => store.setSort('speed')}
-              title="Urutkan berdasarkan Kecepatan Download"
+              title={store.t('table.sortSpeed')}
             >
               <div class="flex items-center gap-1">
-                <span>Kecepatan</span>
+                <span>{store.t('table.colSpeed')}</span>
                 {#if store.sortBy === 'speed'}
                   {#if store.sortOrder === 'asc'}
                     <ArrowUp class="w-3 h-3 text-[#10b981]" />
@@ -466,14 +466,14 @@
                 {/if}
               </div>
             </th>
-            <th class="py-2.5 px-3 w-20">Sisa Waktu</th>
+            <th class="py-2.5 px-3 w-20">{store.t('table.colEta')}</th>
             <th
               class="py-2.5 px-3 w-24 cursor-pointer hover:text-[#dee2ee] transition-colors select-none"
               onclick={() => store.setSort('status')}
-              title="Urutkan berdasarkan Status Unduhan"
+              title={store.t('table.sortStatus')}
             >
               <div class="flex items-center gap-1">
-                <span>Status</span>
+                <span>{store.t('table.colStatus')}</span>
                 {#if store.sortBy === 'status'}
                   {#if store.sortOrder === 'asc'}
                     <ArrowUp class="w-3 h-3 text-[#10b981]" />
@@ -483,7 +483,7 @@
                 {/if}
               </div>
             </th>
-            <th class="py-2.5 px-3 w-32 text-right">Aksi</th>
+            <th class="py-2.5 px-3 w-32 text-right">{store.t('table.colActions')}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-[#252a33]/60 font-sans">
@@ -600,7 +600,7 @@
           role="menuitem"
         >
           <Pause class="w-3.5 h-3.5" />
-          <span>Jeda Unduhan</span>
+          <span>{store.t('menu.pause')}</span>
         </button>
       {:else if contextTask.status !== 'completed'}
         <button
@@ -609,7 +609,7 @@
           role="menuitem"
         >
           <Play class="w-3.5 h-3.5" />
-          <span>Lanjutkan Unduhan</span>
+          <span>{store.t('menu.resume')}</span>
         </button>
         <button
           onclick={() => { store.startRefreshLink(contextTask.id); closeContextMenu(); }}
@@ -617,7 +617,7 @@
           role="menuitem"
         >
           <RotateCw class="w-3.5 h-3.5 text-[#00e5ff]" />
-          <span>Perbarui Tautan Unduhan...</span>
+          <span>{store.t('menu.refreshLink')}</span>
         </button>
       {/if}
 
@@ -628,7 +628,7 @@
           role="menuitem"
         >
           <Zap class="w-3.5 h-3.5 text-[#00e5ff]" />
-          <span>Buka Jendela Transfer...</span>
+          <span>{store.t('transfer.windowTitle')}</span>
         </button>
       {/if}
 
@@ -639,7 +639,7 @@
           role="menuitem"
         >
           <Play class="w-3.5 h-3.5 text-[#00e5ff]" />
-          <span>Buka Berkas</span>
+          <span>{store.t('menu.openFile')}</span>
         </button>
         <button
           onclick={() => { store.openFolder(contextTask.file_path); closeContextMenu(); }}
@@ -647,7 +647,7 @@
           role="menuitem"
         >
           <FolderOpen class="w-3.5 h-3.5 text-blue-400" />
-          <span>Buka Folder</span>
+          <span>{store.t('menu.openFolder')}</span>
         </button>
       {/if}
 
@@ -658,10 +658,10 @@
       >
         {#if copiedContextUrl}
           <Check class="w-3.5 h-3.5 text-emerald-400" />
-          <span class="text-emerald-400">Tautan Tersalin!</span>
+          <span class="text-emerald-400">{store.t('common.copied')}</span>
         {:else}
           <Copy class="w-3.5 h-3.5 text-slate-400" />
-          <span>Salin Tautan Unduhan</span>
+          <span>{store.t('menu.copyUrl')}</span>
         {/if}
       </button>
 
@@ -673,7 +673,7 @@
         role="menuitem"
       >
         <Gauge class="w-3.5 h-3.5 text-[#00e5ff]" />
-        <span>Atur Batas Kecepatan...</span>
+        <span>{store.t('toolbar.speedLimiter')}...</span>
       </button>
 
       <button
@@ -682,7 +682,7 @@
         role="menuitem"
       >
         <Info class="w-3.5 h-3.5 text-cyan-400" />
-        <span>Properti Berkas</span>
+        <span>{store.t('menu.properties')}</span>
       </button>
 
       <button
@@ -691,7 +691,7 @@
         role="menuitem"
       >
         <Trash2 class="w-3.5 h-3.5 text-red-400" />
-        <span>Hapus dari Antrean</span>
+        <span>{store.t('menu.delete')}</span>
       </button>
     </div>
   {/if}

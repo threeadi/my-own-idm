@@ -151,7 +151,10 @@ export function formatDisplayVersion(version?: string | null, prefix = 'v'): str
   return `${prefix}${clean}`;
 }
 
+export type SupportedLanguage = 'id' | 'en';
+
 export interface AppSettings {
+  language: SupportedLanguage;
   autoStartWindows: boolean;
   mediaPanelOverlay: boolean;
   clipboardAutoCapture: boolean;
@@ -173,6 +176,7 @@ export interface AppSettings {
 }
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
+  language: 'id',
   autoStartWindows: true,
   mediaPanelOverlay: true,
   clipboardAutoCapture: true,

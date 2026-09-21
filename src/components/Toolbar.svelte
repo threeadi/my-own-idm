@@ -45,7 +45,7 @@
         <input
           type="text"
           bind:value={store.searchQuery}
-          placeholder="Cari file, tautan unduhan, atau hash MD5..."
+          placeholder={store.t('toolbar.searchPlaceholder')}
           class="w-full h-7 pl-8 pr-3 bg-[#090e16] text-[#dee2ee] font-sans text-xs rounded-lg focus:outline-none focus:ring-1 focus:ring-[#4cd7f6] placeholder-[#8c909f] transition-all border border-[#252a33]"
         />
       </div>
@@ -72,7 +72,7 @@
         class="h-7 px-3 rounded-lg bg-[#4d8eff] hover:bg-[#3b82f6] text-white font-sans text-xs font-semibold flex items-center gap-1.5 shadow-[0_0_14px_-2px_rgba(77,142,255,0.45)] active:scale-95 transition-all cursor-pointer"
       >
         <Plus class="w-3.5 h-3.5 stroke-[2.5]" />
-        <span>+ Tambah URL</span>
+        <span>{store.t('toolbar.addUrl')}</span>
       </button>
 
       <div class="h-4 w-[1px] bg-[#30353e] mx-1"></div>
@@ -81,30 +81,30 @@
       <button
         onclick={() => store.resumeAll()}
         class="h-7 px-2.5 rounded-lg bg-[#252a33] text-[#dee2ee] hover:bg-[#343942] hover:text-[#4edea3] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
-        title="Mulai/Lanjutkan Semua Unduhan"
+        title={store.t('toolbar.resumeAll')}
       >
         <Play class="w-3 h-3 text-[#4edea3] fill-[#4edea3]" />
-        <span class="hidden sm:inline">Mulai Semua</span>
+        <span class="hidden sm:inline">{store.t('toolbar.resumeAll')}</span>
       </button>
 
       <!-- Jeda Semua -->
       <button
         onclick={() => store.pauseAll()}
         class="h-7 px-2.5 rounded-lg bg-[#252a33] text-[#dee2ee] hover:bg-[#343942] hover:text-[#ffb4ab] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
-        title="Jeda Semua Unduhan Aktif"
+        title={store.t('toolbar.pauseAll')}
       >
         <Pause class="w-3 h-3 text-[#ffb4ab] fill-[#ffb4ab]" />
-        <span class="hidden sm:inline">Jeda Semua</span>
+        <span class="hidden sm:inline">{store.t('toolbar.pauseAll')}</span>
       </button>
 
       <!-- Bersihkan Selesai -->
       <button
         onclick={() => store.clearCompleted()}
         class="h-7 px-2.5 rounded-lg bg-[#252a33] text-[#dee2ee] hover:bg-[#343942] hover:text-[#dee2ee] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
-        title="Bersihkan Task yang Selesai dari Antrean"
+        title={store.t('toolbar.clearCompleted')}
       >
         <CheckCheck class="w-3 h-3 text-[#8c909f]" />
-        <span class="hidden md:inline">Bersihkan Selesai</span>
+        <span class="hidden md:inline">{store.t('toolbar.clearCompleted')}</span>
       </button>
 
       <div class="h-4 w-[1px] bg-[#30353e] mx-1"></div>
@@ -114,11 +114,11 @@
         type="button"
         onclick={() => store.setGlobalSpeedLimit(!store.speedLimiterEnabled)}
         class="h-7 px-2.5 rounded-lg {store.speedLimiterEnabled ? 'bg-[#00e5ff]/15 text-[#00e5ff] border border-[#00e5ff]/30 shadow-[0_0_10px_rgba(0,229,255,0.2)]' : 'bg-[#252a33] text-[#dee2ee] hover:bg-[#343942]'} text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
-        title="Aktifkan / Nonaktifkan Pembatas Kecepatan Global"
+        title={store.t('toolbar.speedLimiter')}
       >
         <Gauge class="w-3 h-3 {store.speedLimiterEnabled ? 'text-[#00e5ff]' : 'text-[#8c909f]'}" />
         <span class="hidden lg:inline">
-          {store.speedLimiterEnabled ? `Limit: ${store.globalSpeedLimitValue} ${store.globalSpeedLimitUnit}` : 'Batasi Kecepatan'}
+          {store.speedLimiterEnabled ? store.t('toolbar.speedLimited', { value: `${store.globalSpeedLimitValue} ${store.globalSpeedLimitUnit}` }) : store.t('toolbar.speedLimiter')}
         </span>
       </button>
 
@@ -129,7 +129,7 @@
         <button
           onclick={() => store.openTransferWindow(selected.id)}
           class="h-7 px-2.5 rounded-lg bg-[#252a33] text-[#4cd7f6] hover:bg-[#343942] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
-          title="Buka Jendela Rincian Transfer"
+          title={store.t('transfer.windowTitle')}
         >
           <Zap class="w-3 h-3 text-[#4cd7f6]" />
           <span class="hidden xl:inline">Detail Transfer</span>
@@ -139,7 +139,7 @@
           <button
             onclick={() => store.openFile(selected.file_path)}
             class="h-7 px-2 rounded-lg bg-[#252a33] text-[#dee2ee] hover:text-[#4cd7f6] hover:bg-[#343942] text-xs transition-colors cursor-pointer"
-            title="Buka Berkas"
+            title={store.t('menu.openFile')}
           >
             <FileText class="w-3.5 h-3.5" />
           </button>
@@ -148,7 +148,7 @@
         <button
           onclick={() => store.openFolder(selected.file_path)}
           class="h-7 px-2 rounded-lg bg-[#252a33] text-[#dee2ee] hover:text-[#4cd7f6] hover:bg-[#343942] text-xs transition-colors cursor-pointer"
-          title="Buka Folder Penyimpanan"
+          title={store.t('menu.openFolder')}
         >
           <FolderOpen class="w-3.5 h-3.5" />
         </button>
@@ -156,7 +156,7 @@
         <button
           onclick={() => store.cancelTask(selected.id, true)}
           class="h-7 px-2 rounded-lg bg-[#252a33] text-[#dee2ee] hover:text-[#ffb4ab] hover:bg-[#343942] text-xs transition-colors cursor-pointer"
-          title="Hapus Task dan Berkas"
+          title={store.t('common.delete')}
         >
           <Trash2 class="w-3.5 h-3.5" />
         </button>
@@ -168,10 +168,10 @@
       <button
         onclick={() => (store.isSettingsModalOpen = true)}
         class="h-7 px-2.5 rounded-lg bg-[#252a33] text-[#dee2ee] hover:bg-[#343942] hover:text-[#dee2ee] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
-        title="Pengaturan Unduhan & Jaringan"
+        title={store.t('toolbar.settings')}
       >
         <Settings class="w-3 h-3 text-[#8c909f]" />
-        <span class="hidden sm:inline">Pengaturan</span>
+        <span class="hidden sm:inline">{store.t('toolbar.settings')}</span>
       </button>
     </div>
   </div>

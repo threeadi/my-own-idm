@@ -89,10 +89,10 @@
   }
 
   async function handleResetDefaults() {
-    if (confirm('Kembalikan seluruh preferensi ke pengaturan bawaan standar pabrik?')) {
+    if (confirm(store.t('settings.confirmReset'))) {
       await store.resetAppSettings();
       draft = { ...store.settings };
-      saveSuccessMessage = 'Preferensi dikembalikan ke standar!';
+      saveSuccessMessage = store.t('settings.msgReset');
       setTimeout(() => {
         saveSuccessMessage = null;
       }, 3000);
@@ -199,7 +199,7 @@
           }`}
         >
           <Monitor class="w-3.5 h-3.5" />
-          <span>Umum (General)</span>
+          <span>{store.t('settings.tabGeneral')}</span>
         </button>
 
         <button
@@ -212,7 +212,7 @@
           }`}
         >
           <Zap class="w-3.5 h-3.5" />
-          <span>Sambungan (Connection)</span>
+          <span>{store.t('settings.tabConnection')}</span>
         </button>
 
         <button
@@ -225,7 +225,7 @@
           }`}
         >
           <FileText class="w-3.5 h-3.5" />
-          <span>Jenis Berkas (File Types)</span>
+          <span>{store.t('settings.tabFileTypes')}</span>
         </button>
 
         <button
@@ -238,7 +238,7 @@
           }`}
         >
           <FolderOpen class="w-3.5 h-3.5" />
-          <span>Lokasi Simpan (Save To)</span>
+          <span>{store.t('settings.tabSaveTo')}</span>
         </button>
 
         <button
@@ -251,7 +251,7 @@
           }`}
         >
           <Globe class="w-3.5 h-3.5" />
-          <span>Ekstensi (Extensions)</span>
+          <span>{store.t('settings.tabExtensions')}</span>
         </button>
       </div>
 
@@ -268,12 +268,36 @@
         <!-- TAB 1: UMUM (GENERAL) -->
         {#if activeTab === 'general'}
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <!-- Left: Integrasi Sistem & Startup -->
+            <!-- Left: Bahasa & Integrasi Sistem -->
             <div class="space-y-6">
+              <!-- Pilihan Bahasa / Language Selection -->
+              <div class="bg-[#1b2028] p-4 rounded-xl border border-[#30353e]/80 space-y-3">
+                <div class="flex items-center gap-2 pb-2 border-b border-[#252a33]">
+                  <Globe class="w-4 h-4 text-[#00e5ff]" />
+                  <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">{store.t('settings.languageTitle')}</h3>
+                </div>
+                <p class="text-[11px] text-[#8c909f] leading-snug">
+                  {store.t('settings.languageDesc')}
+                </p>
+                <div class="pt-1">
+                  <select
+                    bind:value={draft.language}
+                    onchange={() => {
+                      store.settings.language = draft.language;
+                    }}
+                    class="w-full bg-[#090e16] text-[#dee2ee] text-xs rounded-lg px-3 py-2 border border-[#30353e] focus:outline-none focus:border-[#00e5ff] cursor-pointer [&>option]:bg-[#171c24] [&>option]:text-[#dee2ee]"
+                  >
+                    <option value="id">🇮🇩 Bahasa Indonesia (Indonesian)</option>
+                    <option value="en">🇺🇸 English (US / International)</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Integrasi Sistem & Startup -->
               <div class="bg-[#1b2028] p-4 rounded-xl border border-[#30353e]/80 space-y-4">
                 <div class="flex items-center gap-2 pb-2 border-b border-[#252a33]">
                   <Monitor class="w-4 h-4 text-[#00e5ff]" />
-                  <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">Integrasi Sistem & Startup</h3>
+                  <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">{store.t('settings.systemStartup')}</h3>
                 </div>
 
                 <div class="space-y-3">
@@ -816,7 +840,7 @@
           class="px-3 py-1.5 rounded-lg bg-[#252a33] hover:bg-[#30353e] text-[#8c909f] hover:text-[#dee2ee] font-medium text-xs flex items-center gap-1.5 transition-colors cursor-pointer border border-[#30353e]"
         >
           <RotateCcw class="w-3.5 h-3.5" />
-          <span>Atur Ulang Default</span>
+          <span>{store.t('settings.btnReset')}</span>
         </button>
 
         <div class="flex items-center gap-2.5">
@@ -825,7 +849,7 @@
             onclick={handleCancel}
             class="px-4 py-1.5 rounded-lg bg-[#252a33] hover:bg-[#30353e] text-[#dee2ee] font-medium text-xs transition-colors cursor-pointer border border-[#30353e]"
           >
-            Batal
+            {store.t('common.cancel')}
           </button>
           <button
             type="button"
@@ -833,7 +857,7 @@
             disabled={isSaving}
             class="px-4 py-1.5 rounded-lg bg-[#252a33] hover:bg-[#30353e] text-[#00e5ff] hover:text-[#4cd7f6] font-semibold text-xs transition-colors cursor-pointer border border-[#00e5ff]/30 shadow-sm"
           >
-            Terapkan
+            {store.t('common.apply')}
           </button>
           <button
             type="button"
@@ -842,7 +866,7 @@
             class="px-5 py-1.5 rounded-lg bg-[#00e5ff] hover:bg-[#4cd7f6] text-[#090e16] font-bold text-xs flex items-center gap-1.5 transition-all shadow-[0_0_12px_rgba(0,229,255,0.3)] cursor-pointer active:scale-95"
           >
             <Check class="w-3.5 h-3.5 stroke-[2.5]" />
-            <span>Oke</span>
+            <span>{store.t('common.ok')}</span>
           </button>
         </div>
       </div>
