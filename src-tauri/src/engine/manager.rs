@@ -779,7 +779,7 @@ impl DownloadManager {
             task.downloaded_bytes += chunk_bytes;
             bytes_since_last_calc += chunk_bytes;
 
-            if is_stream && task.segments.len() > 1 {
+            if is_stream {
                 sync_stream_segments(&mut task.segments, task.downloaded_bytes);
             } else {
                 update_segment_progress(&mut task.segments, seg_idx, chunk_bytes);
@@ -825,8 +825,11 @@ impl DownloadManager {
             .map(|m| m.len())
             .unwrap_or(0);
 
-        let stream_err = if let Some(ref mut rx) = stream_err_rx {
-            rx.try_recv().ok().and_then(|r| r.err())
+        let stream_err = if let Some(rx) = stream_err_rx {
+            match tokio::time::timeout(Duration::from_millis(500), rx).await {
+                Ok(Ok(res)) => res.err(),
+                _ => None,
+            }
         } else {
             None
         };
@@ -934,8 +937,8 @@ impl DownloadManager {
 
 pub fn update_segment_progress(segments: &mut [Segment], seg_idx: usize, chunk_bytes: u64) -> bool {
     if let Some(seg) = segments.get_mut(seg_idx) {
-        seg.downloaded_bytes += chunk_bytes;
-        if seg.start_byte + seg.downloaded_bytes >= seg.end_byte + 1 {
+        seg.downloaded_bytes = seg.downloaded_bytes.saturating_add(chunk_bytes);
+        if seg.end_byte != u64::MAX && seg.start_byte.saturating_add(seg.downloaded_bytes) >= seg.end_byte.saturating_add(1) {
             seg.is_finished = true;
             return true;
         }
@@ -1303,6 +1306,19 @@ mod tests {
         // Out of bounds index should return false safely
         let oob = update_segment_progress(&mut segs, 99, 10);
         assert!(!oob);
+
+        // Segment with end_byte = u64::MAX (stream / unknown size) must not panic on overflow
+        let mut stream_segs = vec![Segment {
+            index: 0,
+            start_byte: 0,
+            end_byte: u64::MAX,
+            downloaded_bytes: 0,
+            is_finished: false,
+        }];
+        let fin_max = update_segment_progress(&mut stream_segs, 0, 5000);
+        assert!(!fin_max);
+        assert_eq!(stream_segs[0].downloaded_bytes, 5000);
+        assert!(!stream_segs[0].is_finished);
     }
 
     #[test]

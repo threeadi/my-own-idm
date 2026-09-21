@@ -261,8 +261,6 @@ impl YtDlpRunner {
                 .arg(&format_selector)
                 .arg("--merge-output-format")
                 .arg("mp4")
-                .arg("--concurrent-fragments")
-                .arg("4")
                 .arg("--progress-delta")
                 .arg("0.2")
                 .arg("--progress-template")
