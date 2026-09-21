@@ -11,6 +11,8 @@ use crate::db::Database;
 use crate::engine::hls::HlsDownloader;
 use crate::engine::limiter::TokenBucketRateLimiter;
 use crate::engine::probe::Prober;
+#[allow(unused_imports)]
+use crate::engine::types::DownloadCategory;
 use crate::engine::types::{
     DownloadTask, GlobalSpeedLimitConfig, ProbeResult, Segment, SpeedMetrics, TaskStatus,
 };
@@ -317,12 +319,8 @@ impl DownloadManager {
             .prepare_download_task(&url, &filename, &save_dir, connections, custom_headers.clone())
             .await?;
 
-        // Extract rate limiters
-        let global_limiter = if self.global_limiter_enabled.load(Ordering::Relaxed) {
-            Some(self.global_limiter.clone())
-        } else {
-            None
-        };
+        // Extract rate limiters: always pass global_limiter so running workers dynamically throttle
+        let global_limiter = Some(self.global_limiter.clone());
         let task_limiter = {
             let limiters = self.task_limiters.read().await;
             limiters.get(&task.id).cloned()
@@ -395,11 +393,8 @@ impl DownloadManager {
                 flags.insert(task_id.to_string(), cancel_flag.clone());
             }
 
-            let global_limiter = if self.global_limiter_enabled.load(Ordering::Relaxed) {
-                Some(self.global_limiter.clone())
-            } else {
-                None
-            };
+            // Extract rate limiters: always pass global_limiter so running workers dynamically throttle
+            let global_limiter = Some(self.global_limiter.clone());
             let task_limiter = {
                 let limiters = self.task_limiters.read().await;
                 limiters.get(&task.id).cloned()
@@ -516,6 +511,17 @@ impl DownloadManager {
         let is_youtube = effective_url.contains("youtube.com") || effective_url.contains("youtu.be");
         let is_stream = is_youtube || task.is_hls || effective_url.contains(".m3u8");
 
+        let effective_limit_bps = task_limiter
+            .as_ref()
+            .map(|l| l.get_limit_bps())
+            .filter(|&b| b > 0)
+            .or_else(|| {
+                global_limiter
+                    .as_ref()
+                    .map(|l| l.get_limit_bps())
+                    .filter(|&b| b > 0)
+            });
+
         if is_stream {
             // Stream mode via YtDlpRunner (handles YouTube + HLS m3u8 streams with ffmpeg remuxing)
             let out_file = task.file_path.clone();
@@ -529,6 +535,7 @@ impl DownloadManager {
                     out_file,
                     cancel_clone,
                     tx_clone,
+                    effective_limit_bps,
                 )
                 .await;
                 if let Err(e) = res {

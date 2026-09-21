@@ -161,6 +161,7 @@ impl YtDlpRunner {
         output_file: String,
         cancel_flag: Arc<AtomicBool>,
         progress_tx: Sender<(usize, u64)>,
+        limit_rate_bps: Option<u64>,
     ) -> Result<(), String> {
         let yt_dlp_exe = Self::find_yt_dlp()?;
 
@@ -177,8 +178,15 @@ impl YtDlpRunner {
             .arg("--progress-template")
             .arg("IDM_PROGRESS:%(progress.downloaded_bytes)s")
             .arg("-o")
-            .arg(&output_file)
-            .arg(&url)
+            .arg(&output_file);
+
+        if let Some(rate) = limit_rate_bps {
+            if rate > 0 {
+                cmd.arg("--limit-rate").arg(format!("{}", rate));
+            }
+        }
+
+        cmd.arg(&url)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
@@ -371,6 +379,7 @@ mod tests {
             out,
             cancel,
             tx,
+            Some(500_000),
         ).await;
         assert!(res.is_ok());
     }
