@@ -316,9 +316,11 @@
                 />
               </div>
               <div class="flex flex-col items-end shrink-0">
-                <span class="text-[9px] text-[#8c909f] uppercase tracking-wider font-semibold">{store.t('addModal.fileSize')}</span>
+                <span class="text-[9px] text-[#8c909f] uppercase tracking-wider font-semibold">
+                  {probeResult?.is_hls && !probeResult?.total_bytes ? store.t('addModal.videoDuration') : store.t('addModal.fileSize')}
+                </span>
                 <span class="font-mono text-sm sm:text-base font-bold text-[#4cd7f6]">
-                  {probeResult?.total_bytes ? formatBytes(probeResult.total_bytes) : store.t('common.unknown')}
+                  {probeResult?.total_bytes ? formatBytes(probeResult.total_bytes) : (probeResult?.formatted_size && probeResult.formatted_size !== 'Unknown size' ? probeResult.formatted_size : store.t('common.unknown'))}
                 </span>
               </div>
             </div>

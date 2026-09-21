@@ -29,7 +29,7 @@
     return video ? dismissedVideos.has(video) : false;
   }
 
-  function cleanFilename(rawTitle, defaultName = "video") {
+  function cleanFilename(rawTitle, defaultName = "video", maxLen = 80) {
     if (!rawTitle) return defaultName;
     let clean = rawTitle
       .replace(/\s*-\s*YouTube$/i, "")
@@ -46,11 +46,57 @@
     clean = clean.replace(/[\s_]+/g, "_").trim();
     clean = clean.replace(/^[\._\-]+|[\._\-]+$/g, "");
 
-    if (clean.length > 50) {
-      clean = clean.substring(0, 50).replace(/[\._\-]+$/, "");
+    if (clean.length > maxLen) {
+      clean = clean.substring(0, maxLen).replace(/[\._\-]+$/, "");
     }
 
     return clean || defaultName;
+  }
+
+  function isGenericTitle(title) {
+    if (!title || typeof title !== "string") return true;
+    const base = title.replace(/\.[a-zA-Z0-9]+$/, "").trim().toLowerCase();
+    const genericList = [
+      "embed",
+      "video",
+      "player",
+      "video player",
+      "iframe",
+      "untitled",
+      "stream",
+      "media player",
+      "watch",
+      "download",
+      "play",
+      "index",
+      "master"
+    ];
+    return genericList.includes(base);
+  }
+
+  function resolveSmartFilename(requestedFilename, tabTitle, quality = "") {
+    if (!tabTitle || isGenericTitle(tabTitle)) {
+      return requestedFilename || "video.mp4";
+    }
+
+    const safeTabTitle = cleanFilename(tabTitle, "video", 80);
+
+    if (!requestedFilename) {
+      return quality ? `${safeTabTitle}_${quality}.mp4` : `${safeTabTitle}.mp4`;
+    }
+
+    const match = requestedFilename.match(/^(.*?)(_(?:4k|2160p|1080p|720p|480p|360p|audio|sub_[a-z0-9]+))?(\.[a-zA-Z0-9]+)?$/i);
+    if (match) {
+      const basePrefix = match[1] || "";
+      const qualityTag = match[2] || (quality ? `_${quality}` : "");
+      const ext = match[3] || ".mp4";
+
+      if (isGenericTitle(basePrefix)) {
+        return `${safeTabTitle}${qualityTag}${ext}`;
+      }
+    }
+
+    return requestedFilename;
   }
 
   function stripByteRanges(rawUrl) {
@@ -143,6 +189,19 @@
     ];
   }
 
+  let cachedTabTitle = "";
+
+  function fetchTabTitleIfIframe() {
+    if (typeof window !== "undefined" && window.self !== window.top) {
+      safeSendMessage({ action: "get-tab-info" }).then((resp) => {
+        if (resp && resp.tabTitle && !isGenericTitle(resp.tabTitle)) {
+          cachedTabTitle = resp.tabTitle;
+        }
+      }).catch(() => {});
+    }
+  }
+  fetchTabTitleIfIframe();
+
   function getPageVideoTitle() {
     const ytTitleEl = document.querySelector(
       "h1.ytd-watch-metadata yt-formatted-string, #title h1 yt-formatted-string, ytd-watch-metadata #title yt-formatted-string, ytd-reel-player-header-renderer h2"
@@ -150,10 +209,13 @@
     if (ytTitleEl && ytTitleEl.textContent.trim()) {
       return ytTitleEl.textContent.trim();
     }
-    if (document.title) {
+    if (document.title && !isGenericTitle(document.title)) {
       return document.title;
     }
-    return "video";
+    if (cachedTabTitle && !isGenericTitle(cachedTabTitle)) {
+      return cachedTabTitle;
+    }
+    return document.title || "video";
   }
 
   // Safe Chrome Runtime Message Sender with Fallback to Local Desktop HTTP Server (Port 18888)
@@ -677,6 +739,15 @@
   }
 
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { cleanFilename, stripByteRanges, generateQualityPresets, safeSendMessage, dismissVideo, isVideoDismissed };
+    module.exports = {
+      cleanFilename,
+      isGenericTitle,
+      resolveSmartFilename,
+      stripByteRanges,
+      generateQualityPresets,
+      safeSendMessage,
+      dismissVideo,
+      isVideoDismissed
+    };
   }
 })();

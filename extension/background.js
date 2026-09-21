@@ -42,7 +42,7 @@ chrome.downloads.onCreated.addListener(async (item) => {
 });
 
 // 3. Media Sniffer (Video/Audio/m3u8 stream detection)
-const STREAM_EXTENSIONS = [".m3u8", "/pl/", "playlist"];
+const STREAM_EXTENSIONS = [".m3u8", "/pl/", "playlist", "/hls", ".urlset", "master.txt"];
 const FILE_EXTENSIONS = [".mp4", ".mkv", ".webm", ".flv", ".mp3", ".aac", ".ogg"];
 
 chrome.webRequest?.onResponseStarted?.addListener(
@@ -100,6 +100,77 @@ chrome.webRequest?.onResponseStarted?.addListener(
 chrome.tabs.onRemoved.addListener((tabId) => {
   delete detectedMediaByTab[tabId];
 });
+
+// Helpers for smart filename resolution
+function cleanFilename(rawTitle, defaultName = "video", maxLen = 80) {
+  if (!rawTitle) return defaultName;
+  let clean = rawTitle
+    .replace(/\s*-\s*YouTube$/i, "")
+    .replace(/\s*\/\s*X$/i, "")
+    .replace(/\s*-\s*Twitter$/i, "")
+    .replace(/\s*•\s*Instagram.*$/i, "")
+    .replace(/\s*on Instagram:.*$/i, "")
+    .replace(/\s*\|\s*TikTok$/i, "")
+    .replace(/https?:\/\/\S+/gi, "")
+    .trim();
+
+  clean = clean.replace(/[\r\n\t]+/g, " ");
+  clean = clean.replace(/[^\w\s\-\.\(\)\[\]]/g, " ");
+  clean = clean.replace(/[\s_]+/g, "_").trim();
+  clean = clean.replace(/^[\._\-]+|[\._\-]+$/g, "");
+
+  if (clean.length > maxLen) {
+    clean = clean.substring(0, maxLen).replace(/[\._\-]+$/, "");
+  }
+
+  return clean || defaultName;
+}
+
+function isGenericTitle(title) {
+  if (!title || typeof title !== "string") return true;
+  const base = title.replace(/\.[a-zA-Z0-9]+$/, "").trim().toLowerCase();
+  const genericList = [
+    "embed",
+    "video",
+    "player",
+    "video player",
+    "iframe",
+    "untitled",
+    "stream",
+    "media player",
+    "watch",
+    "download",
+    "play",
+    "index",
+    "master"
+  ];
+  return genericList.includes(base);
+}
+
+function resolveSmartFilename(requestedFilename, tabTitle, quality = "") {
+  if (!tabTitle || isGenericTitle(tabTitle)) {
+    return requestedFilename || "video.mp4";
+  }
+
+  const safeTabTitle = cleanFilename(tabTitle, "video", 80);
+
+  if (!requestedFilename) {
+    return quality ? `${safeTabTitle}_${quality}.mp4` : `${safeTabTitle}.mp4`;
+  }
+
+  const match = requestedFilename.match(/^(.*?)(_(?:4k|2160p|1080p|720p|480p|360p|audio|sub_[a-z0-9]+))?(\.[a-zA-Z0-9]+)?$/i);
+  if (match) {
+    const basePrefix = match[1] || "";
+    const qualityTag = match[2] || (quality ? `_${quality}` : "");
+    const ext = match[3] || ".mp4";
+
+    if (isGenericTitle(basePrefix)) {
+      return `${safeTabTitle}${qualityTag}${ext}`;
+    }
+  }
+
+  return requestedFilename;
+}
 
 // 4. Send to Desktop App via Local HTTP Server (Port 18888) or Native Messaging Fallback
 async function sendToMyOwnIdm(downloadUrl, refererUrl = "", filename = "", extraMeta = {}) {
@@ -163,7 +234,14 @@ async function sendToMyOwnIdm(downloadUrl, refererUrl = "", filename = "", extra
 }
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === "get-detected-media") {
+  if (request.action === "get-tab-info") {
+    sendResponse({
+      tabId: sender.tab?.id,
+      tabTitle: sender.tab?.title || "",
+      tabUrl: sender.tab?.url || ""
+    });
+    return true;
+  } else if (request.action === "get-detected-media") {
     const tabId = request.tabId || sender.tab?.id;
     const media = detectedMediaByTab[tabId] || [];
     sendResponse({ media, isInterceptorEnabled });
@@ -171,13 +249,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     isInterceptorEnabled = request.enabled;
     sendResponse({ isInterceptorEnabled });
   } else if (request.action === "send-download") {
+    let filename = request.filename || "";
+    const tabTitle = sender.tab?.title;
+    if (tabTitle) {
+      filename = resolveSmartFilename(filename, tabTitle, request.quality);
+    }
     const extraMeta = {
       quality: request.quality,
       is_audio_only: request.is_audio_only,
       threads: request.threads,
       batch: request.batch
     };
-    sendToMyOwnIdm(request.url, request.referer, request.filename, extraMeta)
+    sendToMyOwnIdm(request.url, request.referer, filename, extraMeta)
       .then((success) => {
         sendResponse({ status: success ? "ok" : "error" });
       })

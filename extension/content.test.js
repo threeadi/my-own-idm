@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // @ts-expect-error CommonJS import in ESM
 import content from './content.js';
-const { cleanFilename, stripByteRanges, generateQualityPresets, safeSendMessage, dismissVideo, isVideoDismissed } = content;
+const { cleanFilename, isGenericTitle, resolveSmartFilename, stripByteRanges, generateQualityPresets, safeSendMessage, dismissVideo, isVideoDismissed } = content;
 
 describe('safeSendMessage', () => {
   const originalChrome = globalThis.chrome;
@@ -136,15 +136,71 @@ describe('cleanFilename', () => {
     expect(cleanFilename('test:file*name?with"bad/chars')).toBe('test_file_name_with_bad_chars');
   });
 
-  it('truncates overly long titles to 50 characters', () => {
-    const long = 'a'.repeat(80);
+  it('truncates overly long titles to specified max length (default 80)', () => {
+    const long = 'a'.repeat(120);
     const cleaned = cleanFilename(long);
-    expect(cleaned.length).toBeLessThanOrEqual(50);
+    expect(cleaned.length).toBeLessThanOrEqual(80);
+
+    const cleaned50 = cleanFilename(long, 'video', 50);
+    expect(cleaned50.length).toBeLessThanOrEqual(50);
   });
 
   it('falls back to default name when empty', () => {
     expect(cleanFilename('')).toBe('video');
     expect(cleanFilename('   ', 'fallback')).toBe('fallback');
+  });
+});
+
+describe('isGenericTitle', () => {
+  it('detects generic embed and player titles', () => {
+    expect(isGenericTitle('Embed')).toBe(true);
+    expect(isGenericTitle('embed.mp4')).toBe(true);
+    expect(isGenericTitle('video')).toBe(true);
+    expect(isGenericTitle('Player')).toBe(true);
+    expect(isGenericTitle('Video Player')).toBe(true);
+    expect(isGenericTitle('untitled')).toBe(true);
+    expect(isGenericTitle('')).toBe(true);
+    expect(isGenericTitle(null)).toBe(true);
+  });
+
+  it('recognizes non-generic real titles', () => {
+    expect(isGenericTitle('Msbreewc Update Lingerie Hijau Ajak Omek Bareng Squirt - Bokephub')).toBe(false);
+    expect(isGenericTitle('My Vacation Vlog')).toBe(false);
+  });
+});
+
+describe('resolveSmartFilename', () => {
+  it('replaces generic Embed prefix with parent tab title while preserving quality and extension', () => {
+    const resolved = resolveSmartFilename(
+      'Embed_720p.mp4',
+      'Msbreewc Update Lingerie Hijau Ajak Omek Bareng Squirt - Bokephub',
+      '720p'
+    );
+    expect(resolved).toBe('Msbreewc_Update_Lingerie_Hijau_Ajak_Omek_Bareng_Squirt_-_Bokephub_720p.mp4');
+  });
+
+  it('handles empty requestedFilename by generating from tab title and quality', () => {
+    const resolved = resolveSmartFilename(
+      '',
+      'Awesome Documentary',
+      '1080p'
+    );
+    expect(resolved).toBe('Awesome_Documentary_1080p.mp4');
+  });
+
+  it('preserves non-generic specific filename', () => {
+    const resolved = resolveSmartFilename(
+      'Documentary_Full_720p.mp4',
+      'Generic Web Site - Video Watcher',
+      '720p'
+    );
+    expect(resolved).toBe('Documentary_Full_720p.mp4');
+  });
+
+  it('falls back to requestedFilename when tabTitle is generic or missing', () => {
+    expect(resolveSmartFilename('Embed_720p.mp4', 'Embed', '720p')).toBe('Embed_720p.mp4');
+    expect(resolveSmartFilename('Embed_720p.mp4', '', '720p')).toBe('Embed_720p.mp4');
+    expect(resolveSmartFilename('', '', '720p')).toBe('video.mp4');
   });
 });
 

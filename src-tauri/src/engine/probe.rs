@@ -102,8 +102,30 @@ impl Prober {
                 is_hls = true;
             }
         }
-        if url.to_ascii_lowercase().contains(".m3u8") {
+        let url_lower = url.to_ascii_lowercase();
+        if url_lower.contains(".m3u8")
+            || url_lower.contains("/hls/")
+            || url_lower.contains("/hls3/")
+            || url_lower.contains(".urlset")
+            || url_lower.ends_with("master.txt")
+        {
             is_hls = true;
+        }
+
+        // Calculate HLS duration if HLS and total_bytes is None
+        let mut hls_duration_secs: Option<f64> = None;
+        if is_hls && total_bytes.is_none() {
+            if let Ok(resp) = client.get(url).headers(req_headers.clone()).send().await {
+                if let Ok(body) = resp.text().await {
+                    if body.contains("#EXTM3U") {
+                        is_hls = true;
+                        let dur = Self::calculate_hls_duration(&body, url, client, &req_headers).await;
+                        if dur > 0.0 {
+                            hls_duration_secs = Some(dur);
+                        }
+                    }
+                }
+            }
         }
 
         // Extract filename
@@ -136,7 +158,13 @@ impl Prober {
         let category = DownloadCategory::from_filename(&filename);
         let formatted_size = match total_bytes {
             Some(b) => format_bytes(b),
-            None => "Unknown size".to_string(),
+            None => {
+                if let Some(dur) = hls_duration_secs {
+                    format!("{} (HLS)", Self::format_duration(dur))
+                } else {
+                    "Unknown size".to_string()
+                }
+            }
         };
 
         let default_download_dir = dirs::download_dir()
@@ -192,6 +220,67 @@ impl Prober {
             decoded
         } else {
             segment.to_string()
+        }
+    }
+
+    pub async fn calculate_hls_duration(
+        body: &str,
+        base_url_str: &str,
+        client: &reqwest::Client,
+        headers: &HeaderMap,
+    ) -> f64 {
+        let dur = Self::sum_extinf(body);
+        if dur > 0.0 {
+            return dur;
+        }
+
+        if let Ok(base_url) = reqwest::Url::parse(base_url_str) {
+            let mut sub_urls = Vec::new();
+            for line in body.lines() {
+                let trimmed = line.trim();
+                if !trimmed.starts_with('#') && !trimmed.is_empty() {
+                    if let Ok(u) = base_url.join(trimmed) {
+                        sub_urls.push(u.to_string());
+                    }
+                }
+            }
+
+            if let Some(first_sub) = sub_urls.first() {
+                if let Ok(resp) = client.get(first_sub).headers(headers.clone()).send().await {
+                    if let Ok(sub_body) = resp.text().await {
+                        return Self::sum_extinf(&sub_body);
+                    }
+                }
+            }
+        }
+
+        0.0
+    }
+
+    pub fn sum_extinf(body: &str) -> f64 {
+        let mut total = 0.0;
+        for line in body.lines() {
+            let trimmed = line.trim();
+            if let Some(rest) = trimmed.strip_prefix("#EXTINF:") {
+                if let Some(num_str) = rest.split(',').next() {
+                    if let Ok(d) = num_str.trim().parse::<f64>() {
+                        total += d;
+                    }
+                }
+            }
+        }
+        total
+    }
+
+    pub fn format_duration(seconds: f64) -> String {
+        let total = seconds.round() as u64;
+        let h = total / 3600;
+        let m = (total % 3600) / 60;
+        let s = total % 60;
+        if h > 0 {
+            format!("{:02}:{:02}:{:02}", h, m, s)
+        } else {
+            format!("{:02}:{:02}", m, s)
         }
     }
 }
@@ -492,5 +581,30 @@ Content-Type: application/pdf\r\n\r\n";
         assert_eq!(res.total_bytes, Some(1024));
         assert!(res.supports_range);
         assert_eq!(res.category, DownloadCategory::Documents);
+    }
+
+    #[test]
+    fn test_format_duration() {
+        assert_eq!(Prober::format_duration(45.0), "00:45");
+        assert_eq!(Prober::format_duration(932.0), "15:32");
+        assert_eq!(Prober::format_duration(3665.0), "01:01:05");
+    }
+
+    #[test]
+    fn test_sum_extinf() {
+        let playlist = "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:10.500,\nseg1.ts\n#EXTINF:9.500,\nseg2.ts\n#EXTINF:12.0,\nseg3.ts\n#EXT-X-ENDLIST\n";
+        let total = Prober::sum_extinf(playlist);
+        assert!((total - 32.0).abs() < 0.001);
+    }
+
+    #[tokio::test]
+    async fn test_calculate_hls_duration_direct_and_master() {
+        let client = reqwest::Client::new();
+        let headers = reqwest::header::HeaderMap::new();
+
+        // Direct media playlist
+        let media_pl = "#EXTM3U\n#EXTINF:10.0,\nseg1.ts\n#EXTINF:20.0,\nseg2.ts\n";
+        let dur = Prober::calculate_hls_duration(media_pl, "http://example.com/stream.m3u8", &client, &headers).await;
+        assert_eq!(dur, 30.0);
     }
 }
