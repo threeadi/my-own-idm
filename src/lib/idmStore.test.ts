@@ -574,7 +574,7 @@ describe('IdmStore State & Filtering', () => {
     store.isPropertiesModalOpen = true;
     store.isProgressModalOpen = true;
 
-    const openSpy = vi.spyOn(store, 'openExternalUrl').mockImplementation(async () => {});
+    const openSpy = vi.spyOn(store, 'openExternalUrl').mockImplementation(async () => { });
 
     // Task not found
     store.startRefreshLink('non-existent');
@@ -1251,12 +1251,12 @@ describe('IdmStore State & Filtering', () => {
       await store.setLanguage('en');
       expect(store.settings.language).toBe('en');
       expect(store.t('common.cancel')).toBe('Cancel');
-      expect(store.t('toolbar.addUrl')).toBe('+ Add URL');
+      expect(store.t('toolbar.addUrl')).toBe('Add URL');
 
       await store.setLanguage('id');
       expect(store.settings.language).toBe('id');
       expect(store.t('common.cancel')).toBe('Batal');
-      expect(store.t('toolbar.addUrl')).toBe('+ Tambah URL');
+      expect(store.t('toolbar.addUrl')).toBe('Tambah URL');
     });
 
     it('persists and loads language in raw settings conversion', () => {

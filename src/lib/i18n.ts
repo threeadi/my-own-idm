@@ -49,7 +49,7 @@ export const translations = {
     // Toolbar
     'toolbar.title': 'IDM Turbo Desktop',
     'toolbar.searchPlaceholder': 'Cari file, tautan unduhan, atau ekstensi...',
-    'toolbar.addUrl': '+ Tambah URL',
+    'toolbar.addUrl': 'Tambah URL',
     'toolbar.resumeAll': 'Mulai Semua',
     'toolbar.pauseAll': 'Jeda Semua',
     'toolbar.clearCompleted': 'Bersihkan Selesai',
@@ -526,7 +526,7 @@ export const translations = {
     // Toolbar
     'toolbar.title': 'IDM Turbo Desktop',
     'toolbar.searchPlaceholder': 'Search files, download links, or extensions...',
-    'toolbar.addUrl': '+ Add URL',
+    'toolbar.addUrl': 'Add URL',
     'toolbar.resumeAll': 'Resume All',
     'toolbar.pauseAll': 'Pause All',
     'toolbar.clearCompleted': 'Clear Completed',
