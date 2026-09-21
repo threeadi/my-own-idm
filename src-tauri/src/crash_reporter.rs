@@ -5,9 +5,12 @@ use std::sync::OnceLock;
 static IS_INITIALIZED: AtomicBool = AtomicBool::new(false);
 static SENTRY_GUARD: OnceLock<Mutex<Option<sentry::ClientInitGuard>>> = OnceLock::new();
 
+pub const DEFAULT_GLITCHTIP_DSN: &str =
+    "https://2e56fa98dc824baaa843dff62a18b3d2@app.glitchtip.com/28025";
+
 /// Initialize Sentry / GlitchTip crash reporting.
-/// Reads DSN from compile-time `GLITCHTIP_DSN` / `SENTRY_DSN` or runtime environment variables.
-/// If neither is present, operates in safe no-op mode without crashing.
+/// Reads DSN from compile-time `GLITCHTIP_DSN` / `SENTRY_DSN` or runtime environment variables,
+/// falling back to the project's official GlitchTip DSN.
 pub fn init() {
     if IS_INITIALIZED.swap(true, Ordering::SeqCst) {
         return;
@@ -17,7 +20,8 @@ pub fn init() {
         .map(|s| s.to_string())
         .or_else(|| option_env!("SENTRY_DSN").map(|s| s.to_string()))
         .or_else(|| std::env::var("GLITCHTIP_DSN").ok())
-        .or_else(|| std::env::var("SENTRY_DSN").ok());
+        .or_else(|| std::env::var("SENTRY_DSN").ok())
+        .or_else(|| Some(DEFAULT_GLITCHTIP_DSN.to_string()));
 
     if let Some(dsn_str) = dsn {
         let trimmed = dsn_str.trim();
@@ -32,6 +36,7 @@ pub fn init() {
                             .into(),
                     ),
                     attach_stacktrace: true,
+                    traces_sample_rate: 0.01,
                     ..Default::default()
                 },
             ));
@@ -42,6 +47,7 @@ pub fn init() {
             return;
         }
     }
+
 
     crate::log_info!(
         "crash_reporter",
@@ -334,5 +340,14 @@ mod tests {
 
         let _ = is_reporting_enabled();
     }
+
+    #[test]
+    fn test_sentry_capture_message_verification() {
+        init();
+        let uuid = sentry::capture_message("Test GlitchTip error", sentry::Level::Error);
+        let id_str = uuid.to_string();
+        assert!(!id_str.is_empty());
+    }
 }
+
 

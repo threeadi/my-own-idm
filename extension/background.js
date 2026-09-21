@@ -195,6 +195,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   return true;
 });
 
+const GLITCHTIP_PROJECT_ID = "28025";
+const GLITCHTIP_KEY = "2e56fa98dc824baaa843dff62a18b3d2";
+const GLITCHTIP_STORE_URL = `https://app.glitchtip.com/api/${GLITCHTIP_PROJECT_ID}/store/`;
+
 // 5. Crash & Diagnostic Error Reporting
 async function reportExtensionError(errorType, message, details = {}) {
   const payload = {
@@ -219,7 +223,7 @@ async function reportExtensionError(errorType, message, details = {}) {
     // Desktop app may be closed or offline
   }
 
-  // Fallback: Try Native Messaging if available
+  // Fallback 1: Try Native Messaging if available
   try {
     chrome.runtime.sendNativeMessage(
       NATIVE_HOST,
@@ -234,8 +238,46 @@ async function reportExtensionError(errorType, message, details = {}) {
     // ignore
   }
 
+  // Fallback 2: Direct HTTP POST to GlitchTip when desktop is closed
+  try {
+    const eventId = (typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2)).replace(/-/g, "");
+
+    const sentryEvent = {
+      event_id: eventId,
+      timestamp: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
+      platform: "javascript",
+      level: "error",
+      logger: "browser_extension",
+      message: `Extension [${errorType}]: ${message}`,
+      tags: {
+        component: "browser_extension",
+        error_type: errorType,
+        browser: navigator.userAgent
+      },
+      extra: details || {}
+    };
+
+    const directRes = await fetch(GLITCHTIP_STORE_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Sentry-Auth": `Sentry sentry_version=7, sentry_client=myownidm-extension/1.0, sentry_key=${GLITCHTIP_KEY}`
+      },
+      body: JSON.stringify(sentryEvent)
+    });
+    if (directRes.ok) {
+      console.log("[MyOwnIDM] Extension diagnostic reported directly to GlitchTip:", errorType);
+      return true;
+    }
+  } catch (directErr) {
+    // network error
+  }
+
   return false;
 }
+
 
 // Global Exception Handlers for Extension Background Service Worker
 self.addEventListener("error", (event) => {
