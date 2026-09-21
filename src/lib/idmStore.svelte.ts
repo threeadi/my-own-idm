@@ -1,6 +1,6 @@
 import { invoke, isTauri as coreIsTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import type { DownloadCategory, DownloadTask, SpeedMetrics, SpeedLimitUnit, GlobalSpeedLimitConfig, AppSettings } from './types';
+import type { DownloadCategory, DownloadTask, SpeedMetrics, SpeedLimitUnit, GlobalSpeedLimitConfig, AppSettings, DuplicateCheckResult } from './types';
 import { unitToBps, bpsToUnit, DEFAULT_APP_SETTINGS, matchesDownloadExtension } from './types';
 import { getCompileTimeVersion, fetchRuntimeAppVersion } from './version';
 
@@ -552,6 +552,73 @@ export class IdmStore {
       this.refreshError = typeof e === 'string' ? e : (e?.message || 'Gagal memperbarui URL');
       throw e;
     }
+  }
+
+  async checkDuplicateDownload(url: string, filename: string = '', saveDir: string = ''): Promise<DuplicateCheckResult> {
+    if (!url.trim()) {
+      return {
+        is_duplicate: false,
+        status: null,
+        task_id: null,
+        filename: null,
+        file_path: null,
+        file_exists_on_disk: false,
+        downloaded_bytes: 0,
+        total_bytes: null,
+        percent: 0,
+        completed_at: null,
+        suggested_new_filename: null,
+      };
+    }
+    if (isTauri()) {
+      try {
+        return await invoke<DuplicateCheckResult>('check_duplicate_download', {
+          url: url.trim(),
+          filename: filename.trim(),
+          saveDir: saveDir.trim(),
+        });
+      } catch (e) {
+        console.warn('Failed to check duplicate download via Tauri invoke:', e);
+      }
+    }
+
+    // In-memory fallback
+    const trimmed = url.trim();
+    const matched = this.tasks.find((t) => t.url === trimmed || (filename && t.filename === filename));
+    if (matched) {
+      const isCompleted = matched.status === 'completed';
+      const pct = matched.total_bytes ? Math.min(100, (matched.downloaded_bytes / matched.total_bytes) * 100) : (isCompleted ? 100 : 0);
+      const extMatch = (matched.filename || 'file').match(/^(.*?)(?:\.([^.]+))?$/);
+      const stem = extMatch ? extMatch[1] : (matched.filename || 'file');
+      const ext = extMatch && extMatch[2] ? `.${extMatch[2]}` : '';
+      return {
+        is_duplicate: true,
+        status: matched.status,
+        task_id: matched.id,
+        filename: matched.filename,
+        file_path: matched.file_path,
+        file_exists_on_disk: true,
+        downloaded_bytes: matched.downloaded_bytes,
+        total_bytes: matched.total_bytes,
+        percent: pct,
+        completed_at: matched.completed_at,
+        suggested_new_filename: `${stem} (1)${ext}`,
+      };
+    }
+
+    return {
+      is_duplicate: false,
+      status: null,
+      task_id: null,
+      filename: null,
+      file_path: null,
+      file_exists_on_disk: false,
+      downloaded_bytes: 0,
+      total_bytes: null,
+      percent: 0,
+      completed_at: null,
+      suggested_new_filename: null,
+    };
   }
 
   async openExternalUrl(url: string) {

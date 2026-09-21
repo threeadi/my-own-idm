@@ -76,6 +76,20 @@ export interface ProbeResult {
   is_hls: boolean;
 }
 
+export interface DuplicateCheckResult {
+  is_duplicate: boolean;
+  status: TaskStatus | null;
+  task_id: string | null;
+  filename: string | null;
+  file_path: string | null;
+  file_exists_on_disk: boolean;
+  downloaded_bytes: number;
+  total_bytes: number | null;
+  percent: number;
+  completed_at: string | null;
+  suggested_new_filename: string | null;
+}
+
 export function formatBytes(bytes: number | null | undefined): string {
   if (bytes === null || bytes === undefined) return 'Unknown size';
   if (bytes === 0) return '0 B';

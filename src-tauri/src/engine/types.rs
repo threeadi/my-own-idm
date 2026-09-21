@@ -126,6 +126,21 @@ pub struct ProbeResult {
     pub is_hls: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DuplicateCheckResult {
+    pub is_duplicate: bool,
+    pub status: Option<TaskStatus>,
+    pub task_id: Option<String>,
+    pub filename: Option<String>,
+    pub file_path: Option<String>,
+    pub file_exists_on_disk: bool,
+    pub downloaded_bytes: u64,
+    pub total_bytes: Option<u64>,
+    pub percent: f64,
+    pub completed_at: Option<String>,
+    pub suggested_new_filename: Option<String>,
+}
+
 pub fn format_bytes(bytes: u64) -> String {
     const KB: f64 = 1024.0;
     const MB: f64 = KB * 1024.0;
@@ -307,6 +322,27 @@ mod tests {
         assert_eq!(decoded.task_id, "task-abc");
         assert_eq!(decoded.speed_bps, 1048576);
         assert_eq!(decoded.percent, 50.0);
+    }
+
+    #[test]
+    fn test_duplicate_check_result_serde() {
+        let res = DuplicateCheckResult {
+            is_duplicate: true,
+            status: Some(TaskStatus::Completed),
+            task_id: Some("task-123".to_string()),
+            filename: Some("ubuntu.iso".to_string()),
+            file_path: Some("D:\\Downloads\\ubuntu.iso".to_string()),
+            file_exists_on_disk: true,
+            downloaded_bytes: 1000,
+            total_bytes: Some(1000),
+            percent: 100.0,
+            completed_at: Some("2026-09-21 12:00:00".to_string()),
+            suggested_new_filename: Some("ubuntu (1).iso".to_string()),
+        };
+
+        let json = serde_json::to_string(&res).expect("serialize duplicate result");
+        let decoded: DuplicateCheckResult = serde_json::from_str(&json).expect("deserialize duplicate result");
+        assert_eq!(decoded, res);
     }
 }
 

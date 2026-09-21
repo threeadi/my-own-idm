@@ -5,7 +5,7 @@ use tauri::State;
 
 use crate::engine::manager::DownloadManager;
 use crate::engine::probe::Prober;
-use crate::engine::types::{DownloadTask, ProbeResult};
+use crate::engine::types::{DownloadTask, DuplicateCheckResult, ProbeResult};
 
 pub struct AppState {
     pub manager: Arc<DownloadManager>,
@@ -18,6 +18,16 @@ pub async fn probe_url(
     headers: Option<HashMap<String, String>>,
 ) -> Result<ProbeResult, String> {
     Prober::probe(&state.manager.client, &url, headers).await
+}
+
+#[tauri::command]
+pub async fn check_duplicate_download(
+    state: State<'_, AppState>,
+    url: String,
+    filename: String,
+    save_dir: String,
+) -> Result<DuplicateCheckResult, String> {
+    Ok(state.manager.check_duplicate_task(&url, &filename, &save_dir).await)
 }
 
 #[tauri::command]
@@ -450,5 +460,14 @@ mod tests {
         let loaded = db.get_all_settings().unwrap();
         assert_eq!(loaded.get("default_connections"), Some(&"16".to_string()));
         assert_eq!(loaded.get("notify_on_complete"), Some(&"true".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_check_duplicate_download_command() {
+        let db = Arc::new(crate::db::Database::open_in_memory().unwrap());
+        let manager = Arc::new(DownloadManager::new(db.clone()));
+
+        let res = manager.check_duplicate_task("https://example.com/file.zip", "file.zip", "C:\\Downloads").await;
+        assert!(!res.is_duplicate);
     }
 }

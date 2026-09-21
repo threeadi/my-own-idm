@@ -14,7 +14,7 @@ use crate::engine::probe::Prober;
 #[allow(unused_imports)]
 use crate::engine::types::DownloadCategory;
 use crate::engine::types::{
-    DownloadTask, GlobalSpeedLimitConfig, ProbeResult, Segment, SpeedMetrics, TaskStatus,
+    DownloadTask, DuplicateCheckResult, GlobalSpeedLimitConfig, ProbeResult, Segment, SpeedMetrics, TaskStatus,
 };
 use crate::engine::worker::SegmentWorker;
 use crate::engine::writer::FileWriter;
@@ -213,6 +213,154 @@ impl DownloadManager {
         }
 
         Ok(())
+    }
+
+    /// Generates a unique filename following the "name (1).ext" convention
+    /// if the file already exists in `dir`.
+    pub fn suggest_unique_filename(dir: &str, filename: &str) -> String {
+        let p = Path::new(filename);
+        let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or(filename);
+        let ext = p.extension().and_then(|e| e.to_str());
+
+        for i in 1..=9999 {
+            let candidate = match ext {
+                Some(e) if !e.is_empty() => format!("{} ({}).{}", stem, i, e),
+                _ => format!("{} ({})", stem, i),
+            };
+            let full_path = Path::new(dir).join(&candidate);
+            if !full_path.exists() {
+                return candidate;
+            }
+        }
+
+        format!("{}_{}", filename, &Uuid::new_v4().to_string()[..8])
+    }
+
+    /// Checks if a download with the same URL or colliding target file path exists.
+    /// Follows strict priority:
+    /// 1. In-progress tasks (Downloading, Probing, Queued)
+    /// 2. Paused tasks
+    /// 3. Completed tasks (only if physical file exists on disk; if deleted, ignored)
+    pub async fn check_duplicate_task(
+        &self,
+        url: &str,
+        filename: &str,
+        save_dir: &str,
+    ) -> DuplicateCheckResult {
+        let clean_url = crate::engine::probe::clean_stream_url(url);
+        let trimmed_url = url.trim();
+        let target_path = if !save_dir.is_empty() && !filename.is_empty() {
+            Some(Path::new(save_dir).join(filename))
+        } else {
+            None
+        };
+
+        // Gather in-memory tasks
+        let tasks_guard = self.tasks.read().await;
+        let mut all_tasks: Vec<DownloadTask> = tasks_guard.values().cloned().collect();
+        drop(tasks_guard);
+
+        // Supplement from DB if completed/historic tasks are not in memory
+        if let Ok(db_tasks) = self.db.load_all_tasks() {
+            for dt in db_tasks {
+                if !all_tasks.iter().any(|t| t.id == dt.id) {
+                    all_tasks.push(dt);
+                }
+            }
+        }
+
+        let is_matching = |t: &DownloadTask| -> bool {
+            if !trimmed_url.is_empty() && (t.url == trimmed_url || (!clean_url.is_empty() && t.url == clean_url)) {
+                return true;
+            }
+            if let Some(target) = &target_path {
+                let task_p = Path::new(&t.file_path);
+                if task_p == target {
+                    return true;
+                }
+                if !t.save_dir.is_empty() && !t.filename.is_empty() {
+                    let combined = Path::new(&t.save_dir).join(&t.filename);
+                    if combined == *target {
+                        return true;
+                    }
+                }
+            }
+            false
+        };
+
+        let mut matching_tasks: Vec<DownloadTask> = all_tasks.into_iter().filter(is_matching).collect();
+
+        // Sort by priority: Downloading (0) > Probing/Queued (1) > Paused (2) > Completed (3) > Failed (4)
+        matching_tasks.sort_by_key(|t| match t.status {
+            TaskStatus::Downloading => 0,
+            TaskStatus::Probing | TaskStatus::Queued => 1,
+            TaskStatus::Paused => 2,
+            TaskStatus::Completed => 3,
+            TaskStatus::Failed(_) => 4,
+        });
+
+        for matched in matching_tasks {
+            let file_exists = Path::new(&matched.file_path).exists();
+
+            // Key Invariant: If Completed, but file physically removed from disk,
+            // treat as not duplicated so the user can download anew without hindrance.
+            if matched.status == TaskStatus::Completed && !file_exists {
+                continue;
+            }
+
+            let percent = if let Some(total) = matched.total_bytes {
+                if total > 0 {
+                    (matched.downloaded_bytes as f64 / total as f64) * 100.0
+                } else {
+                    0.0
+                }
+            } else if matched.status == TaskStatus::Completed {
+                100.0
+            } else {
+                0.0
+            };
+
+            let base_filename = if !filename.is_empty() {
+                filename
+            } else {
+                &matched.filename
+            };
+            let target_dir = if !save_dir.is_empty() {
+                save_dir
+            } else {
+                &matched.save_dir
+            };
+
+            let suggested_new_filename = Self::suggest_unique_filename(target_dir, base_filename);
+
+            return DuplicateCheckResult {
+                is_duplicate: true,
+                status: Some(matched.status),
+                task_id: Some(matched.id),
+                filename: Some(matched.filename),
+                file_path: Some(matched.file_path),
+                file_exists_on_disk: file_exists,
+                downloaded_bytes: matched.downloaded_bytes,
+                total_bytes: matched.total_bytes,
+                percent,
+                completed_at: matched.completed_at,
+                suggested_new_filename: Some(suggested_new_filename),
+            };
+        }
+
+        DuplicateCheckResult {
+            is_duplicate: false,
+            status: None,
+            task_id: None,
+            filename: None,
+            file_path: None,
+            file_exists_on_disk: false,
+            downloaded_bytes: 0,
+            total_bytes: None,
+            percent: 0.0,
+            completed_at: None,
+            suggested_new_filename: None,
+        }
     }
 
     pub async fn prepare_download_task(
@@ -1691,6 +1839,113 @@ mod tests {
             let limiter = limiters.get("task-limit-1").unwrap();
             assert_eq!(limiter.get_limit_bps(), 0);
         }
+    }
+
+    #[test]
+    fn test_suggest_unique_filename() {
+        let temp = tempfile::tempdir().unwrap();
+        let dir = temp.path().to_str().unwrap();
+
+        // No existing file
+        let s1 = DownloadManager::suggest_unique_filename(dir, "video.mp4");
+        assert_eq!(s1, "video (1).mp4");
+
+        // Create video (1).mp4
+        std::fs::write(temp.path().join("video (1).mp4"), b"test").unwrap();
+        let s2 = DownloadManager::suggest_unique_filename(dir, "video.mp4");
+        assert_eq!(s2, "video (2).mp4");
+
+        // Test without extension
+        let s3 = DownloadManager::suggest_unique_filename(dir, "README");
+        assert_eq!(s3, "README (1)");
+    }
+
+    #[tokio::test]
+    async fn test_check_duplicate_task_lifecycle_and_physical_disk_check() {
+        let db = Arc::new(Database::open_in_memory().unwrap());
+        let manager = DownloadManager::new(db.clone());
+        let temp = tempfile::tempdir().unwrap();
+        let save_dir = temp.path().to_string_lossy().to_string();
+        let file_path = temp.path().join("file.zip").to_string_lossy().to_string();
+
+        // 1. Initial check: not duplicate
+        let r0 = manager.check_duplicate_task("https://example.com/file.zip", "file.zip", &save_dir).await;
+        assert!(!r0.is_duplicate);
+
+        // 2. Active Downloading task
+        let active_task = DownloadTask {
+            id: "task-active-1".to_string(),
+            url: "https://example.com/file.zip".to_string(),
+            filename: "file.zip".to_string(),
+            save_dir: save_dir.clone(),
+            file_path: file_path.clone(),
+            total_bytes: Some(1_000_000),
+            downloaded_bytes: 450_000,
+            category: DownloadCategory::Compressed,
+            status: TaskStatus::Downloading,
+            connections: 8,
+            supports_range: true,
+            is_hls: false,
+            created_at: "2026-09-21 12:00:00".to_string(),
+            completed_at: None,
+            error_message: None,
+            segments: vec![],
+            referer: None,
+            speed_limit_bps: None,
+        };
+        manager.tasks.write().await.insert(active_task.id.clone(), active_task.clone());
+
+        let r1 = manager.check_duplicate_task("https://example.com/file.zip", "file.zip", &save_dir).await;
+        assert!(r1.is_duplicate);
+        assert_eq!(r1.status, Some(TaskStatus::Downloading));
+        assert_eq!(r1.percent, 45.0);
+        assert_eq!(r1.task_id, Some("task-active-1".to_string()));
+        assert_eq!(r1.suggested_new_filename, Some("file (1).zip".to_string()));
+
+        // Also check duplicate by colliding target path with different URL
+        let r1_by_path = manager.check_duplicate_task("https://other-mirror.com/different-url.zip", "file.zip", &save_dir).await;
+        assert!(r1_by_path.is_duplicate);
+        assert_eq!(r1_by_path.status, Some(TaskStatus::Downloading));
+
+        // 3. Completed task with physical file on disk vs deleted from disk
+        manager.tasks.write().await.clear();
+        let completed_file = temp.path().join("completed.iso");
+        std::fs::write(&completed_file, b"ISO_DATA").unwrap();
+
+        let completed_task = DownloadTask {
+            id: "task-comp-1".to_string(),
+            url: "https://example.com/completed.iso".to_string(),
+            filename: "completed.iso".to_string(),
+            save_dir: save_dir.clone(),
+            file_path: completed_file.to_string_lossy().to_string(),
+            total_bytes: Some(8),
+            downloaded_bytes: 8,
+            category: DownloadCategory::Compressed,
+            status: TaskStatus::Completed,
+            connections: 4,
+            supports_range: true,
+            is_hls: false,
+            created_at: "2026-09-21 10:00:00".to_string(),
+            completed_at: Some("2026-09-21 10:01:00".to_string()),
+            error_message: None,
+            segments: vec![],
+            referer: None,
+            speed_limit_bps: None,
+        };
+        db.insert_task(&completed_task).unwrap();
+
+        // A. File exists on disk -> should detect duplicate completed
+        let r2 = manager.check_duplicate_task("https://example.com/completed.iso", "completed.iso", &save_dir).await;
+        assert!(r2.is_duplicate);
+        assert_eq!(r2.status, Some(TaskStatus::Completed));
+        assert!(r2.file_exists_on_disk);
+        assert_eq!(r2.percent, 100.0);
+        assert_eq!(r2.completed_at, Some("2026-09-21 10:01:00".to_string()));
+
+        // B. Physically delete file from disk (user deleted via Explorer) -> must NOT be treated as duplicate!
+        std::fs::remove_file(&completed_file).unwrap();
+        let r3 = manager.check_duplicate_task("https://example.com/completed.iso", "completed.iso", &save_dir).await;
+        assert!(!r3.is_duplicate, "Expected deleted file to not trigger duplicate warning");
     }
 }
 

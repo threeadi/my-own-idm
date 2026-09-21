@@ -64,6 +64,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::probe_url,
+            commands::check_duplicate_download,
             commands::start_download,
             commands::pause_download,
             commands::resume_download,

@@ -891,6 +891,63 @@ describe('IdmStore State & Filtering', () => {
       icon: '/favicon.png',
     });
   });
+
+  it('handles checkDuplicateDownload in Tauri and browser fallback modes', async () => {
+    const store = new IdmStore();
+
+    // 1. Empty URL
+    const resEmpty = await store.checkDuplicateDownload('');
+    expect(resEmpty.is_duplicate).toBe(false);
+
+    // 2. Tauri invoke mode
+    mockIsTauriReturn = true;
+    const mockDupResult = {
+      is_duplicate: true,
+      status: 'downloading',
+      task_id: 'task-dup-1',
+      filename: 'file.iso',
+      file_path: 'C:\\Downloads\\file.iso',
+      file_exists_on_disk: true,
+      downloaded_bytes: 500,
+      total_bytes: 1000,
+      percent: 50.0,
+      completed_at: null,
+      suggested_new_filename: 'file (1).iso',
+    };
+    mockInvoke.mockResolvedValueOnce(mockDupResult);
+
+    const resTauri = await store.checkDuplicateDownload('https://example.com/file.iso', 'file.iso', 'C:\\Downloads');
+    expect(resTauri.is_duplicate).toBe(true);
+    expect(resTauri.suggested_new_filename).toBe('file (1).iso');
+    expect(mockInvoke).toHaveBeenCalledWith('check_duplicate_download', {
+      url: 'https://example.com/file.iso',
+      filename: 'file.iso',
+      saveDir: 'C:\\Downloads',
+    });
+
+    // 3. Browser fallback mode (isTauri = false)
+    (globalThis as any).window = {};
+    mockIsTauriReturn = false;
+    store.tasks = [
+      makeTask({
+        id: 'task-web-1',
+        url: 'https://example.com/web-file.zip',
+        filename: 'web-file.zip',
+        file_path: 'D:\\web-file.zip',
+        total_bytes: 2000,
+        downloaded_bytes: 1000,
+        status: 'downloading',
+      }),
+    ];
+
+    const resBrowserMatched = await store.checkDuplicateDownload('https://example.com/web-file.zip');
+    expect(resBrowserMatched.is_duplicate).toBe(true);
+    expect(resBrowserMatched.suggested_new_filename).toBe('web-file (1).zip');
+    expect(resBrowserMatched.percent).toBe(50);
+
+    const resBrowserNotMatched = await store.checkDuplicateDownload('https://example.com/other-new.zip');
+    expect(resBrowserNotMatched.is_duplicate).toBe(false);
+  });
 });
 
 
