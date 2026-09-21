@@ -319,11 +319,18 @@ impl DownloadManager {
             .prepare_download_task(&url, &filename, &save_dir, connections, custom_headers.clone())
             .await?;
 
-        // Extract rate limiters: always pass global_limiter so running workers dynamically throttle
+        // Extract rate limiters: always pass global_limiter and task_limiter so running workers dynamically throttle
         let global_limiter = Some(self.global_limiter.clone());
         let task_limiter = {
-            let limiters = self.task_limiters.read().await;
-            limiters.get(&task.id).cloned()
+            let mut limiters = self.task_limiters.write().await;
+            Some(
+                limiters
+                    .entry(task.id.clone())
+                    .or_insert_with(|| {
+                        Arc::new(TokenBucketRateLimiter::new(task.speed_limit_bps.unwrap_or(0)))
+                    })
+                    .clone(),
+            )
         };
 
         // Spawn runner task
@@ -393,11 +400,18 @@ impl DownloadManager {
                 flags.insert(task_id.to_string(), cancel_flag.clone());
             }
 
-            // Extract rate limiters: always pass global_limiter so running workers dynamically throttle
+            // Extract rate limiters: always pass global_limiter and task_limiter so running workers dynamically throttle
             let global_limiter = Some(self.global_limiter.clone());
             let task_limiter = {
-                let limiters = self.task_limiters.read().await;
-                limiters.get(&task.id).cloned()
+                let mut limiters = self.task_limiters.write().await;
+                Some(
+                    limiters
+                        .entry(task.id.clone())
+                        .or_insert_with(|| {
+                            Arc::new(TokenBucketRateLimiter::new(task.speed_limit_bps.unwrap_or(0)))
+                        })
+                        .clone(),
+                )
             };
 
             let db_clone = self.db.clone();
@@ -511,16 +525,15 @@ impl DownloadManager {
         let is_youtube = effective_url.contains("youtube.com") || effective_url.contains("youtu.be");
         let is_stream = is_youtube || task.is_hls || effective_url.contains(".m3u8");
 
-        let effective_limit_bps = task_limiter
-            .as_ref()
-            .map(|l| l.get_limit_bps())
-            .filter(|&b| b > 0)
-            .or_else(|| {
-                global_limiter
-                    .as_ref()
-                    .map(|l| l.get_limit_bps())
-                    .filter(|&b| b > 0)
-            });
+        let effective_limit_bps = match (
+            task_limiter.as_ref().map(|l| l.get_limit_bps()).filter(|&b| b > 0),
+            global_limiter.as_ref().map(|l| l.get_limit_bps()).filter(|&b| b > 0),
+        ) {
+            (Some(t), Some(g)) => Some(t.min(g)),
+            (Some(t), None) => Some(t),
+            (None, Some(g)) => Some(g),
+            (None, None) => None,
+        };
 
         if is_stream {
             // Stream mode via YtDlpRunner (handles YouTube + HLS m3u8 streams with ffmpeg remuxing)
