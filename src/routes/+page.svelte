@@ -5,6 +5,7 @@
   import Sidebar from '../components/Sidebar.svelte';
   import TelemetryBento from '../components/TelemetryBento.svelte';
   import DownloadTable from '../components/DownloadTable.svelte';
+  import TelegramWorkspaceView from '../components/TelegramWorkspaceView.svelte';
   import AddDownloadModal from '../components/AddDownloadModal.svelte';
   import DownloadProgressModal from '../components/DownloadProgressModal.svelte';
   import DownloadOutcomeModal from '../components/DownloadOutcomeModal.svelte';
@@ -12,6 +13,7 @@
   import SettingsModal from '../components/SettingsModal.svelte';
   import RefreshLinkModal from '../components/RefreshLinkModal.svelte';
   import DuplicateConfirmModal from '../components/DuplicateConfirmModal.svelte';
+  import TelegramAuthPopover from '../components/TelegramAuthPopover.svelte';
 
   onMount(() => {
     store.init();
@@ -51,12 +53,16 @@
       <!-- Bento Telemetry Dashboard -->
       <TelemetryBento />
 
-      <!-- Active Downloads Queue / Cards -->
-      <DownloadTable />
+      <!-- Active Workspace View -->
+      {#if store.activeView === 'telegram'}
+        <TelegramWorkspaceView />
+      {:else}
+        <DownloadTable />
+      {/if}
     </main>
   </div>
 
-  <!-- Interactive Dialog Modals -->
+  <!-- Interactive Dialog Modals & Popovers -->
   <AddDownloadModal />
   <DownloadProgressModal />
   <DownloadOutcomeModal />
@@ -64,5 +70,8 @@
   <RefreshLinkModal />
   <DuplicateConfirmModal />
   <SettingsModal />
+  <TelegramAuthPopover />
 </div>
+
+
 

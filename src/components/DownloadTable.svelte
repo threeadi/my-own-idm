@@ -24,7 +24,8 @@
     Check,
     LayoutGrid,
     List,
-    Gauge
+    Gauge,
+    Send
   } from '@lucide/svelte';
 
   const tasks = $derived(store.filteredTasks);
@@ -279,6 +280,13 @@
                   {#if task.quality}
                     <span class="shrink-0 px-2 py-0.2 rounded-full bg-[#4cd7f6]/10 text-[#4cd7f6] font-mono text-[10px] font-semibold border border-[#4cd7f6]/30 uppercase">
                       {task.quality}
+                    </span>
+                  {/if}
+
+                  {#if task.source === 'telegram' || task.id.startsWith('tg_')}
+                    <span class="shrink-0 px-2 py-0.2 rounded-full bg-[#4cd7f6]/15 text-[#4cd7f6] font-mono text-[10px] font-semibold border border-[#4cd7f6]/30 flex items-center gap-1" title={task.telegram_channel ? `Origin: ${task.telegram_channel}` : 'Telegram Download'}>
+                      <Send class="w-3 h-3 text-[#4cd7f6]" />
+                      Telegram {task.telegram_channel ? `• ${task.telegram_channel}` : ''}
                     </span>
                   {/if}
                 </div>
@@ -560,6 +568,12 @@
                   {#if task.quality}
                     <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#4cd7f6]/10 text-[#4cd7f6] border border-[#4cd7f6]/30 uppercase font-semibold">
                       {task.quality}
+                    </span>
+                  {/if}
+                  {#if task.source === 'telegram' || task.id.startsWith('tg_')}
+                    <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#4cd7f6]/15 text-[#4cd7f6] border border-[#4cd7f6]/30 flex items-center gap-1" title={task.telegram_channel ? `Telegram Channel: ${task.telegram_channel}` : 'Telegram Download'}>
+                      <Send class="w-2.5 h-2.5 text-[#4cd7f6]" />
+                      Telegram
                     </span>
                   {/if}
                   {#if task.speed_limit_bps && task.speed_limit_bps > 0}

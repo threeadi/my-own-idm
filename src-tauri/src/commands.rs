@@ -9,6 +9,7 @@ use crate::engine::types::{DownloadTask, DuplicateCheckResult, ProbeResult};
 
 pub struct AppState {
     pub manager: Arc<DownloadManager>,
+    pub telegram: Arc<crate::engine::telegram::TelegramManager>,
 }
 
 #[tauri::command]
@@ -389,6 +390,103 @@ pub async fn report_diagnostic_error(
     report_diagnostic_error_inner(&state.manager, &task_id, error_message).await
 }
 
+#[tauri::command]
+pub async fn telegram_set_credentials(
+    state: State<'_, AppState>,
+    api_id: String,
+    api_hash: String,
+) -> Result<(), String> {
+    state.telegram.set_credentials(&api_id, &api_hash)
+}
+
+#[tauri::command]
+pub async fn telegram_request_otp(
+    state: State<'_, AppState>,
+    phone_number: String,
+) -> Result<String, String> {
+    state.telegram.request_otp(&phone_number)
+}
+
+#[tauri::command]
+pub async fn telegram_verify_otp(
+    state: State<'_, AppState>,
+    phone_number: String,
+    code: String,
+    phone_code_hash: String,
+) -> Result<crate::engine::telegram::TelegramAuthStatus, String> {
+    state.telegram.verify_otp(&phone_number, &code, &phone_code_hash)
+}
+
+#[tauri::command]
+pub async fn telegram_login_bot(
+    state: State<'_, AppState>,
+    bot_token: String,
+) -> Result<crate::engine::telegram::TelegramAuthStatus, String> {
+    state.telegram.login_with_bot(&bot_token)
+}
+
+#[tauri::command]
+pub async fn telegram_get_auth_status(
+    state: State<'_, AppState>,
+) -> Result<crate::engine::telegram::TelegramAuthStatus, String> {
+    Ok(state.telegram.get_auth_status())
+}
+
+#[tauri::command]
+pub async fn telegram_logout(
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    state.telegram.logout()
+}
+
+#[tauri::command]
+pub async fn telegram_list_dialogs(
+    state: State<'_, AppState>,
+) -> Result<Vec<crate::engine::telegram::TelegramChannelInfo>, String> {
+    state.telegram.list_dialogs()
+}
+
+#[tauri::command]
+pub async fn telegram_delete_dialog(
+    state: State<'_, AppState>,
+    dialog_id: String,
+) -> Result<Vec<crate::engine::telegram::TelegramChannelInfo>, String> {
+    state.telegram.delete_dialog(&dialog_id)
+}
+
+#[tauri::command]
+pub async fn telegram_scan_media(
+    state: State<'_, AppState>,
+    chat_input: String,
+    media_filter: Option<String>,
+) -> Result<Vec<crate::engine::telegram::TelegramMediaItem>, String> {
+    state.telegram.scan_chat_media(&chat_input, media_filter.as_deref())
+}
+
+#[tauri::command]
+pub async fn telegram_list_accounts(
+    state: State<'_, AppState>,
+) -> Result<Vec<crate::engine::telegram::TelegramAccountInfo>, String> {
+    Ok(state.telegram.list_accounts())
+}
+
+#[tauri::command]
+pub async fn telegram_switch_account(
+    state: State<'_, AppState>,
+    account_id: String,
+) -> Result<crate::engine::telegram::TelegramAuthStatus, String> {
+    state.telegram.switch_account(&account_id)
+}
+
+#[tauri::command]
+pub async fn telegram_remove_account(
+    state: State<'_, AppState>,
+    account_id: String,
+) -> Result<Vec<crate::engine::telegram::TelegramAccountInfo>, String> {
+    state.telegram.remove_account(&account_id)
+}
+
+
 
 #[cfg(test)]
 
@@ -417,7 +515,8 @@ mod tests {
     async fn test_app_state_and_manager_methods() {
         let db = Arc::new(crate::db::Database::open_in_memory().unwrap());
         let manager = Arc::new(DownloadManager::new(db));
-        let state = AppState { manager: manager.clone() };
+        let telegram = Arc::new(crate::engine::telegram::TelegramManager::new());
+        let state = AppState { manager: manager.clone(), telegram };
 
         let all = state.manager.get_all_tasks().await;
         assert_eq!(all.len(), 0);

@@ -43,6 +43,8 @@ export interface DownloadTask {
   referer?: string | null;
   speed_limit_bps?: number | null;
   quality?: string | null;
+  source?: 'http' | 'telegram';
+  telegram_channel?: string | null;
   // Computed in frontend
   speed_bps?: number;
   eta_seconds?: number | null;
@@ -177,6 +179,8 @@ export interface AppSettings {
   maxRetries: number;
   duplicateAction: DuplicateAction;
   duplicateActionRemember: boolean;
+  telegramDownloadDir?: string;
+  telegramUseChannelSubfolder?: boolean;
 }
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -232,5 +236,55 @@ export function matchesDownloadExtension(url: string, extensionsStr?: string): b
     return ext === e;
   });
 }
+
+export interface TelegramAccountInfo {
+  account_id: string;
+  account_type: 'user' | 'bot';
+  phone_number: string | null;
+  username: string | null;
+  is_active: boolean;
+  is_premium: boolean;
+  created_at: string;
+}
+
+export interface TelegramAuthStatus {
+  is_authenticated: boolean;
+  phone_number: string | null;
+  user_id: string | null;
+  username: string | null;
+  session_active: boolean;
+  anti_flood_enabled: boolean;
+  concurrent_limit: number;
+  download_delay_ms: number;
+  is_premium: boolean;
+  error: string | null;
+}
+
+export interface TelegramChannelInfo {
+  id: string;
+  title: string;
+  username: string | null;
+  chat_type: string;
+  unread_count: number;
+  photo_url: string | null;
+  is_private: boolean;
+}
+
+export interface TelegramMediaItem {
+  message_id: number;
+  chat_id: string;
+  chat_title: string;
+  filename: string;
+  file_size: number;
+  mime_type: string;
+  media_type: string;
+  created_at: string;
+  tg_url: string;
+  thumbnail_url: string | null;
+  duration_seconds: number | null;
+  resolution: string | null;
+  crc32_hash: string | null;
+}
+
 
 

@@ -1,6 +1,6 @@
 import { invoke, isTauri as coreIsTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import type { DownloadCategory, DownloadTask, SpeedMetrics, SpeedLimitUnit, GlobalSpeedLimitConfig, AppSettings, DuplicateCheckResult, SortCriterion, SortOrder, SupportedLanguage } from './types';
+import type { DownloadCategory, DownloadTask, SpeedMetrics, SpeedLimitUnit, GlobalSpeedLimitConfig, AppSettings, DuplicateCheckResult, SortCriterion, SortOrder, SupportedLanguage, TelegramAccountInfo, TelegramAuthStatus, TelegramChannelInfo, TelegramMediaItem } from './types';
 import { unitToBps, bpsToUnit, DEFAULT_APP_SETTINGS, matchesDownloadExtension } from './types';
 import { getCompileTimeVersion, fetchRuntimeAppVersion } from './version';
 import { getTranslation, type TranslationKey } from './i18n';
@@ -20,6 +20,12 @@ export class IdmStore {
   searchQuery = $state<string>('');
   isAddModalOpen = $state<boolean>(false);
   isSettingsModalOpen = $state<boolean>(false);
+  settingsActiveTab = $state<'general' | 'connection' | 'filetypes' | 'saveto' | 'extensions' | 'telegram'>('general');
+
+  openSettingsModal(tab: 'general' | 'connection' | 'filetypes' | 'saveto' | 'extensions' | 'telegram' = 'general') {
+    this.settingsActiveTab = tab;
+    this.isSettingsModalOpen = true;
+  }
   isProgressModalOpen = $state<boolean>(false);
   progressModalTaskId = $state<string | null>(null);
   viewMode = $state<'cards' | 'table'>('cards');
@@ -33,6 +39,20 @@ export class IdmStore {
   initialHeaders = $state<Record<string, string> | null>(null);
   initialQuality = $state<string>('');
   bypassDuplicateCheck = $state<boolean>(false);
+
+  activeView = $state<'downloads' | 'telegram'>('downloads');
+  activeTelegramChannelId = $state<string | null>(null);
+  isTelegramGrabberOpen = $state<boolean>(false);
+  isTelegramAuthModalOpen = $state<boolean>(false);
+  isTelegramPopoverOpen = $state<boolean>(false);
+  telegramAuthStatus = $state<TelegramAuthStatus | null>(null);
+  telegramAccounts = $state<TelegramAccountInfo[]>([]);
+  activeAccountId = $state<string | null>(null);
+  telegramChannels = $state<TelegramChannelInfo[]>([]);
+  telegramScannedMedia = $state<TelegramMediaItem[]>([]);
+  telegramIsScanning = $state<boolean>(false);
+  telegramActiveChatInput = $state<string>('');
+  telegramMediaFilter = $state<string>('all');
 
   globalSpeedLimitBps = $derived<number | null>(
     this.speedLimiterEnabled ? unitToBps(this.globalSpeedLimitValue, this.globalSpeedLimitUnit) : null
@@ -997,6 +1017,380 @@ export class IdmStore {
       defaultDownloadDir: defDir || DEFAULT_APP_SETTINGS.defaultDownloadDir,
     };
     await this.saveAppSettings(defaults);
+  }
+
+  openTelegramGrabber() {
+    this.isTelegramGrabberOpen = true;
+    this.checkTelegramAuthStatus();
+  }
+
+  closeTelegramGrabber() {
+    this.isTelegramGrabberOpen = false;
+  }
+
+  openTelegramAuthModal() {
+    this.isTelegramAuthModalOpen = true;
+  }
+
+  closeTelegramAuthModal() {
+    this.isTelegramAuthModalOpen = false;
+  }
+
+  async checkTelegramAuthStatus() {
+    if (!isTauri()) {
+      this.telegramAuthStatus = {
+        is_authenticated: true,
+        phone_number: '+62 812-***-4421',
+        user_id: 'tg_user_123',
+        username: 'UserPremium',
+        session_active: true,
+        anti_flood_enabled: true,
+        concurrent_limit: 4,
+        download_delay_ms: 1200,
+        is_premium: true,
+        error: null,
+      };
+      if (this.telegramChannels.length === 0) {
+        await this.fetchTelegramDialogs();
+        await this.scanTelegramChat(this.telegramActiveChatInput);
+      }
+      return;
+    }
+    try {
+      const status = await invoke<TelegramAuthStatus>('telegram_get_auth_status');
+      this.telegramAuthStatus = status;
+      if (status.is_authenticated) {
+        await this.fetchTelegramAccounts();
+        await this.fetchTelegramDialogs();
+        await this.scanTelegramChat(this.telegramActiveChatInput);
+      }
+    } catch (e: any) {
+      console.warn('Telegram auth check error:', e);
+    }
+  }
+
+  async fetchTelegramAccounts() {
+    if (!isTauri()) {
+      if (this.telegramAuthStatus?.is_authenticated) {
+        const id = this.telegramAuthStatus.user_id || 'tg_user_123';
+        const type: 'user' | 'bot' = this.telegramAuthStatus.phone_number ? 'user' : 'bot';
+        const phone = this.telegramAuthStatus.phone_number;
+        const uname = this.telegramAuthStatus.username;
+        const updatedList = this.telegramAccounts.map((a) => ({ ...a, is_active: false }));
+        const exists = updatedList.find((a) => a.account_id === id);
+        if (exists) {
+          this.telegramAccounts = updatedList.map((a) => (a.account_id === id ? { ...a, is_active: true } : a));
+        } else {
+          this.telegramAccounts = [
+            ...updatedList,
+            {
+              account_id: id,
+              account_type: type,
+              phone_number: phone,
+              username: uname,
+              is_active: true,
+              is_premium: true,
+              created_at: '2026-09-23 10:00',
+            },
+          ];
+        }
+        this.activeAccountId = id;
+      }
+      return;
+    }
+    try {
+      this.telegramAccounts = await invoke<TelegramAccountInfo[]>('telegram_list_accounts');
+      const active = this.telegramAccounts.find((a) => a.is_active);
+      this.activeAccountId = active ? active.account_id : null;
+    } catch (e: any) {
+      console.warn('Fetch telegram accounts error:', e);
+    }
+  }
+
+  async switchTelegramAccount(accountId: string) {
+    if (!isTauri()) {
+      this.telegramAccounts = this.telegramAccounts.map((a) => ({
+        ...a,
+        is_active: a.account_id === accountId,
+      }));
+      this.activeAccountId = accountId;
+      const target = this.telegramAccounts.find((a) => a.account_id === accountId);
+      if (target) {
+        this.telegramAuthStatus = {
+          is_authenticated: true,
+          phone_number: target.phone_number,
+          user_id: target.account_id,
+          username: target.username,
+          session_active: true,
+          anti_flood_enabled: true,
+          concurrent_limit: 4,
+          download_delay_ms: 1200,
+          is_premium: true,
+          error: null,
+        };
+      }
+      await this.fetchTelegramDialogs();
+      return;
+    }
+
+    try {
+      const res = await invoke<TelegramAuthStatus>('telegram_switch_account', { accountId });
+      this.telegramAuthStatus = res;
+      await this.fetchTelegramAccounts();
+      await this.fetchTelegramDialogs();
+    } catch (e: any) {
+      console.error('Switch telegram account error:', e);
+    }
+  }
+
+  async removeTelegramAccount(accountId: string) {
+    if (!isTauri()) {
+      this.telegramAccounts = this.telegramAccounts.filter((a) => a.account_id !== accountId);
+      if (this.activeAccountId === accountId) {
+        const next = this.telegramAccounts[0];
+        if (next) {
+          await this.switchTelegramAccount(next.account_id);
+        } else {
+          await this.logoutTelegram();
+        }
+      }
+      return;
+    }
+
+    try {
+      this.telegramAccounts = await invoke<TelegramAccountInfo[]>('telegram_remove_account', { accountId });
+      const active = this.telegramAccounts.find((a) => a.is_active);
+      if (active) {
+        this.activeAccountId = active.account_id;
+        await this.checkTelegramAuthStatus();
+      } else {
+        await this.logoutTelegram();
+      }
+    } catch (e: any) {
+      console.error('Remove telegram account error:', e);
+    }
+  }
+
+  async saveTelegramCredentials(apiId: string, apiHash: string) {
+    if (!isTauri()) return;
+    return await invoke('telegram_set_credentials', { apiId, apiHash });
+  }
+
+  async requestTelegramOtp(phoneNumber: string): Promise<string> {
+    if (!isTauri()) return 'mock_hash';
+    return await invoke<string>('telegram_request_otp', { phoneNumber });
+  }
+
+  async verifyTelegramOtp(phoneNumber: string, code: string, phoneCodeHash: string) {
+    if (!isTauri()) {
+      const userId = `tg_user_${phoneNumber.replace(/\+/g, '')}`;
+      this.telegramAuthStatus = {
+        is_authenticated: true,
+        phone_number: phoneNumber,
+        user_id: userId,
+        username: `User_${phoneNumber.slice(-4)}`,
+        session_active: true,
+        anti_flood_enabled: true,
+        concurrent_limit: 4,
+        download_delay_ms: 1200,
+        is_premium: true,
+        error: null,
+      };
+      await this.fetchTelegramAccounts();
+      this.closeTelegramAuthModal();
+      return this.telegramAuthStatus;
+    }
+    const res = await invoke<TelegramAuthStatus>('telegram_verify_otp', {
+      phoneNumber,
+      code,
+      phoneCodeHash,
+    });
+    this.telegramAuthStatus = res;
+    if (res.is_authenticated) {
+      await this.fetchTelegramAccounts();
+      this.closeTelegramAuthModal();
+      await this.fetchTelegramDialogs();
+    }
+    return res;
+  }
+
+  async loginTelegramBot(botToken: string) {
+    if (!isTauri()) {
+      const botId = `bot_${botToken.split(':')[0] || '123'}`;
+      this.telegramAuthStatus = {
+        is_authenticated: true,
+        phone_number: null,
+        user_id: botId,
+        username: 'IDMTurboDownloaderBot',
+        session_active: true,
+        anti_flood_enabled: true,
+        concurrent_limit: 4,
+        download_delay_ms: 1200,
+        is_premium: true,
+        error: null,
+      };
+      await this.fetchTelegramAccounts();
+      this.closeTelegramAuthModal();
+      return this.telegramAuthStatus;
+    }
+    const res = await invoke<TelegramAuthStatus>('telegram_login_bot', { botToken });
+    this.telegramAuthStatus = res;
+    if (res.is_authenticated) {
+      await this.fetchTelegramAccounts();
+      this.closeTelegramAuthModal();
+      await this.fetchTelegramDialogs();
+    }
+    return res;
+  }
+
+  async logoutTelegram() {
+    if (isTauri()) {
+      await invoke('telegram_logout');
+    }
+    this.telegramAuthStatus = null;
+    this.telegramAccounts = [];
+    this.activeAccountId = null;
+    this.telegramChannels = [];
+    this.telegramScannedMedia = [];
+  }
+
+  async fetchTelegramDialogs() {
+    if (!isTauri()) {
+      return;
+    }
+    try {
+      this.telegramChannels = await invoke<TelegramChannelInfo[]>('telegram_list_dialogs');
+    } catch (e: any) {
+      console.warn('Fetch telegram dialogs error:', e);
+    }
+  }
+
+  async deleteTelegramDialog(dialogId: string) {
+    if (!isTauri()) {
+      this.telegramChannels = this.telegramChannels.filter((c) => c.id !== dialogId);
+      return;
+    }
+    try {
+      this.telegramChannels = await invoke<TelegramChannelInfo[]>('telegram_delete_dialog', { dialogId });
+    } catch (e: any) {
+      console.warn('Delete telegram dialog error:', e);
+    }
+  }
+
+  async scanTelegramChat(chatInput?: string, mediaFilter?: string) {
+    const input = chatInput || this.telegramActiveChatInput;
+    const filter = mediaFilter || this.telegramMediaFilter;
+    this.telegramActiveChatInput = input;
+    this.telegramMediaFilter = filter;
+    this.telegramIsScanning = true;
+
+    if (!isTauri()) {
+      this.telegramScannedMedia = [
+        { message_id: 1042, chat_id: '-1001849204912', chat_title: 'Cinema 4K Archive', filename: 'Dune.Part.Two.2024.2160p.HDR.DDP5.1.x265.mkv', file_size: 15891452928, mime_type: 'video/x-matroska', media_type: 'video', created_at: '2026-09-22 14:30', tg_url: 'https://t.me/c/1849204912/1042', thumbnail_url: null, duration_seconds: 9960, resolution: '3840x2160', crc32_hash: '9C7FA10B' },
+        { message_id: 1043, chat_id: '-1001849204912', chat_title: 'Cinema 4K Archive', filename: 'Oppenheimer.2023.IMAX.2160p.UHD.BluRay.x265.mkv', file_size: 21474836480, mime_type: 'video/x-matroska', media_type: 'video', created_at: '2026-09-21 11:15', tg_url: 'https://t.me/c/1849204912/1043', thumbnail_url: null, duration_seconds: 10800, resolution: '3840x2160', crc32_hash: '7A4BF21C' },
+        { message_id: 1044, chat_id: '-1001849204912', chat_title: 'Cinema 4K Archive', filename: 'Interstellar.2014.Remastered.1080p.web.mp4', file_size: 4294967296, mime_type: 'video/mp4', media_type: 'video', created_at: '2026-09-20 09:00', tg_url: 'https://t.me/c/1849204912/1044', thumbnail_url: null, duration_seconds: 10140, resolution: '1920x1080', crc32_hash: '3B9DF01A' },
+        { message_id: 1045, chat_id: '-1001849204912', chat_title: 'Cinema 4K Archive', filename: 'Production_Notes_And_Artwork.pdf', file_size: 52428800, mime_type: 'application/pdf', media_type: 'document', created_at: '2026-09-19 18:45', tg_url: 'https://t.me/c/1849204912/1045', thumbnail_url: null, duration_seconds: null, resolution: null, crc32_hash: '1A2B3C4D' },
+      ];
+      if (filter !== 'all') {
+        this.telegramScannedMedia = this.telegramScannedMedia.filter(m => m.media_type === filter);
+      }
+      this.telegramIsScanning = false;
+      return;
+    }
+
+    try {
+      this.telegramScannedMedia = await invoke<TelegramMediaItem[]>('telegram_scan_media', {
+        chatInput: input,
+        mediaFilter: filter === 'all' ? null : filter,
+      });
+      await this.fetchTelegramDialogs();
+    } catch (e: any) {
+      console.warn('Telegram scan media error:', e);
+    } finally {
+      this.telegramIsScanning = false;
+    }
+  }
+
+  showDownloadsView() {
+    this.activeView = 'downloads';
+    this.activeTelegramChannelId = null;
+  }
+
+  selectTelegramChannel(channelId: string, channelUsername?: string) {
+    this.activeView = 'telegram';
+    this.activeTelegramChannelId = channelId;
+    const input = channelUsername ? `@${channelUsername.replace(/^@/, '')}` : channelId;
+    this.telegramActiveChatInput = input;
+    this.scanTelegramChat(input);
+  }
+
+  toggleTelegramPopover() {
+    this.isTelegramPopoverOpen = !this.isTelegramPopoverOpen;
+    this.openSettingsModal('telegram');
+  }
+
+  async startTelegramDownloadDirect(item: TelegramMediaItem, customSaveDir?: string) {
+    const dir = customSaveDir || this.settings.defaultDownloadDir || 'C:\\Downloads';
+    let category: DownloadCategory = 'video';
+    if (item.media_type === 'document') category = 'documents';
+    else if (item.media_type === 'audio') category = 'audio';
+    else if (item.media_type === 'video') category = 'video';
+    else category = 'general';
+
+    const channelName = item.chat_title || item.chat_id;
+
+    if (!isTauri()) {
+      const task: DownloadTask = {
+        id: `tg_task_${Date.now()}_${item.message_id}`,
+        url: item.tg_url,
+        filename: item.filename,
+        save_dir: dir,
+        file_path: `${dir}\\${item.filename}`,
+        total_bytes: item.file_size,
+        downloaded_bytes: 0,
+        category,
+        status: 'downloading',
+        connections: 16,
+        supports_range: true,
+        is_hls: false,
+        created_at: new Date().toISOString(),
+        completed_at: null,
+        error_message: null,
+        segments: [],
+        source: 'telegram',
+        telegram_channel: channelName,
+      };
+      this.tasks = [task, ...this.tasks];
+      this.openTransferWindow(task.id);
+      return task;
+    }
+
+    try {
+      const task = await invoke<DownloadTask>('start_download', {
+        url: item.tg_url,
+        filename: item.filename,
+        saveDir: dir,
+        connections: this.settings.defaultConnections || 16,
+        headers: null,
+        quality: null,
+      });
+      task.source = 'telegram';
+      task.telegram_channel = channelName;
+      task.category = category;
+      await this.refreshTasks();
+      this.tasks = this.tasks.map((t) => (t.id === task.id ? { ...t, source: 'telegram', telegram_channel: channelName, category } : t));
+      this.openTransferWindow(task.id);
+      return task;
+    } catch (e: any) {
+      console.error('Failed to start Telegram direct download:', e);
+    }
+  }
+
+  async downloadTelegramMediaItems(items: TelegramMediaItem[], customSaveDir?: string) {
+    for (const item of items) {
+      await this.startTelegramDownloadDirect(item, customSaveDir);
+    }
+    this.activeView = 'downloads';
   }
 
   async checkClipboardForUrl() {

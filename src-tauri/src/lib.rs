@@ -46,8 +46,9 @@ pub fn run() {
             let db_arc = Arc::new(db);
 
             let manager = Arc::new(DownloadManager::new(db_arc));
+            let telegram = Arc::new(engine::telegram::TelegramManager::new());
 
-            app.manage(AppState { manager });
+            app.manage(AppState { manager, telegram });
 
             // Start Windows Named Pipe IPC Server for Browser Extensions
             ipc_server::start_ipc_server(app.handle().clone());
@@ -99,7 +100,19 @@ pub fn run() {
             commands::get_app_settings,
             commands::save_app_settings,
             commands::register_native_host_manifest,
-            commands::report_diagnostic_error
+            commands::report_diagnostic_error,
+            commands::telegram_set_credentials,
+            commands::telegram_request_otp,
+            commands::telegram_verify_otp,
+            commands::telegram_login_bot,
+            commands::telegram_get_auth_status,
+            commands::telegram_logout,
+            commands::telegram_list_dialogs,
+            commands::telegram_delete_dialog,
+            commands::telegram_scan_media,
+            commands::telegram_list_accounts,
+            commands::telegram_switch_account,
+            commands::telegram_remove_account
         ])
 
         .run(tauri::generate_context!())

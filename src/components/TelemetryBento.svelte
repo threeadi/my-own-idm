@@ -125,14 +125,25 @@
   <!-- Top Header Row: Status Pills + Collapse Toggle -->
   <div class="relative z-10 flex items-center justify-between gap-2 pb-3 mb-3 border-b border-[#252a33]/70">
     <div class="flex items-center gap-2 flex-wrap">
-      <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#10b981]/15 text-[#4edea3] font-sans text-xs border border-[#10b981]/30">
-        <span class="w-1.5 h-1.5 rounded-full bg-[#4edea3] animate-pulse"></span>
-        {store.t('bento.connStable')}
-      </span>
-      <span class="inline-flex items-center gap-1 text-[#8c909f] font-mono text-xs">
-        <HardDrive class="w-3.5 h-3.5 text-[#4cd7f6]" />
-        <span>{store.t('bento.driveSpace')} <strong class="text-[#dee2ee] font-sans font-semibold">{store.t('bento.driveAvailable')}</strong></span>
-      </span>
+      {#if store.activeView === 'telegram'}
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#4cd7f6]/15 text-[#4cd7f6] font-sans text-xs border border-[#4cd7f6]/30">
+          <span class="w-1.5 h-1.5 rounded-full bg-[#4cd7f6] animate-pulse"></span>
+          Telegram MTProto Telemetry
+        </span>
+        <span class="inline-flex items-center gap-1 text-[#8c909f] font-mono text-xs">
+          <HardDrive class="w-3.5 h-3.5 text-[#4cd7f6]" />
+          <span>Channel: <strong class="text-[#4cd7f6] font-sans font-semibold">{store.telegramActiveChatInput}</strong></span>
+        </span>
+      {:else}
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#10b981]/15 text-[#4edea3] font-sans text-xs border border-[#10b981]/30">
+          <span class="w-1.5 h-1.5 rounded-full bg-[#4edea3] animate-pulse"></span>
+          {store.t('bento.connStable')}
+        </span>
+        <span class="inline-flex items-center gap-1 text-[#8c909f] font-mono text-xs">
+          <HardDrive class="w-3.5 h-3.5 text-[#4cd7f6]" />
+          <span>{store.t('bento.driveSpace')} <strong class="text-[#dee2ee] font-sans font-semibold">{store.t('bento.driveAvailable')}</strong></span>
+        </span>
+      {/if}
     </div>
 
     <!-- Integrated Collapse Toggle -->
@@ -161,12 +172,12 @@
         </span>
         <span class="ml-2 text-[#8c909f] font-sans text-xs flex items-center gap-1">
           <ArrowUp class="w-3.5 h-3.5 text-[#4edea3]" />
-          {store.t('bento.turboMultiPart')}
+          {store.activeView === 'telegram' ? 'MTProto 24 Stream Pool' : store.t('bento.turboMultiPart')}
         </span>
       </div>
 
       <p class="font-sans text-xs text-[#8c909f] line-clamp-1">
-        {store.t('bento.engineDescription')}
+        {store.activeView === 'telegram' ? 'Integrasi MTProto Client Telethon dengan engine unduh multi-thread IDM Turbo (Bypass Batas 4GB Telegram Premium)' : store.t('bento.engineDescription')}
       </p>
     </div>
 

@@ -300,15 +300,64 @@ impl Database {
     }
 
     pub fn set_multiple_settings(&self, settings: &HashMap<String, String>) -> Result<()> {
-        let mut conn = self.conn.lock().unwrap();
-        let tx = conn.transaction()?;
-        {
-            let mut stmt = tx.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?1, ?2)")?;
-            for (k, v) in settings {
-                stmt.execute(params![k, v])?;
-            }
+        let conn = self.conn.lock().unwrap();
+        for (k, v) in settings {
+            conn.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES (?1, ?2)",
+                params![k, v],
+            )?;
         }
-        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn save_telegram_dialog(&self, ch: &crate::engine::telegram::TelegramChannelInfo) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            r#"INSERT OR REPLACE INTO telegram_dialogs (
+                id, title, username, chat_type, unread_count, photo_url, is_private, created_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)"#,
+            params![
+                ch.id,
+                ch.title,
+                ch.username,
+                ch.chat_type,
+                ch.unread_count as i64,
+                ch.photo_url,
+                if ch.is_private { 1 } else { 0 },
+                chrono::Local::now().format("%Y-%m-%d %H:%M").to_string()
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn load_telegram_dialogs(&self) -> Result<Vec<crate::engine::telegram::TelegramChannelInfo>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, title, username, chat_type, unread_count, photo_url, is_private FROM telegram_dialogs ORDER BY created_at DESC"
+        )?;
+
+        let rows = stmt.query_map([], |row| {
+            Ok(crate::engine::telegram::TelegramChannelInfo {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                username: row.get(2)?,
+                chat_type: row.get(3)?,
+                unread_count: row.get::<_, i64>(4)? as usize,
+                photo_url: row.get(5)?,
+                is_private: row.get::<_, i64>(6)? != 0,
+            })
+        })?;
+
+        let mut list = Vec::new();
+        for r in rows {
+            list.push(r?);
+        }
+        Ok(list)
+    }
+
+    pub fn delete_telegram_dialog(&self, dialog_id: &str) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute("DELETE FROM telegram_dialogs WHERE id = ?1", params![dialog_id])?;
         Ok(())
     }
 }

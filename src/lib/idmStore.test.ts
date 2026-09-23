@@ -1492,7 +1492,234 @@ describe('IdmStore State & Filtering', () => {
       expect(store2.settings.duplicateActionRemember).toBe(true);
     });
   });
+
+  describe('Telegram Grabber State & Actions', () => {
+    it('manages modal visibility and auth state', async () => {
+      const store = new IdmStore();
+      expect(store.isTelegramGrabberOpen).toBe(false);
+      expect(store.isTelegramAuthModalOpen).toBe(false);
+
+      store.openTelegramGrabber();
+      expect(store.isTelegramGrabberOpen).toBe(true);
+
+      store.closeTelegramGrabber();
+      expect(store.isTelegramGrabberOpen).toBe(false);
+
+      store.openTelegramAuthModal();
+      expect(store.isTelegramAuthModalOpen).toBe(true);
+
+      store.closeTelegramAuthModal();
+      expect(store.isTelegramAuthModalOpen).toBe(false);
+    });
+
+    it('handles telegram auth and scan flows in non-tauri environment', async () => {
+      mockIsTauriReturn = false;
+      delete (globalThis as any).window.__TAURI_INTERNALS__;
+      delete (globalThis as any).window.isTauri;
+      const store = new IdmStore();
+
+      await store.checkTelegramAuthStatus();
+      expect(store.telegramAuthStatus?.is_authenticated).toBe(true);
+      expect(store.telegramChannels).toBeDefined();
+
+      const otpHash = await store.requestTelegramOtp('+628123456789');
+      expect(otpHash).toBe('mock_hash');
+
+      const authRes = await store.verifyTelegramOtp('+628123456789', '12345', 'mock_hash');
+      expect(authRes.is_authenticated).toBe(true);
+
+      const botRes = await store.loginTelegramBot('123456:ABC_token');
+      expect(botRes.is_authenticated).toBe(true);
+
+      await store.scanTelegramChat('@Cinema4KArchive', 'video');
+      expect(store.telegramScannedMedia.length).toBeGreaterThan(0);
+
+      const directSpy = vi.spyOn(store, 'startTelegramDownloadDirect').mockImplementation(async () => ({} as any));
+      await store.downloadTelegramMediaItems([store.telegramScannedMedia[0]], 'D:\\Downloads');
+      expect(directSpy).toHaveBeenCalledWith(store.telegramScannedMedia[0], 'D:\\Downloads');
+
+      await store.logoutTelegram();
+      expect(store.telegramAuthStatus).toBeNull();
+      expect(store.telegramChannels).toEqual([]);
+      expect(store.telegramScannedMedia).toEqual([]);
+    });
+
+    it('handles telegram IPC calls in tauri environment', async () => {
+      mockIsTauriReturn = true;
+      const store = new IdmStore();
+
+      mockInvoke.mockResolvedValueOnce({ is_authenticated: true, phone_number: '+62812' } as any);
+      mockInvoke.mockResolvedValueOnce([{ id: '1', title: 'Chan' }] as any);
+      mockInvoke.mockResolvedValueOnce([{ message_id: 1, filename: 'video.mp4' }] as any);
+
+      await store.checkTelegramAuthStatus();
+      expect(mockInvoke).toHaveBeenCalledWith('telegram_get_auth_status');
+
+      mockInvoke.mockResolvedValueOnce(undefined);
+      await store.saveTelegramCredentials('123', 'hash');
+      expect(mockInvoke).toHaveBeenCalledWith('telegram_set_credentials', { apiId: '123', apiHash: 'hash' });
+
+      mockInvoke.mockResolvedValueOnce('hash_1');
+      const hash = await store.requestTelegramOtp('+6281');
+      expect(hash).toBe('hash_1');
+
+      mockInvoke.mockResolvedValueOnce({ is_authenticated: true } as any);
+      mockInvoke.mockResolvedValueOnce([]);
+      await store.verifyTelegramOtp('+6281', '12345', 'hash_1');
+      expect(mockInvoke).toHaveBeenCalledWith('telegram_verify_otp', { phoneNumber: '+6281', code: '12345', phoneCodeHash: 'hash_1' });
+
+      mockInvoke.mockResolvedValueOnce({ is_authenticated: true } as any);
+      mockInvoke.mockResolvedValueOnce([]);
+      await store.loginTelegramBot('123:abc');
+      expect(mockInvoke).toHaveBeenCalledWith('telegram_login_bot', { botToken: '123:abc' });
+
+      mockInvoke.mockResolvedValueOnce(undefined);
+      await store.logoutTelegram();
+      expect(mockInvoke).toHaveBeenCalledWith('telegram_logout');
+    });
+
+    it('manages Telegram Vault view state, popover, and direct download execution', async () => {
+      mockIsTauriReturn = false;
+      delete (globalThis as any).window.__TAURI_INTERNALS__;
+      delete (globalThis as any).window.isTauri;
+      const store = new IdmStore();
+
+      expect(store.activeView).toBe('downloads');
+      expect(store.activeTelegramChannelId).toBeNull();
+      expect(store.isTelegramPopoverOpen).toBe(false);
+
+      store.selectTelegramChannel('-1001849204912', 'Cinema4KArchive');
+      expect(store.activeView).toBe('telegram');
+      expect(store.activeTelegramChannelId).toBe('-1001849204912');
+      expect(store.telegramActiveChatInput).toBe('@Cinema4KArchive');
+
+      store.showDownloadsView();
+      expect(store.activeView).toBe('downloads');
+      expect(store.activeTelegramChannelId).toBeNull();
+
+      store.toggleTelegramPopover();
+      expect(store.isTelegramPopoverOpen).toBe(true);
+      store.toggleTelegramPopover();
+      expect(store.isTelegramPopoverOpen).toBe(false);
+
+      // Direct download in non-tauri environment
+      const transferSpy = vi.spyOn(store, 'openTransferWindow').mockImplementation(async () => {});
+      const mediaItem = {
+        message_id: 2001,
+        chat_id: '-1001849204912',
+        chat_title: 'Cinema 4K Archive',
+        filename: 'Dune_2_4K.mkv',
+        file_size: 10737418240,
+        mime_type: 'video/x-matroska',
+        media_type: 'video',
+        created_at: '2026-09-23 10:00',
+        tg_url: 'https://t.me/c/1849204912/2001',
+        thumbnail_url: null,
+        duration_seconds: 9600,
+        resolution: '3840x2160',
+        crc32_hash: 'ABCD1234',
+      };
+
+      const task = await store.startTelegramDownloadDirect(mediaItem);
+      expect(task).toBeDefined();
+      expect(task?.filename).toBe('Dune_2_4K.mkv');
+      expect(task?.source).toBe('telegram');
+      expect(task?.telegram_channel).toBe('Cinema 4K Archive');
+      expect(task?.category).toBe('video');
+      expect(store.tasks.length).toBe(1);
+      expect(transferSpy).toHaveBeenCalledWith(task?.id);
+
+      // Test batch download Telegram media items and auto-navigation to 'downloads' view
+      store.activeView = 'telegram';
+      await store.downloadTelegramMediaItems([mediaItem]);
+      expect(store.activeView).toBe('downloads');
+    });
+
+    it('handles direct telegram download in tauri environment', async () => {
+      mockIsTauriReturn = true;
+      const store = new IdmStore();
+      const transferSpy = vi.spyOn(store, 'openTransferWindow').mockImplementation(async () => {});
+      vi.spyOn(store, 'refreshTasks').mockImplementation(async () => {});
+
+      const mediaItem = {
+        message_id: 2002,
+        chat_id: '-1001849204912',
+        chat_title: 'Cinema 4K Archive',
+        filename: 'Avatar_2_4K.mkv',
+        file_size: 15737418240,
+        mime_type: 'video/x-matroska',
+        media_type: 'video',
+        created_at: '2026-09-23 11:00',
+        tg_url: 'https://t.me/c/1849204912/2002',
+        thumbnail_url: null,
+        duration_seconds: 11000,
+        resolution: '3840x2160',
+        crc32_hash: 'EFGH5678',
+      };
+
+      mockInvoke.mockResolvedValueOnce(makeTask({ id: 'tg_task_99', filename: 'Avatar_2_4K.mkv' }));
+      const task = await store.startTelegramDownloadDirect(mediaItem);
+
+      expect(mockInvoke).toHaveBeenCalledWith('start_download', expect.objectContaining({
+        url: 'https://t.me/c/1849204912/2002',
+        filename: 'Avatar_2_4K.mkv',
+      }));
+      expect(transferSpy).toHaveBeenCalledWith('tg_task_99');
+    });
+
+    it('handles multi-account listing, switching, and removal in Tauri and non-Tauri modes', async () => {
+      mockIsTauriReturn = false;
+      delete (globalThis as any).window.__TAURI_INTERNALS__;
+      delete (globalThis as any).window.isTauri;
+      const store = new IdmStore();
+
+      await store.verifyTelegramOtp('+628123456789', '12345', 'mock_hash');
+      expect(store.telegramAccounts.length).toBe(1);
+      expect(store.activeAccountId).toBe('tg_user_628123456789');
+
+      await store.loginTelegramBot('999999:bot_token');
+      expect(store.telegramAccounts.length).toBe(2);
+      expect(store.activeAccountId).toBe('bot_999999');
+
+      await store.switchTelegramAccount('tg_user_628123456789');
+      expect(store.activeAccountId).toBe('tg_user_628123456789');
+      expect(store.telegramAuthStatus?.phone_number).toBe('+628123456789');
+
+      await store.removeTelegramAccount('tg_user_628123456789');
+      expect(store.telegramAccounts.length).toBe(1);
+      expect(store.activeAccountId).toBe('bot_999999');
+
+      // Test Tauri IPC multi-account calls
+      mockIsTauriReturn = true;
+      const storeTauri = new IdmStore();
+      const sampleAccs = [
+        { account_id: 'acc1', account_type: 'user', phone_number: '+6281', username: 'user1', is_active: true, is_premium: true, created_at: '2026-09-23' },
+        { account_id: 'acc2', account_type: 'bot', phone_number: null, username: 'bot1', is_active: false, is_premium: true, created_at: '2026-09-23' },
+      ];
+
+      mockInvoke.mockResolvedValueOnce(sampleAccs as any);
+      await storeTauri.fetchTelegramAccounts();
+      expect(mockInvoke).toHaveBeenCalledWith('telegram_list_accounts');
+      expect(storeTauri.activeAccountId).toBe('acc1');
+
+      mockInvoke.mockResolvedValueOnce({ is_authenticated: true, user_id: 'acc2' } as any);
+      mockInvoke.mockResolvedValueOnce(sampleAccs as any);
+      mockInvoke.mockResolvedValueOnce([] as any);
+      await storeTauri.switchTelegramAccount('acc2');
+      expect(mockInvoke).toHaveBeenCalledWith('telegram_switch_account', { accountId: 'acc2' });
+
+      mockInvoke.mockResolvedValueOnce([sampleAccs[0]] as any);
+      mockInvoke.mockResolvedValueOnce({ is_authenticated: true } as any);
+      mockInvoke.mockResolvedValueOnce([sampleAccs[0]] as any);
+      mockInvoke.mockResolvedValueOnce([] as any);
+      mockInvoke.mockResolvedValueOnce([] as any);
+      await storeTauri.removeTelegramAccount('acc2');
+      expect(mockInvoke).toHaveBeenCalledWith('telegram_remove_account', { accountId: 'acc2' });
+    });
+  });
 });
+
+
 
 
 

@@ -35,4 +35,25 @@ CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS telegram_accounts (
+    account_id TEXT PRIMARY KEY,
+    account_type TEXT NOT NULL,
+    phone_number TEXT,
+    username TEXT,
+    is_active INTEGER NOT NULL DEFAULT 0,
+    is_premium INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS telegram_dialogs (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    username TEXT,
+    chat_type TEXT NOT NULL,
+    unread_count INTEGER NOT NULL DEFAULT 0,
+    photo_url TEXT,
+    is_private INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
 "#;

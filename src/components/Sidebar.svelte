@@ -12,10 +12,31 @@
     Cpu,
     FileText,
     CalendarClock,
-    Activity
+    Activity,
+    Send,
+    Plus,
+    Radio,
+    ShieldCheck,
+    User,
+    Users,
+    Bot,
+    Bookmark,
+    X
   } from '@lucide/svelte';
 
   const counts = $derived(store.categoryCounts);
+
+  const channelsList = $derived(store.telegramChannels);
+
+  function getChatIcon(chatType: string) {
+    switch (chatType) {
+      case 'user': return User;
+      case 'group': return Users;
+      case 'bot': return Bot;
+      case 'saved_messages': return Bookmark;
+      default: return Radio;
+    }
+  }
 
   const statusFilters = $derived([
     { id: 'all', label: store.t('sidebar.statusAll'), icon: ListFilter, countKey: 'all', color: 'text-[#adc6ff]' },
@@ -31,9 +52,14 @@
     { id: 'audio', label: store.t('sidebar.catAudio'), icon: Music, ext: '.mp3 / .flac', color: 'text-[#4cd7f6]' },
     { id: 'compressed', label: store.t('sidebar.catCompressed'), icon: Archive, ext: '.zip / .rar', color: 'text-[#adc6ff]' },
   ]);
+
+  function handleSelectStatus(id: string) {
+    store.showDownloadsView();
+    store.activeCategory = id;
+  }
 </script>
 
-<aside class="w-60 shrink-0 min-h-0 select-none bg-[#171c24]/90 backdrop-blur-xl border-r border-[#30353e]/70 p-3 flex flex-col justify-between overflow-y-auto">
+<aside class="w-64 shrink-0 min-h-0 select-none bg-[#171c24]/90 backdrop-blur-xl border-r border-[#30353e]/70 p-3 flex flex-col justify-between overflow-y-auto">
   <div class="space-y-4">
     <!-- Status Unduhan -->
     <div>
@@ -44,16 +70,16 @@
       </div>
       <nav class="flex flex-col gap-1">
         {#each statusFilters as item}
-          {@const isActive = store.activeCategory === item.id}
+          {@const isActive = store.activeView === 'downloads' && store.activeCategory === item.id}
           <button
-            onclick={() => (store.activeCategory = item.id)}
-            class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-all cursor-pointer {isActive ? 'bg-[#4d8eff] text-white font-semibold shadow-[0_0_12px_rgba(77,142,255,0.3)]' : 'text-[#c2c6d6] hover:bg-[#252a33] hover:text-[#dee2ee]'}"
+            onclick={() => handleSelectStatus(item.id)}
+            class={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-all cursor-pointer ${isActive ? 'bg-[#4d8eff] text-white font-semibold shadow-[0_0_12px_rgba(77,142,255,0.3)]' : 'text-[#c2c6d6] hover:bg-[#252a33] hover:text-[#dee2ee]'}`}
           >
-            <span class="flex items-center gap-2">
-              <item.icon class="w-3.5 h-3.5 {isActive ? 'text-white' : item.color} {item.pulse && counts[item.countKey] > 0 ? 'animate-pulse' : ''}" />
-              <span>{item.label}</span>
+            <span class="flex items-center gap-2 truncate">
+              <item.icon class={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-white' : item.color} ${item.pulse && counts[item.countKey] > 0 ? 'animate-pulse' : ''}`} />
+              <span class="truncate">{item.label}</span>
             </span>
-            <span class="font-mono text-[11px] px-1.5 py-0.2 rounded {isActive ? 'bg-black/20 text-white font-bold' : 'bg-[#252a33] text-[#8c909f]'}">
+            <span class="font-mono text-[11px] px-1.5 py-0.2 rounded shrink-0 ${isActive ? 'bg-black/20 text-white font-bold' : 'bg-[#252a33] text-[#8c909f]'}">
               {counts[item.countKey] || 0}
             </span>
           </button>
@@ -70,20 +96,72 @@
       </div>
       <nav class="flex flex-col gap-1">
         {#each categoryFilters as item}
-          {@const isActive = store.activeCategory === item.id}
+          {@const isActive = store.activeView === 'downloads' && store.activeCategory === item.id}
           <button
-            onclick={() => (store.activeCategory = item.id)}
-            class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-all cursor-pointer {isActive ? 'bg-[#4d8eff] text-white font-semibold shadow-[0_0_12px_rgba(77,142,255,0.3)]' : 'text-[#c2c6d6] hover:bg-[#252a33] hover:text-[#dee2ee]'}"
+            onclick={() => handleSelectStatus(item.id)}
+            class={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-all cursor-pointer ${isActive ? 'bg-[#4d8eff] text-white font-semibold shadow-[0_0_12px_rgba(77,142,255,0.3)]' : 'text-[#c2c6d6] hover:bg-[#252a33] hover:text-[#dee2ee]'}`}
           >
-            <span class="flex items-center gap-2">
-              <item.icon class="w-3.5 h-3.5 {isActive ? 'text-white' : item.color}" />
-              <span>{item.label}</span>
+            <span class="flex items-center gap-2 truncate">
+              <item.icon class={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-white' : item.color}`} />
+              <span class="truncate">{item.label}</span>
             </span>
-            <span class="font-mono text-[10px] {isActive ? 'text-white/80' : 'text-[#8c909f]'}">
+            <span class="font-mono text-[10px] shrink-0 ${isActive ? 'text-white/80' : 'text-[#8c909f]'}">
               {item.ext}
             </span>
           </button>
         {/each}
+      </nav>
+    </div>
+
+    <!-- Telegram Vault -->
+    <div>
+      <div class="px-2 py-1 mb-1 flex items-center justify-between">
+        <span class="font-sans text-[10px] font-bold uppercase tracking-wider text-[#4cd7f6] flex items-center gap-1.5 truncate">
+          <Send class="w-3 h-3 text-[#4cd7f6] shrink-0" />
+          {store.t('telegram.vaultTitle')}
+        </span>
+        <span class="w-2 h-2 rounded-full bg-[#4edea3] shadow-[0_0_6px_rgba(78,222,163,0.8)] shrink-0"></span>
+      </div>
+      <nav class="flex flex-col gap-1">
+        {#each channelsList as ch (ch.id)}
+          {@const isActive = store.activeView === 'telegram' && store.activeTelegramChannelId === ch.id}
+          {@const ChatIcon = getChatIcon(ch.chat_type)}
+          <div class={`group w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-all ${isActive ? 'bg-[#4cd7f6]/20 text-[#4cd7f6] font-semibold border border-[#4cd7f6]/40 shadow-[0_0_12px_rgba(76,215,246,0.3)]' : 'text-[#c2c6d6] hover:bg-[#252a33] hover:text-[#dee2ee]'}`}>
+            <button
+              onclick={() => store.selectTelegramChannel(ch.id, ch.username || ch.title)}
+              class="flex items-center gap-2 min-w-0 flex-1 text-left cursor-pointer"
+              type="button"
+            >
+              <ChatIcon class={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-[#4cd7f6]' : 'text-[#8c909f]'}`} />
+              <span class="truncate">{ch.title}</span>
+            </button>
+
+            <div class="flex items-center gap-1 shrink-0">
+              {#if (ch as any).unread_count || (ch as any).count}
+                <span class={`font-mono text-[10px] px-1.5 py-0.2 rounded ${isActive ? 'bg-[#4cd7f6]/30 text-[#4cd7f6] font-bold' : 'bg-[#252a33] text-[#8c909f]'}`}>
+                  {(ch as any).unread_count || (ch as any).count}
+                </span>
+              {/if}
+
+              <button
+                onclick={(e) => { e.stopPropagation(); store.deleteTelegramDialog(ch.id); }}
+                class="opacity-0 group-hover:opacity-100 p-0.5 rounded text-[#8c909f] hover:text-[#ff5252] hover:bg-[#ff5252]/10 transition-all cursor-pointer"
+                title={store.t('common.delete')}
+                type="button"
+              >
+                <X class="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+        {/each}
+
+        <button
+          onclick={() => store.selectTelegramChannel('', '')}
+          class="w-full mt-1 flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-[#4cd7f6] bg-[#4cd7f6]/10 border border-[#4cd7f6]/30 hover:bg-[#4cd7f6]/20 transition-all cursor-pointer shadow-sm truncate"
+        >
+          <Plus class="w-3.5 h-3.5 shrink-0" />
+          <span class="truncate">{store.t('telegram.addChannel')}</span>
+        </button>
       </nav>
     </div>
 
@@ -96,14 +174,14 @@
       </div>
       <nav class="flex flex-col gap-1">
         <button
-          onclick={() => (store.activeCategory = 'all')}
+          onclick={() => handleSelectStatus('all')}
           class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs text-[#c2c6d6] hover:bg-[#252a33] hover:text-[#dee2ee] transition-all cursor-pointer"
         >
-          <span class="flex items-center gap-2">
-            <CalendarClock class="w-3.5 h-3.5 text-[#4cd7f6]" />
-            <span>{store.t('sidebar.queueSchedule')}</span>
+          <span class="flex items-center gap-2 truncate">
+            <CalendarClock class="w-3.5 h-3.5 text-[#4cd7f6] shrink-0" />
+            <span class="truncate">{store.t('sidebar.queueSchedule')}</span>
           </span>
-          <span class="w-2 h-2 rounded-full bg-[#4edea3] shadow-[0_0_6px_rgba(78,222,163,0.5)]"></span>
+          <span class="w-2 h-2 rounded-full bg-[#4edea3] shadow-[0_0_6px_rgba(78,222,163,0.5)] shrink-0"></span>
         </button>
       </nav>
     </div>
@@ -111,16 +189,16 @@
 
   <!-- Bottom Engine Status Panel -->
   <div class="p-2.5 rounded-xl bg-[#252a33]/60 border border-[#30353e]/80 flex items-center justify-between mt-3">
-    <div class="flex flex-col">
-      <span class="font-sans text-[9px] text-[#8c909f] uppercase tracking-wider font-semibold">
+    <div class="flex flex-col min-w-0">
+      <span class="font-sans text-[9px] text-[#8c909f] uppercase tracking-wider font-semibold truncate">
         {store.t('sidebar.engineStatus')}
       </span>
-      <span class="font-sans text-[11px] font-semibold text-[#4edea3] flex items-center gap-1.5 mt-0.5">
-        <span class="w-1.5 h-1.5 rounded-full {store.totalSpeedBps > 0 ? 'bg-[#4edea3] animate-ping' : 'bg-[#4cd7f6]'}"></span>
-        {store.totalSpeedBps > 0 ? store.t('sidebar.engineActive') : store.t('sidebar.engineReady')}
+      <span class="font-sans text-[11px] font-semibold text-[#4edea3] flex items-center gap-1.5 mt-0.5 truncate">
+        <span class={`w-1.5 h-1.5 rounded-full shrink-0 ${store.totalSpeedBps > 0 ? 'bg-[#4edea3] animate-ping' : 'bg-[#4cd7f6]'}`}></span>
+        <span class="truncate">{store.totalSpeedBps > 0 ? store.t('sidebar.engineActive') : store.t('sidebar.engineReady')}</span>
       </span>
     </div>
-    <span class="font-mono text-xs text-[#4cd7f6] bg-[#090e16] px-2 py-0.5 rounded border border-[#30353e]">
+    <span class="font-mono text-xs text-[#4cd7f6] bg-[#090e16] px-2 py-0.5 rounded border border-[#30353e] shrink-0">
       {store.t('sidebar.segmentsCount', { count: store.settings.defaultConnections })}
     </span>
   </div>

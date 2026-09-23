@@ -9,8 +9,7 @@
     Search,
     Gauge,
     CheckCheck,
-    Zap,
-    Download
+    Zap
   } from '@lucide/svelte';
 
   const totalSpeed = $derived(store.totalSpeedBps);

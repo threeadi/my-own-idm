@@ -6,4 +6,5 @@ pub mod hls;
 pub mod ytdlp;
 pub mod limiter;
 pub mod manager;
+pub mod telegram;
 

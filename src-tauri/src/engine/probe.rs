@@ -39,10 +39,11 @@ impl Prober {
             url
         };
 
-        // If YouTube URL or Mediadelivery/BunnyCDN URL, try yt-dlp first
+        // If YouTube URL, Telegram URL, or Mediadelivery/BunnyCDN URL, try yt-dlp first
         if effective_url.contains("youtube.com")
             || effective_url.contains("youtu.be")
             || effective_url.contains("mediadelivery.net")
+            || is_telegram_url(effective_url)
         {
             if let Ok(mut yt_probe) = crate::engine::ytdlp::YtDlpRunner::probe(effective_url).await {
                 yt_probe.url = effective_url.to_string();
@@ -391,6 +392,14 @@ fn urlencoding_decode(s: &str) -> Result<String, ()> {
     String::from_utf8(bytes).map_err(|_| ())
 }
 
+pub fn is_telegram_url(url: &str) -> bool {
+    let lower = url.to_lowercase();
+    lower.contains("t.me/")
+        || lower.contains("telegram.me/")
+        || lower.contains("telegram.org/")
+        || lower.starts_with("tg://")
+}
+
 mod dirs {
     use std::path::PathBuf;
     pub fn download_dir() -> Option<PathBuf> {
@@ -498,6 +507,16 @@ mod tests {
         assert_eq!(urlencoding_decode("plain_text").unwrap(), "plain_text");
         assert_eq!(urlencoding_decode("file%2Fname").unwrap(), "file/name");
         assert!(urlencoding_decode("%ZZinvalid").is_err());
+    }
+
+    #[test]
+    fn test_is_telegram_url() {
+        assert!(is_telegram_url("https://t.me/channel/123"));
+        assert!(is_telegram_url("https://telegram.me/user/456"));
+        assert!(is_telegram_url("https://telegram.org/dl"));
+        assert!(is_telegram_url("tg://resolve?domain=test"));
+        assert!(!is_telegram_url("https://youtube.com/watch?v=123"));
+        assert!(!is_telegram_url("https://example.com/file.zip"));
     }
 
     #[test]

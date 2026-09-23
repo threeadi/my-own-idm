@@ -21,11 +21,16 @@
     RefreshCw,
     Layers,
     Clock,
-    Flame
+    Flame,
+    Send,
+    UserCheck,
+    Bot,
+    Trash2,
+    Loader2
   } from '@lucide/svelte';
 
-  type SettingsTab = 'general' | 'connection' | 'filetypes' | 'saveto' | 'extensions';
-  let activeTab = $state<SettingsTab>('general');
+  type SettingsTab = 'general' | 'connection' | 'filetypes' | 'saveto' | 'extensions' | 'telegram';
+  let activeTab = $state<SettingsTab>(store.settingsActiveTab || 'general');
 
   // Draft local copy of settings to allow Apply, OK, Cancel, and Reset
   let draft = $state<AppSettings>({ ...store.settings });
@@ -33,13 +38,77 @@
   let saveSuccessMessage = $state<string | null>(null);
   let nativeHostRegisterStatus = $state<string | null>(null);
 
+  // Telegram auth tab local states
+  let telegramAuthSubTab = $state<'accounts' | 'otp' | 'bot'>('accounts');
+  let apiId = $state('');
+  let apiHash = $state('');
+  let phoneNumber = $state('+62');
+  let otpCode = $state('');
+  let phoneCodeHash = $state('');
+  let botToken = $state('');
+  let isTelegramLoading = $state(false);
+  let telegramErrorMsg = $state<string | null>(null);
+
   $effect(() => {
     if (store.isSettingsModalOpen) {
+      activeTab = store.settingsActiveTab || 'general';
       draft = { ...store.settings };
       saveSuccessMessage = null;
       nativeHostRegisterStatus = null;
+      telegramErrorMsg = null;
     }
   });
+
+  async function handleRequestOtp() {
+    if (!phoneNumber.trim() || phoneNumber.length < 5) {
+      telegramErrorMsg = 'Nomor telepon tidak valid';
+      return;
+    }
+    telegramErrorMsg = null;
+    isTelegramLoading = true;
+    try {
+      if (apiId.trim() && apiHash.trim()) {
+        await store.saveTelegramCredentials(apiId, apiHash);
+      }
+      phoneCodeHash = await store.requestTelegramOtp(phoneNumber);
+      telegramAuthSubTab = 'otp';
+    } catch (e: any) {
+      telegramErrorMsg = String(e);
+    } finally {
+      isTelegramLoading = false;
+    }
+  }
+
+  async function handleVerifyOtp() {
+    if (!otpCode.trim()) {
+      telegramErrorMsg = 'Masukkan kode OTP';
+      return;
+    }
+    telegramErrorMsg = null;
+    isTelegramLoading = true;
+    try {
+      await store.verifyTelegramOtp(phoneNumber, otpCode, phoneCodeHash);
+      telegramAuthSubTab = 'accounts';
+    } catch (e: any) {
+      telegramErrorMsg = String(e);
+    } finally {
+      isTelegramLoading = false;
+    }
+  }
+
+  async function handleBotLogin() {
+    if (!botToken.trim()) return;
+    telegramErrorMsg = null;
+    isTelegramLoading = true;
+    try {
+      await store.loginTelegramBot(botToken);
+      telegramAuthSubTab = 'accounts';
+    } catch (e: any) {
+      telegramErrorMsg = String(e);
+    } finally {
+      isTelegramLoading = false;
+    }
+  }
 
   async function browseFolder(target: 'default' | 'temp') {
     try {
@@ -252,6 +321,19 @@
         >
           <Globe class="w-3.5 h-3.5" />
           <span>{store.t('settings.tabExtensions')}</span>
+        </button>
+
+        <button
+          type="button"
+          onclick={() => (activeTab = 'telegram')}
+          class={`px-3.5 py-2 rounded-t-lg text-xs font-medium flex items-center gap-2 transition-all cursor-pointer ${
+            activeTab === 'telegram'
+              ? 'bg-[#171c24] text-[#4cd7f6] border-t-2 border-t-[#4cd7f6] border-x border-[#30353e] shadow-[0_-2px_8px_rgba(76,215,246,0.1)]'
+              : 'text-[#8c909f] hover:text-[#dee2ee] hover:bg-[#171c24]/50'
+          }`}
+        >
+          <Send class="w-3.5 h-3.5 text-[#4cd7f6]" />
+          <span>{store.t('settings.tabTelegram')}</span>
         </button>
       </div>
 
@@ -854,6 +936,271 @@
               <p class="text-[11px] text-[#8c909f] leading-relaxed">
                 {store.t('settings.manualInstallGuideDesc')}
               </p>
+            </div>
+          </div>
+        {/if}
+
+        <!-- TAB 6: TELEGRAM (AKUN & DIREKTORI UNDUHAN) -->
+        {#if activeTab === 'telegram'}
+          <div class="space-y-6">
+            <!-- Otentikasi & Akun Telegram (Multi-Akun) -->
+            <div class="bg-[#1b2028] p-5 rounded-xl border border-[#30353e]/80 space-y-4">
+              <div class="flex items-center justify-between pb-3 border-b border-[#252a33]">
+                <div class="flex items-center gap-2">
+                  <Send class="w-4 h-4 text-[#4cd7f6]" />
+                  <div>
+                    <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">{store.t('telegram.authModalTitle')}</h3>
+                    <p class="text-[11px] text-[#8c909f]">{store.t('telegram.authModalSub')}</p>
+                  </div>
+                </div>
+                {#if store.telegramAuthStatus?.is_authenticated}
+                  <span class="px-2.5 py-1 rounded-full bg-[#10b981]/15 text-[#4edea3] font-mono text-[10px] font-semibold flex items-center gap-1.5 border border-[#10b981]/30">
+                    <span class="w-1.5 h-1.5 rounded-full bg-[#10b981] animate-pulse"></span>
+                    {store.t('telegram.connected')}
+                  </span>
+                {:else}
+                  <span class="px-2.5 py-1 rounded-full bg-[#f59e0b]/15 text-[#f59e0b] font-mono text-[10px] font-semibold flex items-center gap-1.5 border border-[#f59e0b]/30">
+                    <span class="w-1.5 h-1.5 rounded-full bg-[#f59e0b]"></span>
+                    {store.t('telegram.notLoggedIn')}
+                  </span>
+                {/if}
+              </div>
+
+              <!-- Sub-tab selectors -->
+              <div class="flex items-center gap-2 bg-[#090e16] p-1 rounded-xl border border-[#30353e]">
+                <button
+                  type="button"
+                  onclick={() => { telegramAuthSubTab = 'accounts'; telegramErrorMsg = null; }}
+                  class={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${telegramAuthSubTab === 'accounts' ? 'bg-[#4cd7f6]/20 text-[#4cd7f6]' : 'text-[#8c909f] hover:text-[#dee2ee]'}`}
+                >
+                  {store.t('telegram.tabAccounts', { count: store.telegramAccounts.length })}
+                </button>
+                <button
+                  type="button"
+                  onclick={() => { telegramAuthSubTab = 'otp'; telegramErrorMsg = null; }}
+                  class={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${telegramAuthSubTab === 'otp' ? 'bg-[#4d8eff]/20 text-[#4d8eff]' : 'text-[#8c909f] hover:text-[#dee2ee]'}`}
+                >
+                  {store.t('telegram.tabPhoneOtp')}
+                </button>
+                <button
+                  type="button"
+                  onclick={() => { telegramAuthSubTab = 'bot'; telegramErrorMsg = null; }}
+                  class={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${telegramAuthSubTab === 'bot' ? 'bg-[#4edea3]/20 text-[#4edea3]' : 'text-[#8c909f] hover:text-[#dee2ee]'}`}
+                >
+                  {store.t('telegram.tabBotToken')}
+                </button>
+              </div>
+
+              {#if telegramErrorMsg}
+                <div class="p-2.5 rounded-lg bg-[#ff5252]/10 border border-[#ff5252]/30 text-xs text-[#ffb4ab]">
+                  {telegramErrorMsg}
+                </div>
+              {/if}
+
+              {#if telegramAuthSubTab === 'accounts'}
+                <div class="space-y-2">
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {#each store.telegramAccounts as acc (acc.account_id)}
+                      {@const isActive = acc.is_active || store.activeAccountId === acc.account_id}
+                      <div class={`p-3 rounded-xl border flex items-center justify-between gap-2 transition-all ${isActive ? 'bg-[#4cd7f6]/10 border-[#4cd7f6]/40' : 'bg-[#090e16] border-[#30353e]'}`}>
+                        <div class="flex items-center gap-2.5 min-w-0">
+                          <div class={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${acc.account_type === 'bot' ? 'bg-[#4edea3]/20 text-[#4edea3]' : 'bg-[#4cd7f6]/20 text-[#4cd7f6]'}`}>
+                            {#if acc.account_type === 'bot'}
+                              <Bot class="w-4 h-4" />
+                            {:else}
+                              <UserCheck class="w-4 h-4" />
+                            {/if}
+                          </div>
+                          <div class="flex flex-col min-w-0">
+                            <span class="font-sans text-xs font-semibold text-[#dee2ee] truncate">
+                              {acc.phone_number || acc.username || acc.account_id}
+                            </span>
+                            <span class="font-mono text-[10px] text-[#8c909f] truncate">
+                              {acc.account_type === 'bot' ? 'Telegram Bot' : 'User MTProto Session'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div class="flex items-center gap-1.5 shrink-0">
+                          {#if isActive}
+                            <span class="px-2 py-0.5 rounded bg-[#4cd7f6]/20 text-[#4cd7f6] font-mono text-[10px] font-bold">
+                              {store.t('telegram.activeBadge')}
+                            </span>
+                          {:else}
+                            <button
+                              onclick={() => store.switchTelegramAccount(acc.account_id)}
+                              class="px-2.5 py-1 rounded bg-[#252a33] text-[#8c909f] hover:text-[#4cd7f6] hover:bg-[#30353e] font-mono text-[10px] font-medium transition-colors cursor-pointer"
+                              type="button"
+                            >
+                              {store.t('telegram.switchAccount')}
+                            </button>
+                          {/if}
+                          <button
+                            onclick={() => store.removeTelegramAccount(acc.account_id)}
+                            class="p-1.5 rounded text-[#8c909f] hover:text-[#ff5252] hover:bg-[#ff5252]/10 transition-colors cursor-pointer"
+                            title={store.t('common.delete')}
+                            type="button"
+                          >
+                            <Trash2 class="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    {/each}
+                  </div>
+
+                  {#if store.telegramAccounts.length === 0}
+                    <div class="p-6 text-center rounded-xl bg-[#090e16] border border-[#30353e] text-xs text-[#8c909f]">
+                      {store.t('telegram.noAccount')}
+                    </div>
+                  {/if}
+                </div>
+              {:else if telegramAuthSubTab === 'otp'}
+                <div class="space-y-3 max-w-md">
+                  <div class="p-3 rounded-xl bg-[#090e16] border border-[#30353e] space-y-2">
+                    <div class="flex items-center justify-between">
+                      <span class="text-xs font-semibold text-[#dee2ee]">{store.t('telegram.apiCredentialsTitle')}</span>
+                      <a
+                        href="https://my.telegram.org"
+                        target="_blank"
+                        rel="noreferrer"
+                        class="text-[10px] text-[#00e5ff] hover:underline flex items-center gap-1"
+                      >
+                        my.telegram.org <ExternalLink class="w-2.5 h-2.5" />
+                      </a>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                      <div>
+                        <label class="block text-[10px] text-[#8c909f] mb-1">{store.t('telegram.apiIdLabel')}</label>
+                        <input
+                          type="text"
+                          bind:value={apiId}
+                          placeholder="2040"
+                          class="w-full h-8 px-2.5 bg-[#171c24] border border-[#30353e] rounded-lg text-xs font-mono text-[#dee2ee] focus:outline-none focus:border-[#00e5ff]"
+                        />
+                      </div>
+                      <div>
+                        <label class="block text-[10px] text-[#8c909f] mb-1">{store.t('telegram.apiHashLabel')}</label>
+                        <input
+                          type="text"
+                          bind:value={apiHash}
+                          placeholder="b18441a1ed609c1c80d49ec2861e6074"
+                          class="w-full h-8 px-2.5 bg-[#171c24] border border-[#30353e] rounded-lg text-xs font-mono text-[#dee2ee] focus:outline-none focus:border-[#00e5ff]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label class="block text-[11px] text-[#8c909f] mb-1">{store.t('telegram.phoneLabel')}</label>
+                    <input
+                      type="text"
+                      bind:value={phoneNumber}
+                      placeholder="+628123456789"
+                      class="w-full h-9 px-3 bg-[#090e16] border border-[#30353e] rounded-xl text-xs font-mono text-[#dee2ee] focus:outline-none focus:border-[#00e5ff]"
+                    />
+                  </div>
+
+                  <button
+                    onclick={handleRequestOtp}
+                    disabled={isTelegramLoading}
+                    class="h-9 px-4 rounded-xl bg-[#4d8eff] text-white font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-[#3b82f6] transition-all cursor-pointer disabled:opacity-50"
+                    type="button"
+                  >
+                    {#if isTelegramLoading}
+                      <Loader2 class="w-3.5 h-3.5 animate-spin" />
+                    {:else}
+                      <span>{store.t('telegram.sendOtpBtn')}</span>
+                    {/if}
+                  </button>
+
+                  {#if phoneCodeHash}
+                    <div class="pt-2 border-t border-[#252a33] space-y-2">
+                      <p class="text-[11px] text-[#4edea3]">{store.t('telegram.otpSentDesc')}</p>
+                      <input
+                        type="text"
+                        bind:value={otpCode}
+                        placeholder="12345"
+                        maxlength="6"
+                        class="w-full h-10 px-3 bg-[#090e16] border border-[#4edea3]/40 rounded-xl text-center font-mono text-base tracking-[0.4em] text-[#4edea3]"
+                      />
+                      <button
+                        onclick={handleVerifyOtp}
+                        disabled={isTelegramLoading}
+                        class="w-full h-9 rounded-xl bg-[#10b981] text-white font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-[#059669] transition-all cursor-pointer disabled:opacity-50"
+                        type="button"
+                      >
+                        {#if isTelegramLoading}
+                          <Loader2 class="w-3.5 h-3.5 animate-spin" />
+                        {:else}
+                          <Check class="w-3.5 h-3.5" />
+                          <span>{store.t('telegram.verifyLoginBtn')}</span>
+                        {/if}
+                      </button>
+                    </div>
+                  {/if}
+                </div>
+              {:else}
+                <div class="space-y-3 max-w-md">
+                  <div>
+                    <label class="block text-[11px] text-[#8c909f] mb-1">{store.t('telegram.botTokenLabel')}</label>
+                    <input
+                      type="password"
+                      bind:value={botToken}
+                      placeholder="123456789:ABCDEF..."
+                      class="w-full h-9 px-3 bg-[#090e16] border border-[#30353e] rounded-xl text-xs font-mono text-[#dee2ee]"
+                    />
+                  </div>
+                  <button
+                    onclick={handleBotLogin}
+                    disabled={isTelegramLoading}
+                    class="h-9 px-4 rounded-xl bg-[#10b981] text-white font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-[#059669] transition-all cursor-pointer disabled:opacity-50"
+                    type="button"
+                  >
+                    {#if isTelegramLoading}
+                      <Loader2 class="w-3.5 h-3.5 animate-spin" />
+                    {:else}
+                      <Check class="w-3.5 h-3.5" />
+                      <span>{store.t('telegram.botLoginBtn')}</span>
+                    {/if}
+                  </button>
+                </div>
+              {/if}
+            </div>
+
+            <!-- Target Folder Download Telegram Settings -->
+            <div class="bg-[#1b2028] p-5 rounded-xl border border-[#30353e]/80 space-y-4">
+              <div class="flex items-center gap-2 pb-2 border-b border-[#252a33]">
+                <FolderOpen class="w-4 h-4 text-[#4cd7f6]" />
+                <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">{store.t('telegram.targetSaveDir')}</h3>
+              </div>
+
+              <div class="space-y-3">
+                <div class="flex items-center gap-2">
+                  <input
+                    type="text"
+                    bind:value={draft.defaultDownloadDir}
+                    placeholder="C:\Downloads"
+                    class="flex-1 bg-[#090e16] text-[#dee2ee] text-xs font-mono rounded-lg px-3 py-2 border border-[#30353e] focus:outline-none focus:border-[#4cd7f6]"
+                  />
+                  <button
+                    type="button"
+                    onclick={() => browseFolder('default')}
+                    class="px-3 py-2 bg-[#252a33] hover:bg-[#30353e] text-[#dee2ee] rounded-lg text-xs font-medium border border-[#30353e] flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <FolderOpen class="w-3.5 h-3.5 text-[#4cd7f6]" />
+                    <span>{store.t('telegram.changeFolder')}</span>
+                  </button>
+                </div>
+
+                <label class="flex items-center gap-2 text-xs text-[#dee2ee] cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    bind:checked={draft.categorySubfolders}
+                    class="rounded border-[#30353e] bg-[#090e16] text-[#4cd7f6] focus:ring-0 w-4 h-4 cursor-pointer"
+                  />
+                  <span>{store.t('settings.categorySubfolders')}</span>
+                </label>
+              </div>
             </div>
           </div>
         {/if}
