@@ -112,7 +112,8 @@ pub fn run() {
             commands::telegram_scan_media,
             commands::telegram_list_accounts,
             commands::telegram_switch_account,
-            commands::telegram_remove_account
+            commands::telegram_remove_account,
+            commands::test_proxy_connection
         ])
 
         .run(tauri::generate_context!())

@@ -181,6 +181,13 @@ export interface AppSettings {
   duplicateActionRemember: boolean;
   telegramDownloadDir?: string;
   telegramUseChannelSubfolder?: boolean;
+  proxyEnabled: boolean;
+  proxyType: 'http' | 'https' | 'socks5';
+  proxyHost: string;
+  proxyPort: number | string;
+  proxyAuth: boolean;
+  proxyUser: string;
+  proxyPass: string;
 }
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -205,6 +212,13 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   maxRetries: 5,
   duplicateAction: 'ask',
   duplicateActionRemember: false,
+  proxyEnabled: false,
+  proxyType: 'http',
+  proxyHost: '',
+  proxyPort: 8080,
+  proxyAuth: false,
+  proxyUser: '',
+  proxyPass: '',
 };
 
 export function matchesDownloadExtension(url: string, extensionsStr?: string): boolean {

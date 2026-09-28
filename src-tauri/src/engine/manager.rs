@@ -21,7 +21,7 @@ use crate::engine::writer::FileWriter;
 
 pub struct DownloadManager {
     pub db: Arc<Database>,
-    pub client: reqwest::Client,
+    pub client: parking_lot::RwLock<reqwest::Client>,
     pub tasks: Arc<RwLock<HashMap<String, DownloadTask>>>,
     pub cancel_flags: Arc<RwLock<HashMap<String, Arc<AtomicBool>>>>,
     pub global_limiter: Arc<TokenBucketRateLimiter>,
@@ -30,12 +30,129 @@ pub struct DownloadManager {
 }
 
 impl DownloadManager {
-    pub fn new(db: Arc<Database>) -> Self {
-        let client = reqwest::Client::builder()
+    pub fn build_client(db: &Database) -> reqwest::Client {
+        let mut builder = reqwest::Client::builder()
             .timeout(Duration::from_secs(60))
-            .pool_max_idle_per_host(32)
-            .build()
+            .pool_max_idle_per_host(32);
+
+        let proxy_enabled = db
+            .get_setting("proxyEnabled")
+            .unwrap_or(None)
+            .map(|v| v == "true")
+            .unwrap_or(false);
+
+        if proxy_enabled {
+            let proxy_type = db
+                .get_setting("proxyType")
+                .unwrap_or(None)
+                .unwrap_or_else(|| "http".to_string());
+            let proxy_host = db
+                .get_setting("proxyHost")
+                .unwrap_or(None)
+                .unwrap_or_default();
+            let proxy_port = db
+                .get_setting("proxyPort")
+                .unwrap_or(None)
+                .unwrap_or_else(|| "8080".to_string());
+
+            if !proxy_host.trim().is_empty() {
+                let proxy_url_str = match proxy_type.to_lowercase().as_str() {
+                    "socks5" => format!("socks5h://{}:{}", proxy_host.trim(), proxy_port.trim()),
+                    "https" => format!("https://{}:{}", proxy_host.trim(), proxy_port.trim()),
+                    _ => format!("http://{}:{}", proxy_host.trim(), proxy_port.trim()),
+                };
+
+                if let Ok(mut proxy) = reqwest::Proxy::all(&proxy_url_str) {
+                    let proxy_auth = db
+                        .get_setting("proxyAuth")
+                        .unwrap_or(None)
+                        .map(|v| v == "true")
+                        .unwrap_or(false);
+
+                    if proxy_auth {
+                        let user = db
+                            .get_setting("proxyUser")
+                            .unwrap_or(None)
+                            .unwrap_or_default();
+                        let pass = db
+                            .get_setting("proxyPass")
+                            .unwrap_or(None)
+                            .unwrap_or_default();
+                        if !user.is_empty() {
+                            proxy = proxy.basic_auth(&user, &pass);
+                        }
+                    }
+
+                    builder = builder.proxy(proxy);
+                }
+            }
+        }
+
+        builder.build().unwrap_or_default()
+    }
+
+    pub fn get_client(&self) -> reqwest::Client {
+        self.client.read().clone()
+    }
+
+    pub fn reload_client(&self) {
+        let new_client = Self::build_client(&self.db);
+        *self.client.write() = new_client;
+    }
+
+    pub fn get_proxy_url_from_db(db: &Database) -> Option<String> {
+        let proxy_enabled = db
+            .get_setting("proxyEnabled")
+            .unwrap_or(None)
+            .map(|v| v == "true")
+            .unwrap_or(false);
+
+        if !proxy_enabled {
+            return None;
+        }
+
+        let proxy_type = db
+            .get_setting("proxyType")
+            .unwrap_or(None)
+            .unwrap_or_else(|| "http".to_string());
+        let proxy_host = db
+            .get_setting("proxyHost")
+            .unwrap_or(None)
             .unwrap_or_default();
+        let proxy_port = db
+            .get_setting("proxyPort")
+            .unwrap_or(None)
+            .unwrap_or_else(|| "8080".to_string());
+
+        if proxy_host.trim().is_empty() {
+            return None;
+        }
+
+        let proxy_auth = db
+            .get_setting("proxyAuth")
+            .unwrap_or(None)
+            .map(|v| v == "true")
+            .unwrap_or(false);
+        let user = db.get_setting("proxyUser").unwrap_or(None).unwrap_or_default();
+        let pass = db.get_setting("proxyPass").unwrap_or(None).unwrap_or_default();
+
+        let auth_prefix = if proxy_auth && !user.is_empty() {
+            format!("{}:{}@", user, pass)
+        } else {
+            String::new()
+        };
+
+        let proto = match proxy_type.to_lowercase().as_str() {
+            "socks5" => "socks5",
+            "https" => "https",
+            _ => "http",
+        };
+
+        Some(format!("{}://{}{}:{}", proto, auth_prefix, proxy_host.trim(), proxy_port.trim()))
+    }
+
+    pub fn new(db: Arc<Database>) -> Self {
+        let client = parking_lot::RwLock::new(Self::build_client(&db));
 
         let initial_tasks = db.load_all_tasks().unwrap_or_default();
         let mut map = HashMap::new();
@@ -114,7 +231,8 @@ impl DownloadManager {
         let clean_url = crate::engine::probe::clean_stream_url(new_url);
 
         // 1. Probe the new URL
-        let probe = Prober::probe(&self.client, &clean_url, None).await?;
+        let client = self.get_client();
+        let probe = Prober::probe(&client, &clean_url, None).await?;
 
         // 2. Validate with existing task
         {
@@ -375,7 +493,8 @@ impl DownloadManager {
         let clean_url = crate::engine::probe::clean_stream_url(url);
 
         // 1. Probe the URL
-        let probe = Prober::probe(&self.client, &clean_url, custom_headers.clone()).await?;
+        let client = self.get_client();
+        let probe = Prober::probe(&client, &clean_url, custom_headers.clone()).await?;
 
         let final_filename = if filename.is_empty() {
             probe.filename.clone()
@@ -487,7 +606,7 @@ impl DownloadManager {
         // Spawn runner task
         let db_clone = self.db.clone();
         let tasks_clone = self.tasks.clone();
-        let client_clone = self.client.clone();
+        let client_clone = self.get_client();
         let task_for_run = task.clone();
 
         tauri::async_runtime::spawn(async move {
@@ -567,7 +686,7 @@ impl DownloadManager {
 
             let db_clone = self.db.clone();
             let tasks_clone = self.tasks.clone();
-            let client_clone = self.client.clone();
+            let client_clone = self.get_client();
             let headers = task.referer.as_ref().map(|ref_url| {
                 let mut map = HashMap::new();
                 map.insert("Referer".to_string(), ref_url.clone());
@@ -707,6 +826,7 @@ impl DownloadManager {
             let (stream_err_tx, err_rx) = tokio::sync::oneshot::channel();
             stream_err_rx = Some(err_rx);
             let quality_clone = task.quality.clone();
+            let proxy_clone = Self::get_proxy_url_from_db(&db);
 
             tauri::async_runtime::spawn(async move {
                 let res = crate::engine::ytdlp::YtDlpRunner::run_download(
@@ -718,6 +838,7 @@ impl DownloadManager {
                     task_limiter_clone,
                     global_limiter_clone,
                     quality_clone,
+                    proxy_clone,
                 )
                 .await;
                 let _ = stream_err_tx.send(res);

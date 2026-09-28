@@ -20,9 +20,9 @@ export class IdmStore {
   searchQuery = $state<string>('');
   isAddModalOpen = $state<boolean>(false);
   isSettingsModalOpen = $state<boolean>(false);
-  settingsActiveTab = $state<'general' | 'connection' | 'filetypes' | 'saveto' | 'extensions' | 'telegram'>('general');
+  settingsActiveTab = $state<'general' | 'connection' | 'filetypes' | 'saveto' | 'extensions' | 'telegram' | 'proxy'>('general');
 
-  openSettingsModal(tab: 'general' | 'connection' | 'filetypes' | 'saveto' | 'extensions' | 'telegram' = 'general') {
+  openSettingsModal(tab: 'general' | 'connection' | 'filetypes' | 'saveto' | 'extensions' | 'telegram' | 'proxy' = 'general') {
     this.settingsActiveTab = tab;
     this.isSettingsModalOpen = true;
   }
@@ -936,6 +936,15 @@ export class IdmStore {
     if ('duplicateActionRemember' in raw) {
       s.duplicateActionRemember = raw.duplicateActionRemember === 'true';
     }
+    if ('proxyEnabled' in raw) s.proxyEnabled = raw.proxyEnabled === 'true';
+    if ('proxyType' in raw && (raw.proxyType === 'http' || raw.proxyType === 'https' || raw.proxyType === 'socks5')) {
+      s.proxyType = raw.proxyType;
+    }
+    if ('proxyHost' in raw) s.proxyHost = raw.proxyHost;
+    if ('proxyPort' in raw) s.proxyPort = raw.proxyPort;
+    if ('proxyAuth' in raw) s.proxyAuth = raw.proxyAuth === 'true';
+    if ('proxyUser' in raw) s.proxyUser = raw.proxyUser;
+    if ('proxyPass' in raw) s.proxyPass = raw.proxyPass;
     this.settings = s;
   }
 
@@ -962,7 +971,40 @@ export class IdmStore {
       maxRetries: String(s.maxRetries),
       duplicateAction: s.duplicateAction || 'ask',
       duplicateActionRemember: String(s.duplicateActionRemember ?? false),
+      proxyEnabled: String(s.proxyEnabled ?? false),
+      proxyType: s.proxyType || 'http',
+      proxyHost: s.proxyHost || '',
+      proxyPort: String(s.proxyPort || 8080),
+      proxyAuth: String(s.proxyAuth ?? false),
+      proxyUser: s.proxyUser || '',
+      proxyPass: s.proxyPass || '',
     };
+  }
+
+  async testProxyConnection(config: {
+    proxyType: string;
+    proxyHost: string;
+    proxyPort: number | string;
+    proxyAuth: boolean;
+    proxyUser?: string;
+    proxyPass?: string;
+  }): Promise<{ success: boolean; message: string }> {
+    if (!isTauri()) {
+      return { success: true, message: 'Simulasi: Terhubung ke Proxy (Latensi: 85ms)' };
+    }
+    try {
+      const msg = await invoke<string>('test_proxy_connection', {
+        proxyType: config.proxyType,
+        proxyHost: config.proxyHost,
+        proxyPort: Number(config.proxyPort) || 8080,
+        proxyAuth: config.proxyAuth,
+        proxyUser: config.proxyUser || null,
+        proxyPass: config.proxyPass || null,
+      });
+      return { success: true, message: msg };
+    } catch (e: any) {
+      return { success: false, message: String(e) };
+    }
   }
 
   async loadAppSettings() {

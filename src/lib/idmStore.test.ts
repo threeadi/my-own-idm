@@ -1717,6 +1717,99 @@ describe('IdmStore State & Filtering', () => {
       expect(mockInvoke).toHaveBeenCalledWith('telegram_remove_account', { accountId: 'acc2' });
     });
   });
+
+  describe('Proxy Settings & Connectivity', () => {
+    it('opens settings modal with proxy tab', () => {
+      const store = new IdmStore();
+      store.openSettingsModal('proxy');
+      expect(store.isSettingsModalOpen).toBe(true);
+      expect(store.settingsActiveTab).toBe('proxy');
+    });
+
+    it('correctly deserializes and serializes proxy settings', () => {
+      const store = new IdmStore();
+      const rawSettings = {
+        proxyEnabled: 'true',
+        proxyType: 'socks5',
+        proxyHost: '127.0.0.1',
+        proxyPort: '1080',
+        proxyAuth: 'true',
+        proxyUser: 'proxyuser',
+        proxyPass: 'secret123',
+      };
+
+      (store as any).applyRawSettings(rawSettings);
+      expect(store.settings.proxyEnabled).toBe(true);
+      expect(store.settings.proxyType).toBe('socks5');
+      expect(store.settings.proxyHost).toBe('127.0.0.1');
+      expect(store.settings.proxyPort).toBe('1080');
+      expect(store.settings.proxyAuth).toBe(true);
+      expect(store.settings.proxyUser).toBe('proxyuser');
+      expect(store.settings.proxyPass).toBe('secret123');
+
+      const serialized = (store as any).settingsToRaw(store.settings);
+      expect(serialized.proxyEnabled).toBe('true');
+      expect(serialized.proxyType).toBe('socks5');
+      expect(serialized.proxyHost).toBe('127.0.0.1');
+      expect(serialized.proxyPort).toBe('1080');
+      expect(serialized.proxyAuth).toBe('true');
+      expect(serialized.proxyUser).toBe('proxyuser');
+      expect(serialized.proxyPass).toBe('secret123');
+    });
+
+    it('tests proxy connection in browser mode (simulation)', async () => {
+      (globalThis as any).window = {};
+      mockIsTauriReturn = false;
+      const store = new IdmStore();
+      const res = await store.testProxyConnection({
+        proxyType: 'socks5',
+        proxyHost: '127.0.0.1',
+        proxyPort: 1080,
+        proxyAuth: false,
+      });
+
+      expect(res.success).toBe(true);
+      expect(res.message).toContain('Simulasi');
+      mockIsTauriReturn = true;
+    });
+
+    it('tests proxy connection in Tauri mode (success & error)', async () => {
+      (window as any).__TAURI_INTERNALS__ = {};
+      const store = new IdmStore();
+
+      mockInvoke.mockResolvedValueOnce('Terhubung ke Proxy (Latensi: 42ms)');
+      const resSuccess = await store.testProxyConnection({
+        proxyType: 'socks5',
+        proxyHost: '127.0.0.1',
+        proxyPort: 1080,
+        proxyAuth: false,
+      });
+      expect(resSuccess.success).toBe(true);
+      expect(resSuccess.message).toBe('Terhubung ke Proxy (Latensi: 42ms)');
+      expect(mockInvoke).toHaveBeenCalledWith('test_proxy_connection', {
+        proxyType: 'socks5',
+        proxyHost: '127.0.0.1',
+        proxyPort: 1080,
+        proxyAuth: false,
+        proxyUser: null,
+        proxyPass: null,
+      });
+
+      mockInvoke.mockRejectedValueOnce(new Error('Connection refused'));
+      const resFail = await store.testProxyConnection({
+        proxyType: 'http',
+        proxyHost: '10.0.0.1',
+        proxyPort: 8080,
+        proxyAuth: true,
+        proxyUser: 'user',
+        proxyPass: 'pass',
+      });
+      expect(resFail.success).toBe(false);
+      expect(resFail.message).toContain('Connection refused');
+
+      delete (window as any).__TAURI_INTERNALS__;
+    });
+  });
 });
 
 

@@ -18,7 +18,7 @@ pub async fn probe_url(
     url: String,
     headers: Option<HashMap<String, String>>,
 ) -> Result<ProbeResult, String> {
-    Prober::probe(&state.manager.client, &url, headers).await
+    Prober::probe(&state.manager.get_client(), &url, headers).await
 }
 
 #[tauri::command]
@@ -291,7 +291,62 @@ pub async fn save_app_settings(
     state: State<'_, AppState>,
     settings: HashMap<String, String>,
 ) -> Result<(), String> {
-    state.manager.db.set_multiple_settings(&settings).map_err(|e| e.to_string())
+    state.manager.db.set_multiple_settings(&settings).map_err(|e| e.to_string())?;
+    state.manager.reload_client();
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn test_proxy_connection(
+    proxy_type: String,
+    proxy_host: String,
+    proxy_port: u16,
+    proxy_auth: bool,
+    proxy_user: Option<String>,
+    proxy_pass: Option<String>,
+) -> Result<String, String> {
+    let start = std::time::Instant::now();
+    let proxy_url_str = match proxy_type.to_lowercase().as_str() {
+        "socks5" => format!("socks5h://{}:{}", proxy_host.trim(), proxy_port),
+        "https" => format!("https://{}:{}", proxy_host.trim(), proxy_port),
+        _ => format!("http://{}:{}", proxy_host.trim(), proxy_port),
+    };
+
+    let mut proxy = reqwest::Proxy::all(&proxy_url_str)
+        .map_err(|e| format!("URL Proxy tidak valid: {}", e))?;
+
+    if proxy_auth {
+        if let (Some(user), Some(pass)) = (proxy_user, proxy_pass) {
+            if !user.is_empty() {
+                proxy = proxy.basic_auth(&user, &pass);
+            }
+        }
+    }
+
+    let client = reqwest::Client::builder()
+        .proxy(proxy)
+        .timeout(std::time::Duration::from_secs(8))
+        .build()
+        .map_err(|e| format!("Gagal menginisialisasi client proxy: {}", e))?;
+
+    let res = client
+        .get("https://httpbin.org/ip")
+        .send()
+        .await
+        .map_err(|e| format!("Koneksi ke proxy gagal: {}", e))?;
+
+    let elapsed = start.elapsed().as_millis();
+    if res.status().is_success() {
+        let text = res.text().await.unwrap_or_default();
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
+            if let Some(origin) = json.get("origin").and_then(|o| o.as_str()) {
+                return Ok(format!("Terhubung! IP Proxy: {} (Latensi: {} ms)", origin, elapsed));
+            }
+        }
+        Ok(format!("Terhubung ke Proxy! (Latensi: {} ms)", elapsed))
+    } else {
+        Err(format!("Proxy merespons dengan status HTTP {}", res.status()))
+    }
 }
 
 #[tauri::command]
@@ -702,6 +757,57 @@ mod tests {
         assert!(res_missing.is_err());
         assert!(res_missing.unwrap_err().contains("not found"));
     }
+
+    #[tokio::test]
+    async fn test_proxy_configuration_and_manager_reload() {
+        let db = Arc::new(crate::db::Database::open_in_memory().unwrap());
+        let manager = Arc::new(DownloadManager::new(db.clone()));
+
+        // Disabled by default
+        assert_eq!(DownloadManager::get_proxy_url_from_db(&db), None);
+
+        // Enable HTTP proxy
+        db.set_setting("proxyEnabled", "true").unwrap();
+        db.set_setting("proxyType", "http").unwrap();
+        db.set_setting("proxyHost", "127.0.0.1").unwrap();
+        db.set_setting("proxyPort", "8080").unwrap();
+
+        let proxy_url = DownloadManager::get_proxy_url_from_db(&db);
+        assert_eq!(proxy_url, Some("http://127.0.0.1:8080".to_string()));
+
+        // Reload client with new proxy
+        manager.reload_client();
+        let _ = manager.get_client();
+
+        // Enable SOCKS5 with authentication
+        db.set_setting("proxyType", "socks5").unwrap();
+        db.set_setting("proxyHost", "10.0.0.1").unwrap();
+        db.set_setting("proxyPort", "1080").unwrap();
+        db.set_setting("proxyAuth", "true").unwrap();
+        db.set_setting("proxyUser", "alice").unwrap();
+        db.set_setting("proxyPass", "secret").unwrap();
+
+        let socks_url = DownloadManager::get_proxy_url_from_db(&db);
+        assert_eq!(socks_url, Some("socks5://alice:secret@10.0.0.1:1080".to_string()));
+
+        manager.reload_client();
+    }
+
+    #[tokio::test]
+    async fn test_test_proxy_connection_command_flow() {
+        // Test with unreachable port/host - should return Err gracefully without panic
+        let res = test_proxy_connection(
+            "http".to_string(),
+            "127.0.0.1".to_string(),
+            59999,
+            false,
+            None,
+            None,
+        ).await;
+
+        assert!(res.is_err());
+    }
 }
+
 
 

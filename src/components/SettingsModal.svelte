@@ -26,10 +26,12 @@
     UserCheck,
     Bot,
     Trash2,
-    Loader2
+    Loader2,
+    Eye,
+    EyeOff
   } from '@lucide/svelte';
 
-  type SettingsTab = 'general' | 'connection' | 'filetypes' | 'saveto' | 'extensions' | 'telegram';
+  type SettingsTab = 'general' | 'connection' | 'filetypes' | 'saveto' | 'extensions' | 'telegram' | 'proxy';
   let activeTab = $state<SettingsTab>(store.settingsActiveTab || 'general');
 
   // Draft local copy of settings to allow Apply, OK, Cancel, and Reset
@@ -49,6 +51,31 @@
   let isTelegramLoading = $state(false);
   let telegramErrorMsg = $state<string | null>(null);
 
+  // Proxy test local states
+  let isTestingProxy = $state(false);
+  let proxyTestResult = $state<{ success: boolean; message: string } | null>(null);
+  let showProxyPassword = $state(false);
+
+  async function handleTestProxy() {
+    isTestingProxy = true;
+    proxyTestResult = null;
+    try {
+      const res = await store.testProxyConnection({
+        proxyType: draft.proxyType,
+        proxyHost: draft.proxyHost,
+        proxyPort: draft.proxyPort,
+        proxyAuth: draft.proxyAuth,
+        proxyUser: draft.proxyUser,
+        proxyPass: draft.proxyPass,
+      });
+      proxyTestResult = res;
+    } catch (e: any) {
+      proxyTestResult = { success: false, message: String(e) };
+    } finally {
+      isTestingProxy = false;
+    }
+  }
+
   $effect(() => {
     if (store.isSettingsModalOpen) {
       activeTab = store.settingsActiveTab || 'general';
@@ -56,6 +83,7 @@
       saveSuccessMessage = null;
       nativeHostRegisterStatus = null;
       telegramErrorMsg = null;
+      proxyTestResult = null;
     }
   });
 
@@ -334,6 +362,19 @@
         >
           <Send class="w-3.5 h-3.5 text-[#4cd7f6]" />
           <span>{store.t('settings.tabTelegram')}</span>
+        </button>
+
+        <button
+          type="button"
+          onclick={() => (activeTab = 'proxy')}
+          class={`px-3.5 py-2 rounded-t-lg text-xs font-medium flex items-center gap-2 transition-all cursor-pointer ${
+            activeTab === 'proxy'
+              ? 'bg-[#171c24] text-[#00e5ff] border-t-2 border-t-[#00e5ff] border-x border-[#30353e] shadow-[0_-2px_8px_rgba(0,229,255,0.1)]'
+              : 'text-[#8c909f] hover:text-[#dee2ee] hover:bg-[#171c24]/50'
+          }`}
+        >
+          <ShieldCheck class="w-3.5 h-3.5 text-[#00e5ff]" />
+          <span>{store.t('settings.tabProxy')}</span>
         </button>
       </div>
 
@@ -1200,6 +1241,207 @@
                   />
                   <span>{store.t('settings.categorySubfolders')}</span>
                 </label>
+              </div>
+            </div>
+          </div>
+        {/if}
+
+        <!-- TAB 7: PROXY & SOCKS -->
+        {#if activeTab === 'proxy'}
+          <div class="space-y-6">
+            <!-- Header card: Enable toggle & basic overview -->
+            <div class="bg-[#1b2028] p-5 rounded-xl border border-[#30353e]/80 space-y-4">
+              <div class="flex items-center justify-between gap-4 pb-3 border-b border-[#252a33]">
+                <div class="flex items-center gap-2.5">
+                  <div class="w-8 h-8 rounded-lg bg-[#00e5ff]/10 border border-[#00e5ff]/30 flex items-center justify-center text-[#00e5ff]">
+                    <ShieldCheck class="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 class="font-bold text-xs text-[#dee2ee] uppercase tracking-wider">{store.t('settings.proxyTitle')}</h3>
+                    <p class="text-[11px] text-[#8c909f]">{store.t('settings.proxySubtitle')}</p>
+                  </div>
+                </div>
+
+                <!-- Enable Switch -->
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    bind:checked={draft.proxyEnabled}
+                    class="sr-only peer"
+                  />
+                  <div class="w-11 h-6 bg-[#252a33] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#00e5ff]"></div>
+                </label>
+              </div>
+
+              <!-- Main Proxy Config Fields -->
+              <div class="space-y-4 {draft.proxyEnabled ? 'opacity-100' : 'opacity-50 pointer-events-none transition-opacity'}">
+                <!-- Protocol Selector Buttons -->
+                <div class="space-y-1.5">
+                  <span class="text-xs font-semibold text-[#bac9cc]">{store.t('settings.proxyType')}</span>
+                  <div class="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onclick={() => (draft.proxyType = 'http')}
+                      class={`px-3 py-2 rounded-lg border text-xs font-mono font-medium transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                        draft.proxyType === 'http'
+                          ? 'bg-[#00e5ff]/15 border-[#00e5ff] text-[#00e5ff] shadow-[0_0_8px_rgba(0,229,255,0.2)]'
+                          : 'bg-[#090e16] border-[#30353e] text-[#8c909f] hover:border-[#4cd7f6]/50'
+                      }`}
+                    >
+                      HTTP
+                    </button>
+                    <button
+                      type="button"
+                      onclick={() => (draft.proxyType = 'https')}
+                      class={`px-3 py-2 rounded-lg border text-xs font-mono font-medium transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                        draft.proxyType === 'https'
+                          ? 'bg-[#00e5ff]/15 border-[#00e5ff] text-[#00e5ff] shadow-[0_0_8px_rgba(0,229,255,0.2)]'
+                          : 'bg-[#090e16] border-[#30353e] text-[#8c909f] hover:border-[#4cd7f6]/50'
+                      }`}
+                    >
+                      HTTPS
+                    </button>
+                    <button
+                      type="button"
+                      onclick={() => (draft.proxyType = 'socks5')}
+                      class={`px-3 py-2 rounded-lg border text-xs font-mono font-medium transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                        draft.proxyType === 'socks5'
+                          ? 'bg-[#00e5ff]/15 border-[#00e5ff] text-[#00e5ff] shadow-[0_0_8px_rgba(0,229,255,0.2)]'
+                          : 'bg-[#090e16] border-[#30353e] text-[#8c909f] hover:border-[#4cd7f6]/50'
+                      }`}
+                    >
+                      <span>SOCKS5</span>
+                      <span class="text-[9px] px-1 py-0.2 rounded bg-[#00e5ff]/20 text-[#00e5ff]">DNS</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Host & Port Grid -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div class="sm:col-span-2 space-y-1.5">
+                    <span class="block text-xs font-semibold text-[#bac9cc]">
+                      {store.t('settings.proxyHost')}
+                    </span>
+                    <input
+                      type="text"
+                      bind:value={draft.proxyHost}
+                      placeholder="127.0.0.1"
+                      class="w-full h-9 px-3 bg-[#090e16] border border-[#30353e] rounded-lg text-xs font-mono text-[#dee2ee] placeholder-[#8c909f]/40 focus:outline-none focus:border-[#00e5ff]"
+                    />
+                  </div>
+                  <div class="space-y-1.5">
+                    <span class="block text-xs font-semibold text-[#bac9cc]">
+                      {store.t('settings.proxyPort')}
+                    </span>
+                    <input
+                      type="text"
+                      bind:value={draft.proxyPort}
+                      placeholder="1080"
+                      class="w-full h-9 px-3 bg-[#090e16] border border-[#30353e] rounded-lg text-xs font-mono text-[#dee2ee] placeholder-[#8c909f]/40 focus:outline-none focus:border-[#00e5ff]"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 2: Autentikasi Proxy -->
+            <div class="bg-[#1b2028] p-5 rounded-xl border border-[#30353e]/80 space-y-4 {draft.proxyEnabled ? 'opacity-100' : 'opacity-50 pointer-events-none transition-opacity'}">
+              <div class="flex items-center justify-between gap-4 pb-2 border-b border-[#252a33]">
+                <div>
+                  <h4 class="font-bold text-xs text-[#dee2ee]">{store.t('settings.proxyAuth')}</h4>
+                  <p class="text-[11px] text-[#8c909f]">{store.t('settings.proxyAuthDesc')}</p>
+                </div>
+                <label class="flex items-center cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    bind:checked={draft.proxyAuth}
+                    class="rounded border-[#30353e] bg-[#090e16] text-[#00e5ff] focus:ring-0 w-4 h-4 cursor-pointer"
+                  />
+                </label>
+              </div>
+
+              {#if draft.proxyAuth}
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 animate-in fade-in duration-150">
+                  <div class="space-y-1.5">
+                    <span class="block text-xs font-semibold text-[#bac9cc]">
+                      {store.t('settings.proxyUser')}
+                    </span>
+                    <input
+                      type="text"
+                      bind:value={draft.proxyUser}
+                      placeholder="username"
+                      class="w-full h-9 px-3 bg-[#090e16] border border-[#30353e] rounded-lg text-xs font-mono text-[#dee2ee] placeholder-[#8c909f]/40 focus:outline-none focus:border-[#00e5ff]"
+                    />
+                  </div>
+                  <div class="space-y-1.5">
+                    <span class="block text-xs font-semibold text-[#bac9cc]">
+                      {store.t('settings.proxyPass')}
+                    </span>
+                    <div class="relative">
+                      <input
+                        type={showProxyPassword ? 'text' : 'password'}
+                        bind:value={draft.proxyPass}
+                        placeholder="••••••••"
+                        class="w-full h-9 pl-3 pr-9 bg-[#090e16] border border-[#30353e] rounded-lg text-xs font-mono text-[#dee2ee] placeholder-[#8c909f]/40 focus:outline-none focus:border-[#00e5ff]"
+                      />
+                      <button
+                        type="button"
+                        onclick={() => (showProxyPassword = !showProxyPassword)}
+                        class="absolute right-2 top-2 text-[#8c909f] hover:text-[#dee2ee] transition-colors cursor-pointer"
+                        title={showProxyPassword ? 'Sembunyikan' : 'Tampilkan'}
+                      >
+                        {#if showProxyPassword}
+                          <EyeOff class="w-4 h-4" />
+                        {:else}
+                          <Eye class="w-4 h-4" />
+                        {/if}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              {/if}
+            </div>
+
+            <!-- Card 3: Test Connection & Feedback Banner -->
+            <div class="bg-[#1b2028] p-5 rounded-xl border border-[#30353e]/80 space-y-4">
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onclick={handleTestProxy}
+                  disabled={isTestingProxy || !draft.proxyHost.trim()}
+                  class="h-9 px-4 rounded-xl bg-[#00e5ff] hover:bg-[#4cd7f6] text-[#090e16] font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-[0_0_12px_rgba(0,229,255,0.2)] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {#if isTestingProxy}
+                    <Loader2 class="w-3.5 h-3.5 animate-spin" />
+                    <span>{store.t('settings.proxyTesting')}</span>
+                  {:else}
+                    <RefreshCw class="w-3.5 h-3.5" />
+                    <span>{store.t('settings.proxyTestBtn')}</span>
+                  {/if}
+                </button>
+
+                {#if proxyTestResult}
+                  <div class={`px-3 py-1.5 rounded-lg text-xs font-mono flex items-center gap-2 border ${
+                    proxyTestResult.success
+                      ? 'bg-[#10b981]/10 border-[#10b981]/30 text-[#4edea3]'
+                      : 'bg-[#ff5252]/10 border-[#ff5252]/30 text-[#ffb4ab]'
+                  }`}>
+                    {#if proxyTestResult.success}
+                      <Check class="w-3.5 h-3.5 shrink-0" />
+                    {:else}
+                      <X class="w-3.5 h-3.5 shrink-0" />
+                    {/if}
+                    <span>{proxyTestResult.message}</span>
+                  </div>
+                {/if}
+              </div>
+
+              <!-- Tip Callout -->
+              <div class="p-3 bg-[#090e16]/80 rounded-lg border border-[#30353e] flex items-start gap-2.5">
+                <Flame class="w-4 h-4 text-[#00e5ff] shrink-0 mt-0.5" />
+                <p class="text-[11px] text-[#8c909f] leading-relaxed">
+                  {store.t('settings.proxyTip')}
+                </p>
               </div>
             </div>
           </div>

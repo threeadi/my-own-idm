@@ -235,6 +235,7 @@ impl YtDlpRunner {
         task_limiter: Option<Arc<TokenBucketRateLimiter>>,
         global_limiter: Option<Arc<TokenBucketRateLimiter>>,
         quality: Option<String>,
+        proxy: Option<String>,
     ) -> Result<(), String> {
         let yt_dlp_exe = Self::find_yt_dlp()?;
         let mut last_bytes: u64 = 0;
@@ -281,6 +282,12 @@ impl YtDlpRunner {
             if let Some(rate) = current_rate {
                 if rate > 0 {
                     cmd.arg("--limit-rate").arg(format!("{}", rate));
+                }
+            }
+
+            if let Some(ref p) = proxy {
+                if !p.trim().is_empty() {
+                    cmd.arg("--proxy").arg(p.trim());
                 }
             }
 
@@ -750,6 +757,7 @@ mod tests {
             Some(Arc::new(TokenBucketRateLimiter::new(500_000))),
             None,
             Some("720p".to_string()),
+            None,
         ).await;
         assert!(res.is_ok());
     }
