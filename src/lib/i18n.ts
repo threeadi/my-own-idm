@@ -77,10 +77,6 @@ export const translations = {
     'sidebar.automation': 'Otomasi',
     'sidebar.allFiles': 'Semua Berkas',
     'sidebar.queueSchedule': 'Antrean & Jadwal',
-    'sidebar.engineStatus': 'Status Mesin',
-    'sidebar.engineActive': 'Multi-Thread Aktif',
-    'sidebar.engineReady': 'Multi-Thread Siap',
-    'sidebar.segmentsCount': '{count} Bagian',
 
     // Download Queue & Table
     'table.queueTitle': 'Daftar Antrean Berkas',
@@ -111,7 +107,7 @@ export const translations = {
     'table.emptyTitle': 'Tidak ada unduhan dalam kategori ini',
     'table.emptySubtitle': 'Klik "+ Tambah URL" untuk mulai mengunduh file dengan akselerasi multi-thread',
     'table.emptyBtn': '+ Tambah Unduhan Baru',
-    'table.connectionsActive': '{count} Jalur Koneksi Aktif',
+    'table.connectionsActive': '{count} Jalur Koneksi',
     'table.hlsStream': 'HLS Stream Remux',
     'table.multiPart': 'Multi-Part Parallel',
     'table.viewCards': 'Tampilan Kartu Telemetri',
@@ -639,10 +635,6 @@ export const translations = {
     'sidebar.automation': 'Automation',
     'sidebar.allFiles': 'All Files',
     'sidebar.queueSchedule': 'Queue & Schedule',
-    'sidebar.engineStatus': 'Engine Status',
-    'sidebar.engineActive': 'Multi-Thread Active',
-    'sidebar.engineReady': 'Multi-Thread Ready',
-    'sidebar.segmentsCount': '{count} Segments',
 
     // Download Queue & Table
     'table.queueTitle': 'Download Queue',
@@ -673,7 +665,7 @@ export const translations = {
     'table.emptyTitle': 'No downloads in this category',
     'table.emptySubtitle': 'Click "+ Add URL" to start downloading files with multi-thread acceleration',
     'table.emptyBtn': '+ Add New Download',
-    'table.connectionsActive': '{count} Active Connections',
+    'table.connectionsActive': '{count} Connections',
     'table.hlsStream': 'HLS Stream Remux',
     'table.multiPart': 'Multi-Part Parallel',
     'table.viewCards': 'Telemetry Card View',

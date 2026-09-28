@@ -282,36 +282,4 @@
       </nav>
     </div>
   </div>
-
-  <!-- Bottom Engine Status Panel -->
-  <div
-    class="p-2.5 rounded-xl bg-[#252a33]/60 border border-[#30353e]/80 flex items-center justify-between mt-3"
-  >
-    <div class="flex flex-col min-w-0">
-      <span
-        class="font-sans text-[9px] text-[#8c909f] uppercase tracking-wider font-semibold truncate"
-      >
-        {store.t("sidebar.engineStatus")}
-      </span>
-      <span
-        class="font-sans text-[11px] font-semibold text-[#4edea3] flex items-center gap-1.5 mt-0.5 truncate"
-      >
-        <span
-          class={`w-1.5 h-1.5 rounded-full shrink-0 ${store.totalSpeedBps > 0 ? "bg-[#4edea3] animate-ping" : "bg-[#4cd7f6]"}`}
-        ></span>
-        <span class="truncate"
-          >{store.totalSpeedBps > 0
-            ? store.t("sidebar.engineActive")
-            : store.t("sidebar.engineReady")}</span
-        >
-      </span>
-    </div>
-    <span
-      class="font-mono text-xs text-[#4cd7f6] bg-[#090e16] px-2 py-0.5 rounded border border-[#30353e] shrink-0"
-    >
-      {store.t("sidebar.segmentsCount", {
-        count: store.settings.defaultConnections,
-      })}
-    </span>
-  </div>
 </aside>
