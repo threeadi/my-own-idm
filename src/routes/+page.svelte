@@ -13,6 +13,7 @@
   import SettingsModal from '../components/SettingsModal.svelte';
   import RefreshLinkModal from '../components/RefreshLinkModal.svelte';
   import DuplicateConfirmModal from '../components/DuplicateConfirmModal.svelte';
+  import DeleteConfirmModal from '../components/DeleteConfirmModal.svelte';
   import TelegramAuthPopover from '../components/TelegramAuthPopover.svelte';
 
   onMount(() => {
@@ -69,6 +70,7 @@
   <FilePropertiesModal />
   <RefreshLinkModal />
   <DuplicateConfirmModal />
+  <DeleteConfirmModal />
   <SettingsModal />
   <TelegramAuthPopover />
 </div>

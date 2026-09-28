@@ -28,6 +28,13 @@ export class IdmStore {
   }
   isProgressModalOpen = $state<boolean>(false);
   progressModalTaskId = $state<string | null>(null);
+  isDeleteModalOpen = $state<boolean>(false);
+  deleteModalTaskId = $state<string | null>(null);
+  deleteModalDeleteFile = $state<boolean>(false);
+
+  deleteModalTask = $derived<DownloadTask | null>(
+    this.tasks.find((t) => t.id === this.deleteModalTaskId) || null
+  );
   viewMode = $state<'cards' | 'table'>('cards');
   sortBy = $state<SortCriterion>('date');
   sortOrder = $state<SortOrder>('desc');
@@ -564,6 +571,26 @@ export class IdmStore {
   closePropertiesModal() {
     this.isPropertiesModalOpen = false;
     this.propertiesTaskId = null;
+  }
+
+  openDeleteModal(taskId: string, deleteFileDefault: boolean = false) {
+    this.deleteModalTaskId = taskId;
+    this.deleteModalDeleteFile = deleteFileDefault;
+    this.isDeleteModalOpen = true;
+  }
+
+  closeDeleteModal() {
+    this.isDeleteModalOpen = false;
+    this.deleteModalTaskId = null;
+    this.deleteModalDeleteFile = false;
+  }
+
+  async confirmDelete() {
+    if (!this.deleteModalTaskId) return;
+    const taskId = this.deleteModalTaskId;
+    const deleteFile = this.deleteModalDeleteFile;
+    this.closeDeleteModal();
+    await this.cancelTask(taskId, deleteFile);
   }
 
   setSort(criterion: SortCriterion, order?: SortOrder) {

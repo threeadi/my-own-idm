@@ -338,6 +338,19 @@ export const translations = {
     'dup.titleNewCopy': 'Unduh sebagai salinan baru',
     'dup.titleAutoRename': 'Otomatis beri nama baru dan download terpisah',
 
+    // Delete Confirmation Modal
+    'deleteModal.title': 'Konfirmasi Hapus Unduhan',
+    'deleteModal.confirmQuestion': 'Hapus berkas ini dari antrean unduhan?',
+    'deleteModal.confirmSubtitle': 'Tugas unduhan ini akan dihapus dari daftar IDM Turbo.',
+    'deleteModal.filename': 'Nama Berkas:',
+    'deleteModal.fileSize': 'Ukuran:',
+    'deleteModal.filePath': 'Lokasi:',
+    'deleteModal.deleteFromDisk': 'Hapus juga berkas fisik dari penyimpanan disk komputer',
+    'deleteModal.deleteFromDiskDesc': 'Jika dicentang, file yang telah diunduh di disk akan dihapus secara permanen.',
+    'deleteModal.warningActive': 'Peringatan: Unduhan ini sedang aktif berjalan. Menghapusnya akan membatalkan proses transfer yang sedang berlangsung.',
+    'deleteModal.btnCancel': 'Batal',
+    'deleteModal.btnDelete': 'Hapus Unduhan',
+
     // Refresh Link Modal
     'refresh.title': 'Perbarui Tautan Unduhan',
     'refresh.subtitle': 'Menunggu tautan unduhan segar dari peramban web...',
@@ -895,6 +908,19 @@ export const translations = {
     'dup.btnResume': 'Resume Download',
     'dup.titleNewCopy': 'Download as a new copy',
     'dup.titleAutoRename': 'Automatically rename and download separately',
+
+    // Delete Confirmation Modal
+    'deleteModal.title': 'Confirm Delete Download',
+    'deleteModal.confirmQuestion': 'Delete this file from download queue?',
+    'deleteModal.confirmSubtitle': 'This download task will be removed from the IDM Turbo list.',
+    'deleteModal.filename': 'Filename:',
+    'deleteModal.fileSize': 'Size:',
+    'deleteModal.filePath': 'Location:',
+    'deleteModal.deleteFromDisk': 'Also delete the physical file from computer disk',
+    'deleteModal.deleteFromDiskDesc': 'If checked, the downloaded file on your disk will be permanently removed.',
+    'deleteModal.warningActive': 'Warning: This download is currently active. Deleting it will cancel the in-progress transfer.',
+    'deleteModal.btnCancel': 'Cancel',
+    'deleteModal.btnDelete': 'Delete Download',
 
     // Refresh Link Modal
     'refresh.title': 'Refresh Download Address',

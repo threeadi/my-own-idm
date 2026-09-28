@@ -1810,6 +1810,56 @@ describe('IdmStore State & Filtering', () => {
       delete (window as any).__TAURI_INTERNALS__;
     });
   });
+
+  describe('Delete Confirmation Dialog', () => {
+    it('manages openDeleteModal, deleteModalTask derived property, and closeDeleteModal', () => {
+      const store = new IdmStore();
+      const task = makeTask({ id: 'task-del-1', filename: 'document.pdf', status: 'completed' });
+      store.tasks = [task];
+
+      expect(store.isDeleteModalOpen).toBe(false);
+      expect(store.deleteModalTask).toBeNull();
+
+      store.openDeleteModal('task-del-1', true);
+      expect(store.isDeleteModalOpen).toBe(true);
+      expect(store.deleteModalTaskId).toBe('task-del-1');
+      expect(store.deleteModalDeleteFile).toBe(true);
+      expect(store.deleteModalTask?.filename).toBe('document.pdf');
+
+      store.closeDeleteModal();
+      expect(store.isDeleteModalOpen).toBe(false);
+      expect(store.deleteModalTaskId).toBeNull();
+      expect(store.deleteModalDeleteFile).toBe(false);
+      expect(store.deleteModalTask).toBeNull();
+    });
+
+    it('confirmDelete delegates to cancelTask and closes modal', async () => {
+      const store = new IdmStore();
+      const task = makeTask({ id: 'task-del-2', filename: 'clip.mp4' });
+      store.tasks = [task];
+
+      const cancelSpy = vi.spyOn(store, 'cancelTask').mockResolvedValue(undefined as any);
+
+      // 1. Confirm delete with deleteFile = false
+      store.openDeleteModal('task-del-2', false);
+      await store.confirmDelete();
+
+      expect(cancelSpy).toHaveBeenCalledWith('task-del-2', false);
+      expect(store.isDeleteModalOpen).toBe(false);
+
+      // 2. Confirm delete with deleteFile = true
+      store.openDeleteModal('task-del-2', true);
+      await store.confirmDelete();
+
+      expect(cancelSpy).toHaveBeenCalledWith('task-del-2', true);
+      expect(store.isDeleteModalOpen).toBe(false);
+
+      // 3. Confirm delete with no taskId does nothing
+      store.deleteModalTaskId = null;
+      await store.confirmDelete();
+      expect(cancelSpy).toHaveBeenCalledTimes(2);
+    });
+  });
 });
 
 

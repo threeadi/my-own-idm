@@ -106,7 +106,27 @@
 
 </script>
 
-<svelte:window onclick={closeContextMenu} onkeydown={(e) => e.key === 'Escape' && closeContextMenu()} />
+<svelte:window
+  onclick={closeContextMenu}
+  onkeydown={(e) => {
+    if (e.key === 'Escape') {
+      closeContextMenu();
+    } else if (
+      e.key === 'Delete' &&
+      store.selectedTaskId &&
+      !store.isAddModalOpen &&
+      !store.isSettingsModalOpen &&
+      !store.isDeleteModalOpen &&
+      !store.isDuplicateModalOpen &&
+      !store.isPropertiesModalOpen &&
+      !store.isOutcomeModalOpen &&
+      !store.isRefreshModalOpen
+    ) {
+      const target = tasks.find((item) => item.id === store.selectedTaskId);
+      store.openDeleteModal(store.selectedTaskId, target?.status === 'completed');
+    }
+  }}
+/>
 
 <div class="w-full flex flex-col min-w-0 select-none bg-[#0f141c]">
   <!-- Control & Filter Header Bar -->
@@ -370,7 +390,7 @@
               </button>
 
               <button
-                onclick={(e) => { e.stopPropagation(); store.cancelTask(task.id, true); }}
+                onclick={(e) => { e.stopPropagation(); store.openDeleteModal(task.id, task.status === 'completed'); }}
                 class="w-7 h-7 rounded-lg bg-[#252a33] text-[#8c909f] hover:text-[#ffb4ab] hover:bg-[#343942] flex items-center justify-center transition-colors cursor-pointer"
                 title={store.t('menu.delete')}
               >
@@ -637,7 +657,7 @@
                   </button>
 
                   <button
-                    onclick={(e) => { e.stopPropagation(); store.cancelTask(task.id, true); }}
+                    onclick={(e) => { e.stopPropagation(); store.openDeleteModal(task.id, task.status === 'completed'); }}
                     class="w-6.5 h-6.5 rounded-lg bg-[#252a33] text-[#8c909f] hover:text-[#ffb4ab] hover:bg-[#343942] flex items-center justify-center transition-colors cursor-pointer"
                     title={store.t('menu.delete')}
                   >
@@ -762,7 +782,7 @@
       </button>
 
       <button
-        onclick={() => { store.cancelTask(contextTask.id, false); closeContextMenu(); }}
+        onclick={() => { store.openDeleteModal(contextTask.id, contextTask.status === 'completed'); closeContextMenu(); }}
         class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-red-500/20 text-red-400 transition text-left cursor-pointer"
         role="menuitem"
       >
