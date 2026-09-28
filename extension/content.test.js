@@ -1,7 +1,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // @ts-expect-error CommonJS import in ESM
 import content from './content.js';
-const { cleanFilename, isGenericTitle, resolveSmartFilename, stripByteRanges, generateQualityPresets, safeSendMessage, dismissVideo, isVideoDismissed, ensureTopmost } = content;
+const {
+  cleanFilename,
+  isGenericTitle,
+  resolveSmartFilename,
+  stripByteRanges,
+  generateQualityPresets,
+  safeSendMessage,
+  dismissVideo,
+  isVideoDismissed,
+  ensureTopmost,
+  isWatchOrPlayerPage,
+  isEligiblePlayerVideo
+} = content;
 
 describe('safeSendMessage', () => {
   const originalChrome = globalThis.chrome;
@@ -318,3 +330,98 @@ describe('ensureTopmost', () => {
     expect(() => ensureTopmost(undefined, undefined)).not.toThrow();
   });
 });
+
+describe('isWatchOrPlayerPage', () => {
+  const originalLocation = globalThis.window?.location;
+
+  afterEach(() => {
+    if (globalThis.window) {
+      // @ts-expect-error test mock
+      globalThis.window.location = originalLocation;
+    }
+  });
+
+  it('correctly identifies YouTube watch and shorts pages while excluding feeds', () => {
+    // @ts-expect-error test mock
+    globalThis.window = {
+      location: { hostname: 'www.youtube.com', pathname: '/watch' }
+    };
+    expect(isWatchOrPlayerPage()).toBe(true);
+
+    // @ts-expect-error test mock
+    globalThis.window.location = { hostname: 'www.youtube.com', pathname: '/shorts/abc123' };
+    expect(isWatchOrPlayerPage()).toBe(true);
+
+    // @ts-expect-error test mock
+    globalThis.window.location = { hostname: 'www.youtube.com', pathname: '/embed/abc123' };
+    expect(isWatchOrPlayerPage()).toBe(true);
+
+    // Excluded YouTube pages: Home, feed, subscriptions, channel
+    // @ts-expect-error test mock
+    globalThis.window.location = { hostname: 'www.youtube.com', pathname: '/' };
+    expect(isWatchOrPlayerPage()).toBe(false);
+
+    // @ts-expect-error test mock
+    globalThis.window.location = { hostname: 'www.youtube.com', pathname: '/feed/subscriptions' };
+    expect(isWatchOrPlayerPage()).toBe(false);
+
+    // @ts-expect-error test mock
+    globalThis.window.location = { hostname: 'www.youtube.com', pathname: '/results' };
+    expect(isWatchOrPlayerPage()).toBe(false);
+  });
+
+  it('correctly identifies TikTok video pages and excludes feeds', () => {
+    // @ts-expect-error test mock
+    globalThis.window = {
+      location: { hostname: 'www.tiktok.com', pathname: '/@user/video/12345' }
+    };
+    expect(isWatchOrPlayerPage()).toBe(true);
+
+    // @ts-expect-error test mock
+    globalThis.window.location = { hostname: 'www.tiktok.com', pathname: '/foryou' };
+    expect(isWatchOrPlayerPage()).toBe(false);
+  });
+});
+
+describe('isEligiblePlayerVideo', () => {
+  it('rejects dismissed videos or disconnected videos', () => {
+    const video = { isConnected: false, getBoundingClientRect: () => ({ width: 640, height: 360 }) };
+    expect(isEligiblePlayerVideo(video)).toBe(false);
+
+    const video2 = { isConnected: true, getBoundingClientRect: () => ({ width: 640, height: 360 }) };
+    dismissVideo(video2);
+    expect(isEligiblePlayerVideo(video2)).toBe(false);
+  });
+
+  it('rejects videos inside feed listing containers', () => {
+    const video = {
+      isConnected: true,
+      getBoundingClientRect: () => ({ width: 640, height: 360 }),
+      closest: (sel) => sel.includes('ytd-rich-item-renderer')
+    };
+    expect(isEligiblePlayerVideo(video)).toBe(false);
+  });
+
+  it('rejects tiny hover thumbnails and preview clips', () => {
+    const tinyVideo = {
+      isConnected: true,
+      getBoundingClientRect: () => ({ width: 120, height: 80 }),
+      closest: () => null
+    };
+    expect(isEligiblePlayerVideo(tinyVideo)).toBe(false);
+  });
+
+  it('accepts valid full-sized player videos', () => {
+    // @ts-expect-error test mock
+    globalThis.window = {
+      location: { hostname: 'example.com', pathname: '/video' }
+    };
+    const playerVideo = {
+      isConnected: true,
+      getBoundingClientRect: () => ({ width: 854, height: 480 }),
+      closest: () => null
+    };
+    expect(isEligiblePlayerVideo(playerVideo)).toBe(true);
+  });
+});
+
