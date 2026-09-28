@@ -63,6 +63,18 @@ const NON_MEDIA_EXTENSIONS = [
   ".html", ".htm", ".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".woff", ".woff2", ".ttf"
 ];
 
+function formatBytes(bytes) {
+  if (!bytes || bytes <= 0) return "";
+  const units = ["B", "KB", "MB", "GB"];
+  let i = 0;
+  let val = bytes;
+  while (val >= 1024 && i < units.length - 1) {
+    val /= 1024;
+    i++;
+  }
+  return `${val.toFixed(val >= 100 || i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
 chrome.webRequest?.onResponseStarted?.addListener(
   (details) => {
     if (details.tabId < 0) return;
@@ -109,11 +121,41 @@ chrome.webRequest?.onResponseStarted?.addListener(
         detectedMediaByTab[details.tabId] = [];
       }
 
-      // Avoid duplicates
-      if (!detectedMediaByTab[details.tabId].some(m => m.url === details.url)) {
+      // Parse content-length if available
+      const contentLengthHeader = details.responseHeaders?.find(
+        h => h.name.toLowerCase() === "content-length"
+      );
+      let contentLength = null;
+      if (contentLengthHeader?.value) {
+        const parsedLen = parseInt(contentLengthHeader.value, 10);
+        if (!isNaN(parsedLen) && parsedLen > 0) {
+          contentLength = parsedLen;
+        }
+      }
+
+      // Determine stream/file format
+      let format = "MP4";
+      if (isStream || isStreamMime) {
+        format = "M3U8";
+      } else if (url.includes(".webm") || ct.includes("webm")) {
+        format = "WEBM";
+      } else if (url.includes(".mp3") || ct.includes("audio/mpeg")) {
+        format = "MP3";
+      } else if (url.includes(".m4a") || ct.includes("audio/mp4")) {
+        format = "M4A";
+      } else if (url.includes(".mkv")) {
+        format = "MKV";
+      }
+
+      // Check existing item
+      const existing = detectedMediaByTab[details.tabId].find(m => m.url === details.url);
+      if (!existing) {
         detectedMediaByTab[details.tabId].push({
           url: details.url,
           type: (isStream || isStreamMime) ? "stream" : "media",
+          format: format,
+          contentLength: contentLength,
+          sizeFormatted: contentLength ? formatBytes(contentLength) : "",
           timestamp: Date.now()
         });
 
@@ -121,12 +163,25 @@ chrome.webRequest?.onResponseStarted?.addListener(
         const count = detectedMediaByTab[details.tabId].length;
         chrome.action.setBadgeText({ tabId: details.tabId, text: String(count) });
         chrome.action.setBadgeBackgroundColor({ tabId: details.tabId, color: "#00e5ff" });
+      } else if (contentLength && !existing.contentLength) {
+        existing.contentLength = contentLength;
+        existing.sizeFormatted = formatBytes(contentLength);
       }
     }
   },
   { urls: ["<all_urls>"] },
   ["responseHeaders"]
 );
+
+// Clear detected media on tab navigation
+chrome.tabs?.onUpdated?.addListener((tabId, changeInfo) => {
+  if (changeInfo.status === "loading" && changeInfo.url) {
+    detectedMediaByTab[tabId] = [];
+    try {
+      chrome.action.setBadgeText({ tabId, text: "" });
+    } catch (e) {}
+  }
+});
 
 // Clean up closed tabs
 chrome.tabs.onRemoved.addListener((tabId) => {

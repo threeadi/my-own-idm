@@ -6,6 +6,9 @@ const {
   isGenericTitle,
   resolveSmartFilename,
   stripByteRanges,
+  classifyResolution,
+  formatDuration,
+  generateRealMediaItems,
   generateQualityPresets,
   safeSendMessage,
   dismissVideo,
@@ -77,38 +80,117 @@ describe('safeSendMessage', () => {
   });
 });
 
-describe('generateQualityPresets', () => {
-  it('generates 5 distinct quality presets for detected media', () => {
-    const presets = generateQualityPresets('youtube.com', 'Cosmic Odyssey (2025) 4K');
-    expect(presets).toHaveLength(5);
+describe('classifyResolution', () => {
+  it('correctly classifies standard resolutions from height and width', () => {
+    expect(classifyResolution(2160, 3840).quality).toBe('2160p');
+    expect(classifyResolution(2160, 3840).badge).toBe('4K');
+    expect(classifyResolution(1440, 2560).quality).toBe('1440p');
+    expect(classifyResolution(1080, 1920).quality).toBe('1080p');
+    expect(classifyResolution(1080, 1920).badge).toBe('FHD');
+    expect(classifyResolution(720, 1280).quality).toBe('720p');
+    expect(classifyResolution(720, 1280).badge).toBe('HD');
+    expect(classifyResolution(480, 854).quality).toBe('480p');
+    expect(classifyResolution(480, 854).badge).toBe('SD');
+    expect(classifyResolution(360, 640).quality).toBe('360p');
+  });
 
-    const ids = presets.map((p) => p.id);
-    expect(ids).toEqual(['4k', '1080p', '720p', 'audio', 'sub']);
+  it('infers resolution from URL or text hints when height is zero', () => {
+    expect(classifyResolution(0, 0, 'https://example.com/video_1080p.mp4').quality).toBe('1080p');
+    expect(classifyResolution(0, 0, 'Breaking News 720p HD').quality).toBe('720p');
+    expect(classifyResolution(0, 0, 'trailer_4k.webm').quality).toBe('2160p');
+    expect(classifyResolution(0, 0, 'random_video.mp4').quality).toBe('original');
+  });
+});
 
-    // Check 4K Ultra HD properties
-    const p4k = presets.find((p) => p.id === '4k');
-    expect(p4k?.badge).toBe('4K');
-    expect(p4k?.quality).toBe('2160p');
-    expect(p4k?.threads).toBe(32);
-    expect(p4k?.filename).toContain('_4k.mp4');
+describe('formatDuration', () => {
+  it('formats seconds into MM:SS string', () => {
+    expect(formatDuration(65)).toBe('1:05');
+    expect(formatDuration(180)).toBe('3:00');
+    expect(formatDuration(0)).toBe('');
+    expect(formatDuration(null)).toBe('');
+  });
+});
 
-    // Check 1080p FHD
-    const pFhd = presets.find((p) => p.id === '1080p');
-    expect(pFhd?.badge).toBe('FHD');
-    expect(pFhd?.quality).toBe('1080p');
-    expect(pFhd?.threads).toBe(16);
+describe('generateRealMediaItems', () => {
+  it('returns truthful items for a generic web video without fake resolutions or subtitles', () => {
+    const mockVideo = {
+      videoHeight: 720,
+      videoWidth: 1280,
+      currentSrc: 'https://twitter.com/vid.mp4',
+      duration: 45
+    };
+    const items = generateRealMediaItems(mockVideo, [], 'x.com', 'Funny Cat Clip');
+    
+    // Exactly 2 items: The 720p video itself, and audio extraction
+    expect(items).toHaveLength(2);
+    expect(items[0].id).toBe('main_video');
+    expect(items[0].badge).toBe('HD');
+    expect(items[0].quality).toBe('720p');
+    expect(items[0].title).toContain('720p HD');
+    expect(items[0].filename).toBe('Funny_Cat_Clip_720p.mp4');
 
-    // Check Audio Only
-    const pAudio = presets.find((p) => p.id === 'audio');
-    expect(pAudio?.is_audio_only).toBe(true);
-    expect(pAudio?.badge).toBe('🎵');
-    expect(pAudio?.filename).toContain('_audio.m4a');
+    expect(items[1].id).toBe('audio');
+    expect(items[1].is_audio_only).toBe(true);
 
-    // Check Subtitle
-    const pSub = presets.find((p) => p.id === 'sub');
-    expect(pSub?.quality).toBe('subtitle');
-    expect(pSub?.badge).toBe('SRT');
-    expect(pSub?.filename).toContain('_sub_id.srt');
+    // Verify absolutely NO fake 4K or fake subtitles
+    expect(items.some((item) => item.quality === '2160p')).toBe(false);
+    expect(items.some((item) => item.quality === 'subtitle')).toBe(false);
+  });
+
+  it('includes subtitle only when track element actually exists', () => {
+    const mockVideo = {
+      videoHeight: 1080,
+      videoWidth: 1920,
+      currentSrc: 'https://example.com/movie.mp4',
+      querySelectorAll: (sel) => {
+        if (sel.includes('subtitles')) {
+          return [{ srclang: 'en', label: 'English', src: 'https://example.com/en.vtt' }];
+        }
+        return [];
+      }
+    };
+    const items = generateRealMediaItems(mockVideo, [], 'movie-site.com', 'Feature Film');
+    expect(items.some((item) => item.quality === 'subtitle')).toBe(true);
+    const sub = items.find((item) => item.quality === 'subtitle');
+    expect(sub?.title).toContain('English');
+    expect(sub?.url).toBe('https://example.com/en.vtt');
+  });
+
+  it('generates real YouTube qualities capped at actual playing resolution', () => {
+    // 720p video on YouTube should NOT offer fake 4K or 1080p
+    const mockYt720 = {
+      videoHeight: 720,
+      videoWidth: 1280
+    };
+    const items720 = generateRealMediaItems(mockYt720, [], 'youtube.com', 'Indie Vlog');
+    const qualities720 = items720.map((item) => item.quality);
+    expect(qualities720).toEqual(['720p', '480p', 'audio']);
+    expect(qualities720).not.toContain('2160p');
+    expect(qualities720).not.toContain('1080p');
+
+    // 4K video on YouTube
+    const mockYt4k = {
+      videoHeight: 2160,
+      videoWidth: 3840
+    };
+    const items4k = generateRealMediaItems(mockYt4k, [], 'youtube.com', 'Nature in 4K');
+    const qualities4k = items4k.map((item) => item.quality);
+    expect(qualities4k).toContain('2160p');
+    expect(qualities4k).toContain('1080p');
+    expect(qualities4k).toContain('720p');
+    expect(qualities4k).toContain('audio');
+  });
+
+  it('handles multiple sniffed media streams accurately', () => {
+    const sniffed = [
+      { url: 'https://cdn.example.com/stream_1080p.m3u8', type: 'stream', format: 'M3U8', sizeFormatted: '' },
+      { url: 'https://cdn.example.com/stream_720p.m3u8', type: 'stream', format: 'M3U8', sizeFormatted: '' }
+    ];
+    const items = generateRealMediaItems(null, sniffed, 'streamer.com', 'Live Show');
+    expect(items.length).toBe(3); // 2 streams + 1 audio option
+    expect(items[0].url).toBe('https://cdn.example.com/stream_1080p.m3u8');
+    expect(items[1].url).toBe('https://cdn.example.com/stream_720p.m3u8');
+    expect(items[2].id).toBe('audio');
   });
 });
 

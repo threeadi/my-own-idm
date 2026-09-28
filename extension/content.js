@@ -147,76 +147,290 @@
     }
   }
 
-  function generateQualityPresets(platform, rawTitle) {
+  function classifyResolution(height = 0, width = 0, hint = "") {
+    let h = Number(height) || 0;
+    let w = Number(width) || 0;
+
+    if (h === 0 && hint) {
+      const u = String(hint).toLowerCase();
+      if (u.includes("2160p") || u.includes("4k") || u.includes("3840x2160")) h = 2160;
+      else if (u.includes("1440p") || u.includes("2k") || u.includes("2560x1440")) h = 1440;
+      else if (u.includes("1080p") || u.includes("1920x1080") || u.includes("fhd")) h = 1080;
+      else if (u.includes("720p") || u.includes("1280x720") || u.includes("hd")) h = 720;
+      else if (u.includes("480p") || u.includes("854x480") || u.includes("640x480") || u.includes("sd")) h = 480;
+      else if (u.includes("360p") || u.includes("640x360")) h = 360;
+    }
+
+    if (h >= 2160 || w >= 3840) {
+      return { quality: "2160p", badge: "4K", badgeClass: "myownidm-badge-4k", label: "4K Ultra HD", tag: "2160p 60fps", tagClass: "myownidm-pill-tag-cyan", threads: 32 };
+    }
+    if (h >= 1440 || w >= 2560) {
+      return { quality: "1440p", badge: "2K", badgeClass: "myownidm-badge-4k", label: "2K Quad HD", tag: "1440p", tagClass: "myownidm-pill-tag-cyan", threads: 24 };
+    }
+    if (h >= 1080 || w >= 1920) {
+      return { quality: "1080p", badge: "FHD", badgeClass: "myownidm-badge-fhd", label: "Full HD 1080p", tag: "1080p", tagClass: "", threads: 16 };
+    }
+    if (h >= 720 || w >= 1280) {
+      return { quality: "720p", badge: "HD", badgeClass: "myownidm-badge-hd", label: "720p HD", tag: "720p", tagClass: "", threads: 8 };
+    }
+    if (h >= 480 || w >= 854) {
+      return { quality: "480p", badge: "SD", badgeClass: "myownidm-badge-hd", label: "480p SD", tag: "480p", tagClass: "", threads: 6 };
+    }
+    if (h >= 360 || w >= 640) {
+      return { quality: "360p", badge: "SD", badgeClass: "myownidm-badge-hd", label: "360p", tag: "360p", tagClass: "", threads: 4 };
+    }
+    if (h > 0) {
+      return { quality: `${h}p`, badge: "VID", badgeClass: "myownidm-badge-hd", label: `${h}p Video`, tag: `${h}p`, tagClass: "", threads: 6 };
+    }
+    return { quality: "original", badge: "HD", badgeClass: "myownidm-badge-hd", label: "Resolusi Asli", tag: "Asli", tagClass: "", threads: 8 };
+  }
+
+  function formatDuration(sec) {
+    if (!sec || isNaN(sec) || sec <= 0) return "";
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m}:${s < 10 ? "0" : ""}${s}`;
+  }
+
+  function generateRealMediaItems(video = null, sniffedMedia = [], host = "", rawTitle = "") {
     const safeTitle = cleanFilename(rawTitle, "video");
-    return [
-      {
-        id: "4k",
-        badge: "4K",
-        badgeClass: "myownidm-badge-4k",
-        title: "4K Ultra HD",
-        tag: "2160p 60fps",
-        tagClass: "myownidm-pill-tag-cyan",
-        meta: "MP4 • 1.65 GB • 32 Threads",
-        filename: `${safeTitle}_4k.mp4`,
-        quality: "2160p",
-        threads: 32,
-        btnClass: ""
-      },
-      {
-        id: "1080p",
-        badge: "FHD",
-        badgeClass: "myownidm-badge-fhd",
-        title: "Full HD 1080p",
-        tag: "1080p",
-        tagClass: "",
-        meta: "MP4 • 420 MB • 16 Threads",
-        filename: `${safeTitle}_1080p.mp4`,
-        quality: "1080p",
-        threads: 16,
-        btnClass: ""
-      },
-      {
-        id: "720p",
-        badge: "HD",
+    const isYouTube = host.includes("youtube.com") || host.includes("youtu.be");
+
+    const vHeight = video?.videoHeight || 0;
+    const vWidth = video?.videoWidth || 0;
+    const vSrc = video?.currentSrc || video?.src || "";
+    const res = classifyResolution(vHeight, vWidth, rawTitle || vSrc);
+
+    // Scenario 1: YouTube
+    if (isYouTube) {
+      // Determine max height of the playing video. If not yet determined, default to 1080p
+      const effectiveMaxHeight = vHeight > 0 ? vHeight : (res.quality === "2160p" ? 2160 : (res.quality === "1440p" ? 1440 : 1080));
+      const items = [];
+
+      if (effectiveMaxHeight >= 2160) {
+        items.push({
+          id: "4k",
+          badge: "4K",
+          badgeClass: "myownidm-badge-4k",
+          title: "4K Ultra HD",
+          tag: "2160p 60fps",
+          tagClass: "myownidm-pill-tag-cyan",
+          meta: "MP4 • 2160p 60fps • 32 Threads",
+          filename: `${safeTitle}_4k.mp4`,
+          quality: "2160p",
+          threads: 32,
+          btnClass: ""
+        });
+      }
+      if (effectiveMaxHeight >= 1440) {
+        items.push({
+          id: "1440p",
+          badge: "2K",
+          badgeClass: "myownidm-badge-4k",
+          title: "2K Quad HD",
+          tag: "1440p",
+          tagClass: "myownidm-pill-tag-cyan",
+          meta: "MP4 • 1440p • 24 Threads",
+          filename: `${safeTitle}_1440p.mp4`,
+          quality: "1440p",
+          threads: 24,
+          btnClass: ""
+        });
+      }
+      if (effectiveMaxHeight >= 1080) {
+        items.push({
+          id: "1080p",
+          badge: "FHD",
+          badgeClass: "myownidm-badge-fhd",
+          title: "Full HD 1080p",
+          tag: "1080p",
+          tagClass: "",
+          meta: "MP4 • Full HD • 16 Threads",
+          filename: `${safeTitle}_1080p.mp4`,
+          quality: "1080p",
+          threads: 16,
+          btnClass: ""
+        });
+      }
+      if (effectiveMaxHeight >= 720) {
+        items.push({
+          id: "720p",
+          badge: "HD",
+          badgeClass: "myownidm-badge-hd",
+          title: "720p HD",
+          tag: "720p",
+          tagClass: "",
+          meta: "MP4 • High Definition • 8 Threads",
+          filename: `${safeTitle}_720p.mp4`,
+          quality: "720p",
+          threads: 8,
+          btnClass: ""
+        });
+      }
+      items.push({
+        id: "480p",
+        badge: "SD",
         badgeClass: "myownidm-badge-hd",
-        title: "720p HD",
-        tag: "720p",
+        title: "480p SD",
+        tag: "480p",
         tagClass: "",
-        meta: "MP4 • 185 MB • 8 Threads",
-        filename: `${safeTitle}_720p.mp4`,
-        quality: "720p",
-        threads: 8,
+        meta: "MP4 • Kualitas Standar • 6 Threads",
+        filename: `${safeTitle}_480p.mp4`,
+        quality: "480p",
+        threads: 6,
         btnClass: ""
-      },
-      {
+      });
+
+      // Audio extraction option
+      items.push({
         id: "audio",
         badge: "🎵",
         badgeClass: "myownidm-badge-audio",
         title: "Audio Only (M4A 320kbps)",
         tag: "HQ",
         tagClass: "myownidm-pill-tag-emerald",
-        meta: "M4A Lossless • 48 MB",
+        meta: "M4A Lossless • Ekstrak Suara • 4 Threads",
         filename: `${safeTitle}_audio.m4a`,
         quality: "audio",
         is_audio_only: true,
         threads: 4,
         btnClass: "myownidm-btn-emerald"
+      });
+
+      // Subtitle: only if caption track exists
+      const hasSub = typeof document !== "undefined" && Boolean(
+        document.querySelector(".ytp-subtitles-button[aria-pressed='true']") ||
+        video?.querySelector("track[kind='subtitles'], track[kind='captions']")
+      );
+      if (hasSub) {
+        items.push({
+          id: "sub",
+          badge: "SRT",
+          badgeClass: "myownidm-badge-sub",
+          title: "Subtitles / Captions",
+          tag: "SRT",
+          tagClass: "",
+          meta: "Subtitle Trek Aktif • 1 Thread",
+          filename: `${safeTitle}_sub.srt`,
+          quality: "subtitle",
+          threads: 1,
+          btnClass: ""
+        });
+      }
+
+      return items;
+    }
+
+    // Scenario 2: Multiple distinct sniffed streams (e.g. adaptive HLS / multi-source videos)
+    const validSniffed = (sniffedMedia || []).filter(m => {
+      const u = (m.url || "").toLowerCase();
+      return !u.includes("videoplayback") && !u.includes(".m4s") && !u.includes(".ts?") && !u.endsWith(".ts");
+    });
+
+    if (validSniffed.length > 1) {
+      const items = validSniffed.map((m, idx) => {
+        const streamRes = classifyResolution(0, 0, m.url);
+        const formatLabel = m.format || (m.type === "stream" ? "M3U8" : "MP4");
+        const sizeStr = m.sizeFormatted ? `${m.sizeFormatted} • ` : "";
+        return {
+          id: `stream_${idx}`,
+          badge: m.type === "stream" ? "HLS" : streamRes.badge,
+          badgeClass: streamRes.badgeClass,
+          title: `${formatLabel} Video Stream ${idx + 1}`,
+          tag: streamRes.tag !== "Asli" ? streamRes.tag : formatLabel,
+          tagClass: "",
+          meta: `${formatLabel} • ${sizeStr}${streamRes.threads} Threads`,
+          filename: `${safeTitle}_stream${idx + 1}.${formatLabel.toLowerCase()}`,
+          quality: streamRes.quality,
+          url: m.url,
+          threads: streamRes.threads,
+          btnClass: ""
+        };
+      });
+
+      // Add audio extraction option
+      items.push({
+        id: "audio",
+        badge: "🎵",
+        badgeClass: "myownidm-badge-audio",
+        title: "Audio Only (Ekstrak Suara)",
+        tag: "HQ",
+        tagClass: "myownidm-pill-tag-emerald",
+        meta: "M4A / MP3 • 4 Threads",
+        filename: `${safeTitle}_audio.m4a`,
+        quality: "audio",
+        is_audio_only: true,
+        threads: 4,
+        btnClass: "myownidm-btn-emerald"
+      });
+
+      return items;
+    }
+
+    // Scenario 3: Single HTML5 Video Element / Generic Web Video (Twitter, TikTok, Instagram, News, etc.)
+    const matched = validSniffed.find(m => m.url === vSrc) || validSniffed[0];
+    const formatLabel = matched?.format || (vSrc.includes(".webm") ? "WEBM" : (vSrc.includes(".m3u8") ? "M3U8" : "MP4"));
+    const sizeStr = matched?.sizeFormatted ? `${matched.sizeFormatted} • ` : (video?.duration ? `${formatDuration(video.duration)} • ` : "");
+
+    const items = [
+      {
+        id: "main_video",
+        badge: res.badge,
+        badgeClass: res.badgeClass,
+        title: `Video (${res.label})`,
+        tag: res.tag,
+        tagClass: res.tagClass || "",
+        meta: `${formatLabel} • ${sizeStr}${res.threads} Threads`,
+        filename: `${safeTitle}_${res.quality !== 'original' ? res.quality : 'video'}.${formatLabel.toLowerCase()}`,
+        quality: res.quality,
+        url: matched?.url || vSrc,
+        threads: res.threads,
+        btnClass: ""
       },
       {
-        id: "sub",
-        badge: "SRT",
-        badgeClass: "myownidm-badge-sub",
-        title: "Indonesian Subtitle",
-        tag: "SRT",
-        tagClass: "",
-        meta: "UTF-8 Bersih • 120 KB",
-        filename: `${safeTitle}_sub_id.srt`,
-        quality: "subtitle",
-        threads: 1,
-        btnClass: ""
+        id: "audio",
+        badge: "🎵",
+        badgeClass: "myownidm-badge-audio",
+        title: "Audio Only (Ekstrak Suara)",
+        tag: "HQ",
+        tagClass: "myownidm-pill-tag-emerald",
+        meta: "M4A / MP3 • 4 Threads",
+        filename: `${safeTitle}_audio.m4a`,
+        quality: "audio",
+        is_audio_only: true,
+        url: matched?.url || vSrc,
+        threads: 4,
+        btnClass: "myownidm-btn-emerald"
       }
     ];
+
+    // Check for real subtitles track elements
+    if (typeof video?.querySelectorAll === "function") {
+      const tracks = Array.from(video.querySelectorAll("track[kind='subtitles'], track[kind='captions']"));
+      tracks.forEach((tr, i) => {
+        const lang = tr.srclang || tr.label || `sub${i + 1}`;
+        items.push({
+          id: `sub_${i}`,
+          badge: "SRT",
+          badgeClass: "myownidm-badge-sub",
+          title: `Subtitle (${tr.label || lang})`,
+          tag: "SRT",
+          tagClass: "",
+          meta: "Trek Teks Asli • 1 Thread",
+          filename: `${safeTitle}_${lang}.srt`,
+          quality: "subtitle",
+          url: tr.src,
+          threads: 1,
+          btnClass: ""
+        });
+      });
+    }
+
+    return items;
+  }
+
+  function generateQualityPresets(platform = "", rawTitle = "", video = null) {
+    return generateRealMediaItems(video, [], platform, rawTitle);
   }
 
   let cachedTabTitle = "";
@@ -472,10 +686,10 @@
     btn.className = "myownidm-floating-bar";
     btn.innerHTML = `
       <div class="myownidm-bar-content" title="Pilih resolusi dan unduh video">
-        <div class="myownidm-badge-count">5</div>
+        <div class="myownidm-badge-count">1</div>
         <div class="myownidm-text-group">
           <span class="myownidm-title">Unduh dengan IDM Turbo</span>
-          <span class="myownidm-subtitle">5 resolusi terdeteksi</span>
+          <span class="myownidm-subtitle">Video terdeteksi</span>
         </div>
         <div class="myownidm-chevron">
           <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
@@ -614,26 +828,55 @@
     return { btn, panel };
   }
 
+  let lastPresetsVideoTime = 0;
+
   // Update presets list in panel for the active video
-  function updatePresetsForVideo(video) {
+  async function updatePresetsForVideo(video) {
     if (!video || !singletonPanel) return;
-    if (lastPresetsVideo === video) return;
+    const now = Date.now();
+    if (lastPresetsVideo === video && (now - lastPresetsVideoTime < 1500)) return;
     lastPresetsVideo = video;
+    lastPresetsVideoTime = now;
 
     const host = (typeof window !== "undefined" ? window.location?.hostname : "") || "";
     const rawTitle = getPageVideoTitle();
-    const presets = generateQualityPresets(host, rawTitle);
-    const count = presets.length;
+
+    let sniffedMedia = [];
+    try {
+      const resp = await safeSendMessage({ action: "get-detected-media" });
+      if (resp?.media && Array.isArray(resp.media)) {
+        sniffedMedia = resp.media;
+      }
+    } catch (e) {}
+
+    const presets = generateRealMediaItems(video, sniffedMedia, host, rawTitle);
+    const videoStreamsCount = presets.filter(p => !p.is_audio_only && p.quality !== "subtitle").length;
 
     if (singletonBtn) {
       const countEl = singletonBtn.querySelector(".myownidm-badge-count");
-      if (countEl) countEl.textContent = String(count);
+      if (countEl) countEl.textContent = String(videoStreamsCount || presets.length);
+
       const subtitleEl = singletonBtn.querySelector(".myownidm-subtitle");
-      if (subtitleEl) subtitleEl.textContent = `${count} resolusi terdeteksi`;
+      if (subtitleEl) {
+        if (videoStreamsCount === 1) {
+          const firstVid = presets[0];
+          subtitleEl.textContent = `${firstVid.tag || firstVid.badge} terdeteksi`;
+        } else if (videoStreamsCount > 1) {
+          subtitleEl.textContent = `${videoStreamsCount} resolusi terdeteksi`;
+        } else {
+          subtitleEl.textContent = `${presets.length} media terdeteksi`;
+        }
+      }
     }
 
     const listEl = singletonPanel.querySelector(".myownidm-quality-list");
     if (!listEl) return;
+
+    // Toggle Batch Download button visibility
+    const batchBtn = singletonPanel.querySelector(".myownidm-batch-btn");
+    if (batchBtn) {
+      batchBtn.style.display = videoStreamsCount > 1 ? "inline-flex" : "none";
+    }
 
     let qualityItemsHtml = "";
     presets.forEach((item) => {
@@ -647,7 +890,7 @@
             </div>
             <div class="myownidm-item-meta">${item.meta}</div>
           </div>
-          <button type="button" class="myownidm-download-btn ${item.btnClass}" data-quality="${item.quality}" data-audio="${item.is_audio_only ? 'true' : 'false'}" data-filename="${item.filename}">
+          <button type="button" class="myownidm-download-btn ${item.btnClass}" data-quality="${item.quality}" data-audio="${item.is_audio_only ? 'true' : 'false'}" data-filename="${item.filename}" data-url="${item.url || ''}">
             <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
               <polyline points="7 10 12 15 17 10"></polyline>
@@ -669,13 +912,14 @@
         const quality = dlBtn.getAttribute("data-quality") || "";
         const isAudio = dlBtn.getAttribute("data-audio") === "true";
         const filename = dlBtn.getAttribute("data-filename") || "video.mp4";
+        const explicitUrl = dlBtn.getAttribute("data-url") || "";
         const origHtml = dlBtn.innerHTML;
 
         dlBtn.textContent = "Connecting...";
         dlBtn.disabled = true;
 
         try {
-          const targetUrl = await getDownloadTargetUrl(currentVideo);
+          const targetUrl = explicitUrl || (await getDownloadTargetUrl(currentVideo));
           const payload = {
             action: "send-download",
             url: targetUrl,
@@ -822,6 +1066,13 @@
       }
     }, true);
 
+    document.addEventListener("loadedmetadata", (e) => {
+      const el = e.target;
+      if (el && el.tagName === "VIDEO" && currentVideo === el) {
+        updatePresetsForVideo(el);
+      }
+    }, true);
+
     // 2. Throttled Pointer Over: Detects hover over video player or floating elements
     let hoverThrottle = null;
     document.addEventListener("pointerover", (e) => {
@@ -920,6 +1171,9 @@
       isGenericTitle,
       resolveSmartFilename,
       stripByteRanges,
+      classifyResolution,
+      formatDuration,
+      generateRealMediaItems,
       generateQualityPresets,
       safeSendMessage,
       dismissVideo,
