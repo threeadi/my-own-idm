@@ -216,7 +216,7 @@
           >
             <button
               onclick={() =>
-                store.selectTelegramChannel(ch.id, ch.username || ch.title)}
+                store.selectTelegramChannel(ch.id, ch.username || undefined)}
               class="flex items-center gap-2 min-w-0 flex-1 text-left cursor-pointer"
               type="button"
             >

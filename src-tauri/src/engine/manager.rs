@@ -466,6 +466,27 @@ impl DownloadManager {
             };
         }
 
+        if let Some(target) = &target_path {
+            if target.exists() {
+                let suggested = Self::suggest_unique_filename(save_dir, filename);
+                let meta = std::fs::metadata(target).ok();
+                let file_len = meta.map(|m| m.len()).unwrap_or(0);
+                return DuplicateCheckResult {
+                    is_duplicate: true,
+                    status: Some(TaskStatus::Completed),
+                    task_id: None,
+                    filename: Some(filename.to_string()),
+                    file_path: Some(target.to_string_lossy().to_string()),
+                    file_exists_on_disk: true,
+                    downloaded_bytes: file_len,
+                    total_bytes: Some(file_len),
+                    percent: 100.0,
+                    completed_at: None,
+                    suggested_new_filename: Some(suggested),
+                };
+            }
+        }
+
         DuplicateCheckResult {
             is_duplicate: false,
             status: None,

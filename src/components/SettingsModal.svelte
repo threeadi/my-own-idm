@@ -24,11 +24,12 @@
     Flame,
     Send,
     UserCheck,
-    Bot,
     Trash2,
     Loader2,
     Eye,
-    EyeOff
+    EyeOff,
+    ShieldAlert,
+    KeyRound
   } from '@lucide/svelte';
 
   type SettingsTab = 'general' | 'connection' | 'filetypes' | 'saveto' | 'extensions' | 'telegram' | 'proxy';
@@ -41,13 +42,12 @@
   let nativeHostRegisterStatus = $state<string | null>(null);
 
   // Telegram auth tab local states
-  let telegramAuthSubTab = $state<'accounts' | 'otp' | 'bot'>('accounts');
+  let telegramAuthSubTab = $state<'accounts' | 'otp'>('accounts');
   let apiId = $state('');
   let apiHash = $state('');
   let phoneNumber = $state('+62');
   let otpCode = $state('');
   let phoneCodeHash = $state('');
-  let botToken = $state('');
   let isTelegramLoading = $state(false);
   let telegramErrorMsg = $state<string | null>(null);
 
@@ -107,6 +107,8 @@
     }
   }
 
+  let twoFactorPassword = $state('');
+
   async function handleVerifyOtp() {
     if (!otpCode.trim()) {
       telegramErrorMsg = 'Masukkan kode OTP';
@@ -115,8 +117,14 @@
     telegramErrorMsg = null;
     isTelegramLoading = true;
     try {
-      await store.verifyTelegramOtp(phoneNumber, otpCode, phoneCodeHash);
-      telegramAuthSubTab = 'accounts';
+      const res = await store.verifyTelegramOtp(phoneNumber, otpCode, phoneCodeHash);
+      if (res && res.needs_password) {
+        // Needs 2FA password, stay on OTP/2FA screen
+        return;
+      }
+      if (res && res.is_authenticated) {
+        telegramAuthSubTab = 'accounts';
+      }
     } catch (e: any) {
       telegramErrorMsg = String(e);
     } finally {
@@ -124,13 +132,20 @@
     }
   }
 
-  async function handleBotLogin() {
-    if (!botToken.trim()) return;
+  async function handleVerifyPassword() {
+    if (!twoFactorPassword.trim()) {
+      telegramErrorMsg = 'Masukkan password verifikasi dua langkah (2FA)';
+      return;
+    }
     telegramErrorMsg = null;
     isTelegramLoading = true;
     try {
-      await store.loginTelegramBot(botToken);
-      telegramAuthSubTab = 'accounts';
+      const res = await store.verifyTelegramPassword(twoFactorPassword);
+      if (res && res.is_authenticated) {
+        telegramAuthSubTab = 'accounts';
+      } else {
+        telegramErrorMsg = 'Password 2FA salah atau tidak valid';
+      }
     } catch (e: any) {
       telegramErrorMsg = String(e);
     } finally {
@@ -1023,13 +1038,6 @@
                 >
                   {store.t('telegram.tabPhoneOtp')}
                 </button>
-                <button
-                  type="button"
-                  onclick={() => { telegramAuthSubTab = 'bot'; telegramErrorMsg = null; }}
-                  class={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${telegramAuthSubTab === 'bot' ? 'bg-[#4edea3]/20 text-[#4edea3]' : 'text-[#8c909f] hover:text-[#dee2ee]'}`}
-                >
-                  {store.t('telegram.tabBotToken')}
-                </button>
               </div>
 
               {#if telegramErrorMsg}
@@ -1045,19 +1053,15 @@
                       {@const isActive = acc.is_active || store.activeAccountId === acc.account_id}
                       <div class={`p-3 rounded-xl border flex items-center justify-between gap-2 transition-all ${isActive ? 'bg-[#4cd7f6]/10 border-[#4cd7f6]/40' : 'bg-[#090e16] border-[#30353e]'}`}>
                         <div class="flex items-center gap-2.5 min-w-0">
-                          <div class={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${acc.account_type === 'bot' ? 'bg-[#4edea3]/20 text-[#4edea3]' : 'bg-[#4cd7f6]/20 text-[#4cd7f6]'}`}>
-                            {#if acc.account_type === 'bot'}
-                              <Bot class="w-4 h-4" />
-                            {:else}
-                              <UserCheck class="w-4 h-4" />
-                            {/if}
+                          <div class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-[#4cd7f6]/20 text-[#4cd7f6]">
+                            <UserCheck class="w-4 h-4" />
                           </div>
                           <div class="flex flex-col min-w-0">
                             <span class="font-sans text-xs font-semibold text-[#dee2ee] truncate">
                               {acc.phone_number || acc.username || acc.account_id}
                             </span>
                             <span class="font-mono text-[10px] text-[#8c909f] truncate">
-                              {acc.account_type === 'bot' ? 'Telegram Bot' : 'User MTProto Session'}
+                              User MTProto Session
                             </span>
                           </div>
                         </div>
@@ -1111,8 +1115,9 @@
                     </div>
                     <div class="grid grid-cols-2 gap-2">
                       <div>
-                        <label class="block text-[10px] text-[#8c909f] mb-1">{store.t('telegram.apiIdLabel')}</label>
+                        <label for="tg-api-id" class="block text-[10px] text-[#8c909f] mb-1">{store.t('telegram.apiIdLabel')}</label>
                         <input
+                          id="tg-api-id"
                           type="text"
                           bind:value={apiId}
                           placeholder="2040"
@@ -1120,8 +1125,9 @@
                         />
                       </div>
                       <div>
-                        <label class="block text-[10px] text-[#8c909f] mb-1">{store.t('telegram.apiHashLabel')}</label>
+                        <label for="tg-api-hash" class="block text-[10px] text-[#8c909f] mb-1">{store.t('telegram.apiHashLabel')}</label>
                         <input
+                          id="tg-api-hash"
                           type="text"
                           bind:value={apiHash}
                           placeholder="b18441a1ed609c1c80d49ec2861e6074"
@@ -1132,8 +1138,9 @@
                   </div>
 
                   <div>
-                    <label class="block text-[11px] text-[#8c909f] mb-1">{store.t('telegram.phoneLabel')}</label>
+                    <label for="tg-phone-number" class="block text-[11px] text-[#8c909f] mb-1">{store.t('telegram.phoneLabel')}</label>
                     <input
+                      id="tg-phone-number"
                       type="text"
                       bind:value={phoneNumber}
                       placeholder="+628123456789"
@@ -1154,7 +1161,34 @@
                     {/if}
                   </button>
 
-                  {#if phoneCodeHash}
+                  {#if store.telegramAuthStatus?.needs_password}
+                    <div class="pt-3 border-t border-[#ff5252]/40 space-y-2.5 bg-[#ff5252]/5 p-3.5 rounded-xl border border-[#ff5252]/30">
+                      <div class="flex items-center gap-1.5 text-[#ffb4ab]">
+                        <ShieldAlert class="w-4 h-4 text-[#ff5252]" />
+                        <span class="text-xs font-bold">{store.t('telegram.twoFactorTitle')}</span>
+                      </div>
+                      <p class="text-[11px] text-[#bac9cc] leading-relaxed">{store.t('telegram.twoFactorDesc')}</p>
+                      <input
+                        type="password"
+                        bind:value={twoFactorPassword}
+                        placeholder="••••••••"
+                        class="w-full h-10 px-3 bg-[#090e16] border border-[#ff5252]/40 rounded-xl text-center font-mono text-sm text-[#dee2ee] focus:outline-none focus:border-[#ff5252]"
+                      />
+                      <button
+                        onclick={handleVerifyPassword}
+                        disabled={isTelegramLoading}
+                        class="w-full h-9 rounded-xl bg-[#ff5252] text-white font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-[#e04545] transition-all cursor-pointer disabled:opacity-50 shadow-[0_0_12px_rgba(255,82,82,0.3)]"
+                        type="button"
+                      >
+                        {#if isTelegramLoading}
+                          <Loader2 class="w-3.5 h-3.5 animate-spin" />
+                        {:else}
+                          <KeyRound class="w-3.5 h-3.5" />
+                          <span>{store.t('telegram.verifyPasswordBtn')}</span>
+                        {/if}
+                      </button>
+                    </div>
+                  {:else if phoneCodeHash}
                     <div class="pt-2 border-t border-[#252a33] space-y-2">
                       <p class="text-[11px] text-[#4edea3]">{store.t('telegram.otpSentDesc')}</p>
                       <input
@@ -1179,31 +1213,6 @@
                       </button>
                     </div>
                   {/if}
-                </div>
-              {:else}
-                <div class="space-y-3 max-w-md">
-                  <div>
-                    <label class="block text-[11px] text-[#8c909f] mb-1">{store.t('telegram.botTokenLabel')}</label>
-                    <input
-                      type="password"
-                      bind:value={botToken}
-                      placeholder="123456789:ABCDEF..."
-                      class="w-full h-9 px-3 bg-[#090e16] border border-[#30353e] rounded-xl text-xs font-mono text-[#dee2ee]"
-                    />
-                  </div>
-                  <button
-                    onclick={handleBotLogin}
-                    disabled={isTelegramLoading}
-                    class="h-9 px-4 rounded-xl bg-[#10b981] text-white font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-[#059669] transition-all cursor-pointer disabled:opacity-50"
-                    type="button"
-                  >
-                    {#if isTelegramLoading}
-                      <Loader2 class="w-3.5 h-3.5 animate-spin" />
-                    {:else}
-                      <Check class="w-3.5 h-3.5" />
-                      <span>{store.t('telegram.botLoginBtn')}</span>
-                    {/if}
-                  </button>
                 </div>
               {/if}
             </div>

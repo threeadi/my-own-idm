@@ -46,7 +46,7 @@ pub fn run() {
             let db_arc = Arc::new(db);
 
             let manager = Arc::new(DownloadManager::new(db_arc));
-            let telegram = Arc::new(engine::telegram::TelegramManager::new());
+            let telegram = Arc::new(engine::telegram::TelegramManager::new_with_dir(app_data_dir.join("telegram")));
 
             app.manage(AppState { manager, telegram });
 
@@ -104,12 +104,15 @@ pub fn run() {
             commands::telegram_set_credentials,
             commands::telegram_request_otp,
             commands::telegram_verify_otp,
-            commands::telegram_login_bot,
+            commands::telegram_verify_password,
             commands::telegram_get_auth_status,
+            commands::telegram_get_config,
+            commands::telegram_save_config,
             commands::telegram_logout,
             commands::telegram_list_dialogs,
             commands::telegram_delete_dialog,
             commands::telegram_scan_media,
+            commands::telegram_start_download,
             commands::telegram_list_accounts,
             commands::telegram_switch_account,
             commands::telegram_remove_account,

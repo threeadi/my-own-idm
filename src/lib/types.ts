@@ -253,7 +253,7 @@ export function matchesDownloadExtension(url: string, extensionsStr?: string): b
 
 export interface TelegramAccountInfo {
   account_id: string;
-  account_type: 'user' | 'bot';
+  account_type: 'user';
   phone_number: string | null;
   username: string | null;
   is_active: boolean;
@@ -271,6 +271,7 @@ export interface TelegramAuthStatus {
   concurrent_limit: number;
   download_delay_ms: number;
   is_premium: boolean;
+  needs_password?: boolean;
   error: string | null;
 }
 
@@ -298,6 +299,8 @@ export interface TelegramMediaItem {
   duration_seconds: number | null;
   resolution: string | null;
   crc32_hash: string | null;
+  sender_name?: string | null;
+  subchat_name?: string | null;
 }
 
 

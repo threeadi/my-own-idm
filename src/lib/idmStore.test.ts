@@ -1528,15 +1528,16 @@ describe('IdmStore State & Filtering', () => {
       const authRes = await store.verifyTelegramOtp('+628123456789', '12345', 'mock_hash');
       expect(authRes.is_authenticated).toBe(true);
 
-      const botRes = await store.loginTelegramBot('123456:ABC_token');
-      expect(botRes.is_authenticated).toBe(true);
+      await store.scanTelegramChat('Budi Santoso', 'all');
+      expect(store.telegramScannedMedia.length).toBeGreaterThan(0);
+      expect(store.telegramScannedMedia[0].sender_name).toBe('Budi Santoso');
 
       await store.scanTelegramChat('@Cinema4KArchive', 'video');
       expect(store.telegramScannedMedia.length).toBeGreaterThan(0);
 
       const directSpy = vi.spyOn(store, 'startTelegramDownloadDirect').mockImplementation(async () => ({} as any));
       await store.downloadTelegramMediaItems([store.telegramScannedMedia[0]], 'D:\\Downloads');
-      expect(directSpy).toHaveBeenCalledWith(store.telegramScannedMedia[0], 'D:\\Downloads');
+      expect(directSpy).toHaveBeenCalledWith(store.telegramScannedMedia[0], 'D:\\Downloads', false, true);
 
       await store.logoutTelegram();
       expect(store.telegramAuthStatus).toBeNull();
@@ -1568,10 +1569,10 @@ describe('IdmStore State & Filtering', () => {
       await store.verifyTelegramOtp('+6281', '12345', 'hash_1');
       expect(mockInvoke).toHaveBeenCalledWith('telegram_verify_otp', { phoneNumber: '+6281', code: '12345', phoneCodeHash: 'hash_1' });
 
-      mockInvoke.mockResolvedValueOnce({ is_authenticated: true } as any);
+      mockInvoke.mockResolvedValueOnce([{ message_id: 1, filename: 'Budi_Video.mp4', sender_name: 'Budi Santoso' }] as any);
       mockInvoke.mockResolvedValueOnce([]);
-      await store.loginTelegramBot('123:abc');
-      expect(mockInvoke).toHaveBeenCalledWith('telegram_login_bot', { botToken: '123:abc' });
+      await store.scanTelegramChat('Budi Santoso', 'video');
+      expect(mockInvoke).toHaveBeenCalledWith('telegram_scan_media', expect.objectContaining({ chatInput: 'Budi Santoso', mediaFilter: 'video' }));
 
       mockInvoke.mockResolvedValueOnce(undefined);
       await store.logoutTelegram();
@@ -1657,12 +1658,19 @@ describe('IdmStore State & Filtering', () => {
         crc32_hash: 'EFGH5678',
       };
 
-      mockInvoke.mockResolvedValueOnce(makeTask({ id: 'tg_task_99', filename: 'Avatar_2_4K.mkv' }));
+      mockInvoke.mockImplementation(async (cmd: string) => {
+        if (cmd === 'check_duplicate_download') {
+          return { is_duplicate: false };
+        }
+        if (cmd === 'telegram_start_download') {
+          return makeTask({ id: 'tg_task_99', filename: 'Avatar_2_4K.mkv' });
+        }
+        return undefined;
+      });
       const task = await store.startTelegramDownloadDirect(mediaItem);
 
-      expect(mockInvoke).toHaveBeenCalledWith('start_download', expect.objectContaining({
-        url: 'https://t.me/c/1849204912/2002',
-        filename: 'Avatar_2_4K.mkv',
+      expect(mockInvoke).toHaveBeenCalledWith('telegram_start_download', expect.objectContaining({
+        item: mediaItem,
       }));
       expect(transferSpy).toHaveBeenCalledWith('tg_task_99');
     });
@@ -1677,9 +1685,9 @@ describe('IdmStore State & Filtering', () => {
       expect(store.telegramAccounts.length).toBe(1);
       expect(store.activeAccountId).toBe('tg_user_628123456789');
 
-      await store.loginTelegramBot('999999:bot_token');
+      await store.verifyTelegramOtp('+628999999999', '54321', 'mock_hash_2');
       expect(store.telegramAccounts.length).toBe(2);
-      expect(store.activeAccountId).toBe('bot_999999');
+      expect(store.activeAccountId).toBe('tg_user_628999999999');
 
       await store.switchTelegramAccount('tg_user_628123456789');
       expect(store.activeAccountId).toBe('tg_user_628123456789');
@@ -1687,14 +1695,14 @@ describe('IdmStore State & Filtering', () => {
 
       await store.removeTelegramAccount('tg_user_628123456789');
       expect(store.telegramAccounts.length).toBe(1);
-      expect(store.activeAccountId).toBe('bot_999999');
+      expect(store.activeAccountId).toBe('tg_user_628999999999');
 
       // Test Tauri IPC multi-account calls
       mockIsTauriReturn = true;
       const storeTauri = new IdmStore();
       const sampleAccs = [
         { account_id: 'acc1', account_type: 'user', phone_number: '+6281', username: 'user1', is_active: true, is_premium: true, created_at: '2026-09-23' },
-        { account_id: 'acc2', account_type: 'bot', phone_number: null, username: 'bot1', is_active: false, is_premium: true, created_at: '2026-09-23' },
+        { account_id: 'acc2', account_type: 'user', phone_number: '+6282', username: 'user2', is_active: false, is_premium: true, created_at: '2026-09-23' },
       ];
 
       mockInvoke.mockResolvedValueOnce(sampleAccs as any);
@@ -1858,6 +1866,142 @@ describe('IdmStore State & Filtering', () => {
       store.deleteModalTaskId = null;
       await store.confirmDelete();
       expect(cancelSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it('matches telegram media items with active or completed tasks via getTelegramMediaTask', () => {
+      const store = new IdmStore();
+      const item = {
+        message_id: 501,
+        chat_id: '-100999888',
+        chat_title: 'Media Channel',
+        filename: 'movie.mp4',
+        file_size: 1048576,
+        mime_type: 'video/mp4',
+        media_type: 'video',
+        created_at: '2026-10-23',
+        tg_url: 'tg://chat/-100999888/msg/501',
+        thumbnail_url: null,
+        duration_seconds: null,
+        resolution: null,
+        crc32_hash: null,
+      };
+
+      // 1. No matching task
+      expect(store.getTelegramMediaTask(item)).toBeUndefined();
+
+      // 2. Direct tg_url match
+      const task1 = makeTask({
+        id: 'tg-1',
+        url: 'tg://chat/-100999888/msg/501',
+        filename: 'movie.mp4',
+        status: 'completed',
+      });
+      store.tasks = [task1];
+      expect(store.getTelegramMediaTask(item)?.id).toBe('tg-1');
+
+      // 3. Match by source telegram and filename
+      const task2 = makeTask({
+        id: 'tg-2',
+        url: 'https://custom.t.me/anything',
+        filename: 'movie.mp4',
+        status: 'downloading',
+      });
+      (task2 as any).source = 'telegram';
+      store.tasks = [task2];
+      expect(store.getTelegramMediaTask(item)?.id).toBe('tg-2');
+    });
+
+    it('handles duplicate detection on startTelegramDownloadDirect and opens duplicate modal or auto-acts', async () => {
+      const store = new IdmStore();
+      const item = {
+        message_id: 701,
+        chat_id: '-100123456',
+        chat_title: 'Movies',
+        filename: 'avatar.mp4',
+        file_size: 2048,
+        mime_type: 'video/mp4',
+        media_type: 'video',
+        created_at: '2026-10-23',
+        tg_url: 'tg://chat/-100123456/msg/701',
+        thumbnail_url: null,
+        duration_seconds: null,
+        resolution: null,
+        crc32_hash: null,
+      };
+
+      // Mock duplicate check returning duplicate
+      vi.spyOn(store, 'checkDuplicateDownload').mockResolvedValue({
+        is_duplicate: true,
+        status: 'completed',
+        task_id: 'task-avatar',
+        filename: 'avatar.mp4',
+        file_path: 'C:\\Downloads\\Telegram\\Movies\\avatar.mp4',
+        file_exists_on_disk: true,
+        downloaded_bytes: 2048,
+        total_bytes: 2048,
+        percent: 100,
+        completed_at: '2026-10-23T01:00:00Z',
+        suggested_new_filename: 'avatar (1).mp4',
+      });
+
+      const modalSpy = vi.spyOn(store, 'openDuplicateModal');
+
+      // Case 1: duplicateAction is 'ask' -> opens duplicate modal
+      store.settings.duplicateAction = 'ask';
+      store.settings.duplicateActionRemember = false;
+      await store.startTelegramDownloadDirect(item, 'C:\\Downloads', false, false);
+      expect(modalSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ is_duplicate: true }),
+        item.tg_url,
+        null,
+        '',
+        item,
+        'C:\\Downloads'
+      );
+      expect(store.duplicateTelegramItem).toEqual(item);
+
+      // Case 2: proceedWithDuplicateAction 'numbered' downloads unique filename
+      const startSpy = vi.spyOn(store, 'startTelegramDownloadDirect');
+      await store.proceedWithDuplicateAction('numbered', false);
+      expect(startSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ filename: 'avatar (1).mp4' }),
+        'C:\\Downloads',
+        false,
+        true
+      );
+
+      // Case 3: proceedWithDuplicateAction 'resume' opens existing file
+      const openFileSpy = vi.spyOn(store, 'openFile').mockResolvedValue(undefined as any);
+      store.duplicateModalData = {
+        is_duplicate: true,
+        status: 'completed',
+        task_id: 'task-avatar',
+        filename: 'avatar.mp4',
+        file_path: 'C:\\Downloads\\Telegram\\Movies\\avatar.mp4',
+        file_exists_on_disk: true,
+        downloaded_bytes: 2048,
+        total_bytes: 2048,
+        percent: 100,
+        completed_at: null,
+        suggested_new_filename: 'avatar (1).mp4',
+      };
+      store.duplicateTelegramItem = item;
+      store.duplicateTelegramSaveDir = 'C:\\Downloads';
+      await store.proceedWithDuplicateAction('resume', false);
+      expect(openFileSpy).toHaveBeenCalledWith('C:\\Downloads\\Telegram\\Movies\\avatar.mp4');
+
+      // Case 4: downloadTelegramMediaItems automatically skips completed items
+      store.tasks = [
+        makeTask({
+          id: 'task-avatar',
+          url: item.tg_url,
+          filename: 'avatar.mp4',
+          status: 'completed',
+        }),
+      ];
+      startSpy.mockClear();
+      await store.downloadTelegramMediaItems([item]);
+      expect(startSpy).not.toHaveBeenCalled();
     });
   });
 });

@@ -345,6 +345,7 @@ impl Database {
                 unread_count: row.get::<_, i64>(4)? as usize,
                 photo_url: row.get(5)?,
                 is_private: row.get::<_, i64>(6)? != 0,
+                last_read_message_id: None,
             })
         })?;
 

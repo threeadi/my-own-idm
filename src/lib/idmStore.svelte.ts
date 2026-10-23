@@ -84,6 +84,8 @@ export class IdmStore {
   duplicateModalUrl = $state<string>('');
   duplicateModalHeaders = $state<Record<string, string> | null>(null);
   duplicateModalQuality = $state<string>('');
+  duplicateTelegramItem = $state<TelegramMediaItem | null>(null);
+  duplicateTelegramSaveDir = $state<string>('');
 
   selectedTask = $derived<DownloadTask | null>(
     this.tasks.find((t) => t.id === this.selectedTaskId) || null
@@ -322,6 +324,8 @@ export class IdmStore {
     } catch (e) {
       console.error('Failed to load global speed limit config:', e);
     }
+    // Check & restore Telegram authentication status on startup
+    await this.checkTelegramAuthStatus();
   }
 
   async refreshTasks() {
@@ -784,11 +788,20 @@ export class IdmStore {
     };
   }
 
-  async openDuplicateModal(data: DuplicateCheckResult, url: string, headers: Record<string, string> | null = null, quality: string = '') {
+  async openDuplicateModal(
+    data: DuplicateCheckResult,
+    url: string,
+    headers: Record<string, string> | null = null,
+    quality: string = '',
+    telegramItem?: TelegramMediaItem,
+    telegramSaveDir?: string
+  ) {
     this.duplicateModalData = data;
     this.duplicateModalUrl = url;
     this.duplicateModalHeaders = headers;
     this.duplicateModalQuality = quality;
+    this.duplicateTelegramItem = telegramItem || null;
+    this.duplicateTelegramSaveDir = telegramSaveDir || '';
 
     if (this.settings.duplicateActionRemember && this.settings.duplicateAction && this.settings.duplicateAction !== 'ask') {
       await this.proceedWithDuplicateAction(this.settings.duplicateAction, false);
@@ -805,6 +818,8 @@ export class IdmStore {
     this.duplicateModalUrl = '';
     this.duplicateModalHeaders = null;
     this.duplicateModalQuality = '';
+    this.duplicateTelegramItem = null;
+    this.duplicateTelegramSaveDir = '';
   }
 
   async proceedWithDuplicateAction(choice: 'numbered' | 'overwrite' | 'resume', remember: boolean = false) {
@@ -812,6 +827,8 @@ export class IdmStore {
     const url = this.duplicateModalUrl;
     const headers = this.duplicateModalHeaders;
     const quality = this.duplicateModalQuality;
+    const tgItem = this.duplicateTelegramItem;
+    const tgSaveDir = this.duplicateTelegramSaveDir;
 
     if (remember) {
       this.settings.duplicateAction = choice;
@@ -820,6 +837,26 @@ export class IdmStore {
     }
 
     this.closeDuplicateModal();
+
+    if (tgItem) {
+      if (choice === 'numbered') {
+        const newFilename = data?.suggested_new_filename || tgItem.filename;
+        const newItem = { ...tgItem, filename: newFilename };
+        await this.startTelegramDownloadDirect(newItem, tgSaveDir, false, true);
+      } else if (choice === 'overwrite') {
+        await this.startTelegramDownloadDirect(tgItem, tgSaveDir, false, true);
+      } else if (choice === 'resume') {
+        if (data?.file_path && (data.status === 'completed' || data.file_exists_on_disk)) {
+          await this.openFile(data.file_path);
+        } else if (data?.task_id) {
+          if (data.status === 'paused') {
+            await this.resumeTask(data.task_id);
+          }
+          await this.openTransferWindow(data.task_id);
+        }
+      }
+      return;
+    }
 
     if (choice === 'numbered') {
       const filename = data?.suggested_new_filename || '';
@@ -1127,11 +1164,13 @@ export class IdmStore {
     }
     try {
       const status = await invoke<TelegramAuthStatus>('telegram_get_auth_status');
-      this.telegramAuthStatus = status;
-      if (status.is_authenticated) {
-        await this.fetchTelegramAccounts();
-        await this.fetchTelegramDialogs();
-        await this.scanTelegramChat(this.telegramActiveChatInput);
+      if (status) {
+        this.telegramAuthStatus = status;
+        if (status.is_authenticated) {
+          await this.fetchTelegramAccounts();
+          await this.fetchTelegramDialogs();
+          await this.scanTelegramChat(this.telegramActiveChatInput);
+        }
       }
     } catch (e: any) {
       console.warn('Telegram auth check error:', e);
@@ -1142,7 +1181,7 @@ export class IdmStore {
     if (!isTauri()) {
       if (this.telegramAuthStatus?.is_authenticated) {
         const id = this.telegramAuthStatus.user_id || 'tg_user_123';
-        const type: 'user' | 'bot' = this.telegramAuthStatus.phone_number ? 'user' : 'bot';
+        const type: 'user' = 'user';
         const phone = this.telegramAuthStatus.phone_number;
         const uname = this.telegramAuthStatus.username;
         const updatedList = this.telegramAccounts.map((a) => ({ ...a, is_active: false }));
@@ -1283,26 +1322,15 @@ export class IdmStore {
     return res;
   }
 
-  async loginTelegramBot(botToken: string) {
+  async verifyTelegramPassword(password: string) {
     if (!isTauri()) {
-      const botId = `bot_${botToken.split(':')[0] || '123'}`;
-      this.telegramAuthStatus = {
-        is_authenticated: true,
-        phone_number: null,
-        user_id: botId,
-        username: 'IDMTurboDownloaderBot',
-        session_active: true,
-        anti_flood_enabled: true,
-        concurrent_limit: 4,
-        download_delay_ms: 1200,
-        is_premium: true,
-        error: null,
-      };
-      await this.fetchTelegramAccounts();
-      this.closeTelegramAuthModal();
+      if (this.telegramAuthStatus) {
+        this.telegramAuthStatus.is_authenticated = true;
+        this.telegramAuthStatus.needs_password = false;
+      }
       return this.telegramAuthStatus;
     }
-    const res = await invoke<TelegramAuthStatus>('telegram_login_bot', { botToken });
+    const res = await invoke<TelegramAuthStatus>('telegram_verify_password', { password });
     this.telegramAuthStatus = res;
     if (res.is_authenticated) {
       await this.fetchTelegramAccounts();
@@ -1346,32 +1374,87 @@ export class IdmStore {
     }
   }
 
-  async scanTelegramChat(chatInput?: string, mediaFilter?: string) {
+  async scanTelegramChat(chatInput?: string, mediaFilter?: string, loadMore: boolean = false) {
     const input = chatInput || this.telegramActiveChatInput;
     const filter = mediaFilter || this.telegramMediaFilter;
     this.telegramActiveChatInput = input;
     this.telegramMediaFilter = filter;
     this.telegramIsScanning = true;
 
+    let offsetId: number | null = null;
+    if (loadMore && this.telegramScannedMedia.length > 0) {
+      const minId = Math.min(...this.telegramScannedMedia.map((m) => m.message_id));
+      if (minId > 0 && minId < Number.MAX_SAFE_INTEGER) {
+        offsetId = minId;
+      }
+    }
+
     if (!isTauri()) {
-      this.telegramScannedMedia = [
-        { message_id: 1042, chat_id: '-1001849204912', chat_title: 'Cinema 4K Archive', filename: 'Dune.Part.Two.2024.2160p.HDR.DDP5.1.x265.mkv', file_size: 15891452928, mime_type: 'video/x-matroska', media_type: 'video', created_at: '2026-09-22 14:30', tg_url: 'https://t.me/c/1849204912/1042', thumbnail_url: null, duration_seconds: 9960, resolution: '3840x2160', crc32_hash: '9C7FA10B' },
-        { message_id: 1043, chat_id: '-1001849204912', chat_title: 'Cinema 4K Archive', filename: 'Oppenheimer.2023.IMAX.2160p.UHD.BluRay.x265.mkv', file_size: 21474836480, mime_type: 'video/x-matroska', media_type: 'video', created_at: '2026-09-21 11:15', tg_url: 'https://t.me/c/1849204912/1043', thumbnail_url: null, duration_seconds: 10800, resolution: '3840x2160', crc32_hash: '7A4BF21C' },
-        { message_id: 1044, chat_id: '-1001849204912', chat_title: 'Cinema 4K Archive', filename: 'Interstellar.2014.Remastered.1080p.web.mp4', file_size: 4294967296, mime_type: 'video/mp4', media_type: 'video', created_at: '2026-09-20 09:00', tg_url: 'https://t.me/c/1849204912/1044', thumbnail_url: null, duration_seconds: 10140, resolution: '1920x1080', crc32_hash: '3B9DF01A' },
-        { message_id: 1045, chat_id: '-1001849204912', chat_title: 'Cinema 4K Archive', filename: 'Production_Notes_And_Artwork.pdf', file_size: 52428800, mime_type: 'application/pdf', media_type: 'document', created_at: '2026-09-19 18:45', tg_url: 'https://t.me/c/1849204912/1045', thumbnail_url: null, duration_seconds: null, resolution: null, crc32_hash: '1A2B3C4D' },
+      const isPersonSearch = !input.startsWith('@') && !input.toLowerCase().includes('cinema');
+      const sender = isPersonSearch ? input.replace(/^@/, '') : 'Cinema 4K Archive';
+      const cleanPrefix = isPersonSearch ? sender.replace(/\s+/g, '_') : 'Cinema';
+
+      const mockItems: TelegramMediaItem[] = [
+        {
+          message_id: loadMore ? 1040 : 1042,
+          chat_id: isPersonSearch ? `user_${cleanPrefix.toLowerCase()}` : '-1001849204912',
+          chat_title: isPersonSearch ? `${sender} (Kontak)` : 'Cinema 4K Archive',
+          filename: `${cleanPrefix}_Video_4K_HDR_${loadMore ? 'part2' : 'part1'}.mp4`,
+          file_size: 15891452928,
+          mime_type: 'video/mp4',
+          media_type: 'video',
+          created_at: '2026-09-22 14:30',
+          tg_url: `https://t.me/c/${cleanPrefix}/${loadMore ? 1040 : 1042}`,
+          thumbnail_url: null,
+          duration_seconds: 9960,
+          resolution: '3840x2160',
+          crc32_hash: '9C7FA10B',
+          sender_name: sender,
+        },
+        {
+          message_id: loadMore ? 1041 : 1043,
+          chat_id: isPersonSearch ? `user_${cleanPrefix.toLowerCase()}` : '-1001849204912',
+          chat_title: isPersonSearch ? `${sender} (Kontak)` : 'Cinema 4K Archive',
+          filename: `${cleanPrefix}_Photo_Original_${loadMore ? '2' : '1'}.jpg`,
+          file_size: 8388608,
+          mime_type: 'image/jpeg',
+          media_type: 'photo',
+          created_at: '2026-09-21 11:15',
+          tg_url: `https://t.me/c/${cleanPrefix}/${loadMore ? 1041 : 1043}`,
+          thumbnail_url: null,
+          duration_seconds: null,
+          resolution: '3840x2160',
+          crc32_hash: '7A4BF21C',
+          sender_name: sender,
+        },
       ];
+      let filtered = mockItems;
       if (filter !== 'all') {
-        this.telegramScannedMedia = this.telegramScannedMedia.filter(m => m.media_type === filter);
+        filtered = filtered.filter(m => m.media_type === filter);
+      }
+      if (loadMore) {
+        this.telegramScannedMedia = [...this.telegramScannedMedia, ...filtered];
+      } else {
+        this.telegramScannedMedia = filtered;
       }
       this.telegramIsScanning = false;
       return;
     }
 
     try {
-      this.telegramScannedMedia = await invoke<TelegramMediaItem[]>('telegram_scan_media', {
+      const items = await invoke<TelegramMediaItem[]>('telegram_scan_media', {
         chatInput: input,
         mediaFilter: filter === 'all' ? null : filter,
+        offsetId,
+        limit: 500,
       });
+      if (loadMore) {
+        const existingIds = new Set(this.telegramScannedMedia.map((m) => m.message_id));
+        const fresh = items.filter((m) => !existingIds.has(m.message_id));
+        this.telegramScannedMedia = [...this.telegramScannedMedia, ...fresh];
+      } else {
+        this.telegramScannedMedia = items;
+      }
       await this.fetchTelegramDialogs();
     } catch (e: any) {
       console.warn('Telegram scan media error:', e);
@@ -1398,8 +1481,36 @@ export class IdmStore {
     this.openSettingsModal('telegram');
   }
 
-  async startTelegramDownloadDirect(item: TelegramMediaItem, customSaveDir?: string) {
+  getTelegramMediaTask(item: TelegramMediaItem): DownloadTask | undefined {
+    return this.tasks.find((t) => {
+      if (t.url && (t.url === item.tg_url || t.url.endsWith(`/msg/${item.message_id}`))) {
+        return true;
+      }
+      if (t.filename === item.filename) {
+        if (t.source === 'telegram') return true;
+        if (t.telegram_channel && (t.telegram_channel === item.chat_id || t.telegram_channel === item.chat_title)) return true;
+      }
+      return false;
+    });
+  }
+
+  async startTelegramDownloadDirect(
+    item: TelegramMediaItem,
+    customSaveDir?: string,
+    openWindow: boolean = true,
+    bypassDuplicate: boolean = false
+  ): Promise<DownloadTask | undefined> {
     const dir = customSaveDir || this.settings.defaultDownloadDir || 'C:\\Downloads';
+
+    // Duplicate check if not bypassed
+    if (!bypassDuplicate) {
+      const dup = await this.checkDuplicateDownload(item.tg_url, item.filename, dir);
+      if (dup.is_duplicate) {
+        await this.openDuplicateModal(dup, item.tg_url, null, '', item, dir);
+        return undefined;
+      }
+    }
+
     let category: DownloadCategory = 'video';
     if (item.media_type === 'document') category = 'documents';
     else if (item.media_type === 'audio') category = 'audio';
@@ -1430,25 +1541,25 @@ export class IdmStore {
         telegram_channel: channelName,
       };
       this.tasks = [task, ...this.tasks];
-      this.openTransferWindow(task.id);
+      if (openWindow) {
+        this.openTransferWindow(task.id);
+      }
       return task;
     }
 
     try {
-      const task = await invoke<DownloadTask>('start_download', {
-        url: item.tg_url,
-        filename: item.filename,
+      const task = await invoke<DownloadTask>('telegram_start_download', {
+        item,
         saveDir: dir,
-        connections: this.settings.defaultConnections || 16,
-        headers: null,
-        quality: null,
       });
       task.source = 'telegram';
       task.telegram_channel = channelName;
       task.category = category;
       await this.refreshTasks();
       this.tasks = this.tasks.map((t) => (t.id === task.id ? { ...t, source: 'telegram', telegram_channel: channelName, category } : t));
-      this.openTransferWindow(task.id);
+      if (openWindow) {
+        this.openTransferWindow(task.id);
+      }
       return task;
     } catch (e: any) {
       console.error('Failed to start Telegram direct download:', e);
@@ -1457,7 +1568,11 @@ export class IdmStore {
 
   async downloadTelegramMediaItems(items: TelegramMediaItem[], customSaveDir?: string) {
     for (const item of items) {
-      await this.startTelegramDownloadDirect(item, customSaveDir);
+      const task = this.getTelegramMediaTask(item);
+      if (task && (task.status === 'completed' || task.status === 'downloading')) {
+        continue;
+      }
+      await this.startTelegramDownloadDirect(item, customSaveDir, false, true);
     }
     this.activeView = 'downloads';
   }

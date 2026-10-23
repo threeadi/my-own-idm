@@ -459,7 +459,7 @@ pub async fn telegram_request_otp(
     state: State<'_, AppState>,
     phone_number: String,
 ) -> Result<String, String> {
-    state.telegram.request_otp(&phone_number)
+    state.telegram.request_otp(&phone_number).await
 }
 
 #[tauri::command]
@@ -469,36 +469,52 @@ pub async fn telegram_verify_otp(
     code: String,
     phone_code_hash: String,
 ) -> Result<crate::engine::telegram::TelegramAuthStatus, String> {
-    state.telegram.verify_otp(&phone_number, &code, &phone_code_hash)
+    state.telegram.verify_otp(&phone_number, &code, &phone_code_hash).await
 }
 
 #[tauri::command]
-pub async fn telegram_login_bot(
+pub async fn telegram_verify_password(
     state: State<'_, AppState>,
-    bot_token: String,
+    password: String,
 ) -> Result<crate::engine::telegram::TelegramAuthStatus, String> {
-    state.telegram.login_with_bot(&bot_token)
+    state.telegram.verify_password(&password).await
 }
 
 #[tauri::command]
 pub async fn telegram_get_auth_status(
     state: State<'_, AppState>,
 ) -> Result<crate::engine::telegram::TelegramAuthStatus, String> {
-    Ok(state.telegram.get_auth_status())
+    Ok(state.telegram.check_and_restore_auth().await)
+}
+
+#[tauri::command]
+pub async fn telegram_get_config(
+    state: State<'_, AppState>,
+) -> Result<crate::engine::telegram::TelegramConfig, String> {
+    Ok(state.telegram.get_config())
+}
+
+#[tauri::command]
+pub async fn telegram_save_config(
+    state: State<'_, AppState>,
+    config: crate::engine::telegram::TelegramConfig,
+) -> Result<(), String> {
+    state.telegram.save_config(config);
+    Ok(())
 }
 
 #[tauri::command]
 pub async fn telegram_logout(
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    state.telegram.logout()
+    state.telegram.logout().await
 }
 
 #[tauri::command]
 pub async fn telegram_list_dialogs(
     state: State<'_, AppState>,
 ) -> Result<Vec<crate::engine::telegram::TelegramChannelInfo>, String> {
-    state.telegram.list_dialogs()
+    state.telegram.list_dialogs().await
 }
 
 #[tauri::command]
@@ -514,8 +530,194 @@ pub async fn telegram_scan_media(
     state: State<'_, AppState>,
     chat_input: String,
     media_filter: Option<String>,
+    offset_id: Option<i32>,
+    limit: Option<usize>,
 ) -> Result<Vec<crate::engine::telegram::TelegramMediaItem>, String> {
-    state.telegram.scan_chat_media(&chat_input, media_filter.as_deref())
+    state
+        .telegram
+        .scan_chat_media(&chat_input, media_filter.as_deref(), offset_id, limit)
+        .await
+}
+
+#[tauri::command]
+pub async fn telegram_start_download(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    item: crate::engine::telegram::TelegramMediaItem,
+    save_dir: String,
+) -> Result<crate::engine::types::DownloadTask, String> {
+    use std::sync::atomic::AtomicBool;
+    use std::sync::Arc;
+    use crate::engine::types::{DownloadCategory, DownloadTask, TaskStatus, Segment, SpeedMetrics};
+    use crate::engine::telegram::sanitize_folder_name;
+
+    let task_id = uuid::Uuid::new_v4().to_string();
+
+    // Auto-organize into {channel}/{chat} folder structure requested by user
+    let target_dir = {
+        let base = std::path::PathBuf::from(&save_dir);
+        let channel_name = sanitize_folder_name(&item.chat_title);
+        
+        let mut dir = base;
+        let base_str = dir.to_string_lossy();
+        if !base_str.contains(&channel_name) {
+            dir = dir.join(&channel_name);
+        }
+        if let Some(ref sub) = item.subchat_name {
+            let clean_sub = sanitize_folder_name(sub);
+            if !clean_sub.is_empty() && clean_sub != channel_name && !dir.to_string_lossy().contains(&clean_sub) {
+                dir = dir.join(&clean_sub);
+            }
+        }
+        dir
+    };
+
+    if let Err(e) = tokio::fs::create_dir_all(&target_dir).await {
+        crate::log_warn!("telegram", "Failed to create target directory {:?}: {}", target_dir, e);
+    }
+    let target_path = target_dir.join(&item.filename);
+
+    let category = match item.media_type.as_str() {
+        "video" => DownloadCategory::Video,
+        "document" => DownloadCategory::Documents,
+        "audio" | "voice" => DownloadCategory::Audio,
+        _ => DownloadCategory::General,
+    };
+
+    let segments = vec![Segment {
+        index: 0,
+        start_byte: 0,
+        end_byte: item.file_size.saturating_sub(1),
+        downloaded_bytes: 0,
+        is_finished: false,
+    }];
+
+    let task = DownloadTask {
+        id: task_id.clone(),
+        url: item.tg_url.clone(),
+        filename: item.filename.clone(),
+        save_dir: target_dir.to_string_lossy().to_string(),
+        file_path: target_path.to_string_lossy().to_string(),
+        total_bytes: if item.file_size > 0 { Some(item.file_size) } else { None },
+        downloaded_bytes: 0,
+        category,
+        status: TaskStatus::Downloading,
+        connections: 1,
+        supports_range: true,
+        is_hls: false,
+        created_at: chrono::Local::now().to_rfc3339(),
+        completed_at: None,
+        error_message: None,
+        segments,
+        referer: None,
+        speed_limit_bps: None,
+        quality: None,
+    };
+
+    // Save to DB and Memory
+    let _ = state.manager.db.insert_task(&task);
+    {
+        let mut tasks = state.manager.tasks.write().await;
+        tasks.insert(task_id.clone(), task.clone());
+    }
+
+    let cancel_flag = Arc::new(AtomicBool::new(false));
+    {
+        let mut flags = state.manager.cancel_flags.write().await;
+        flags.insert(task_id.clone(), cancel_flag.clone());
+    }
+
+    // Spawn download worker
+    let telegram = state.telegram.clone();
+    let app_handle = app.clone();
+    let db = state.manager.db.clone();
+    let tasks_map = state.manager.tasks.clone();
+    let cancel_flags = state.manager.cancel_flags.clone();
+    let t_id = task_id.clone();
+    let total = item.file_size;
+    let chat_id = item.chat_id.clone();
+    let msg_id = item.message_id as i32;
+
+    tauri::async_runtime::spawn(async move {
+        use tauri::Emitter;
+        let last_emit = parking_lot::Mutex::new(std::time::Instant::now());
+        let start_time = std::time::Instant::now();
+        let t_id_cb = t_id.clone();
+        let app_cb = app_handle.clone();
+
+        let cb = Arc::new(move |downloaded: u64, tot: u64| {
+            let now = std::time::Instant::now();
+            let mut last = last_emit.lock();
+            if now.duration_since(*last) >= std::time::Duration::from_millis(150) {
+                *last = now;
+                let elapsed_secs = start_time.elapsed().as_secs_f64();
+                let speed = if elapsed_secs > 0.0 { (downloaded as f64 / elapsed_secs) as u64 } else { 0 };
+                let effective_total = if tot > 0 { tot } else { total };
+                let eta = if speed > 0 && effective_total > downloaded {
+                    Some((effective_total - downloaded) / speed)
+                } else {
+                    None
+                };
+                let percent = if effective_total > 0 {
+                    ((downloaded as f64 / effective_total as f64) * 100.0).clamp(0.0, 100.0)
+                } else {
+                    0.0
+                };
+                let metrics = SpeedMetrics {
+                    task_id: t_id_cb.clone(),
+                    speed_bps: speed,
+                    eta_seconds: eta,
+                    downloaded_bytes: downloaded,
+                    total_bytes: Some(effective_total),
+                    percent,
+                    status: TaskStatus::Downloading,
+                    segments: vec![Segment {
+                        index: 0,
+                        start_byte: 0,
+                        end_byte: effective_total.saturating_sub(1),
+                        downloaded_bytes: downloaded,
+                        is_finished: false,
+                    }],
+                };
+                let _ = app_cb.emit("download-progress", serde_json::to_value(&metrics).unwrap_or_default());
+            }
+        });
+
+        match telegram.download_media_message(&chat_id, msg_id, &target_path, cancel_flag, Some(cb)).await {
+            Ok(final_bytes) => {
+                let completed_at = chrono::Local::now().to_rfc3339();
+                let _ = db.mark_task_completed(&t_id, &completed_at, final_bytes);
+                {
+                    let mut ts = tasks_map.write().await;
+                    if let Some(t) = ts.get_mut(&t_id) {
+                        t.status = TaskStatus::Completed;
+                        t.completed_at = Some(completed_at);
+                        t.downloaded_bytes = final_bytes;
+                        t.total_bytes = Some(final_bytes);
+                    }
+                }
+                let _ = app_handle.emit("download-completed", serde_json::to_value(&t_id).unwrap_or_default());
+            }
+            Err(err) => {
+                crate::log_error!("telegram", "telegram_start_download failed for task {}: {}", t_id, err);
+                let _ = db.mark_task_failed(&t_id, &err);
+                {
+                    let mut ts = tasks_map.write().await;
+                    if let Some(t) = ts.get_mut(&t_id) {
+                        t.status = TaskStatus::Failed(err.clone());
+                        t.error_message = Some(err.clone());
+                    }
+                }
+                let _ = app_handle.emit("download-failed", serde_json::to_value(&t_id).unwrap_or_default());
+            }
+        }
+
+        // Clean cancel flag
+        let mut flags = cancel_flags.write().await;
+        flags.remove(&t_id);
+    });
+
+    Ok(task)
 }
 
 #[tauri::command]
