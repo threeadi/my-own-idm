@@ -514,6 +514,17 @@ describe('IdmStore State & Filtering', () => {
     expect(store.isOutcomeModalOpen).toBe(false);
     expect(store.outcomeTaskId).toBeNull();
     expect(store.outcomeErrorMessage).toBeNull();
+
+    // When showCompletionDialog is false, completed outcomes should not pop up modal
+    store.settings.showCompletionDialog = false;
+    store.openOutcomeModal('task-789', 'completed');
+    expect(store.isOutcomeModalOpen).toBe(false);
+
+    // But failure outcomes should still pop up modal
+    store.openOutcomeModal('task-789', 'failed', 'Socket closed');
+    expect(store.isOutcomeModalOpen).toBe(true);
+    expect(store.outcomeTaskId).toBe('task-789');
+    expect(store.outcomeType).toBe('failed');
   });
 
   it('manages properties modal open and close methods', () => {
@@ -802,6 +813,7 @@ describe('IdmStore State & Filtering', () => {
           defaultConnections: '32',
           connectionType: 'broadband',
           defaultDownloadDir: 'D:\\Downloads',
+          showCompletionDialog: 'false',
         });
       }
       if (cmd === 'save_app_settings') {
@@ -819,15 +831,18 @@ describe('IdmStore State & Filtering', () => {
     expect(store.settings.autoStartWindows).toBe(false);
     expect(store.settings.defaultConnections).toBe(32);
     expect(store.settings.defaultDownloadDir).toBe('D:\\Downloads');
+    expect(store.settings.showCompletionDialog).toBe(false);
 
     // Save partial update
-    await store.saveAppSettings({ defaultConnections: 24, autoStartWindows: true });
+    await store.saveAppSettings({ defaultConnections: 24, autoStartWindows: true, showCompletionDialog: true });
     expect(store.settings.defaultConnections).toBe(24);
     expect(store.settings.autoStartWindows).toBe(true);
+    expect(store.settings.showCompletionDialog).toBe(true);
     expect(mockInvoke).toHaveBeenCalledWith('save_app_settings', {
       settings: expect.objectContaining({
         defaultConnections: '24',
         autoStartWindows: 'true',
+        showCompletionDialog: 'true',
       }),
     });
 

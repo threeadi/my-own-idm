@@ -555,6 +555,9 @@ export class IdmStore {
   }
 
   openOutcomeModal(taskId: string, type: 'completed' | 'failed' = 'completed', errorMsg?: string | null) {
+    if (type === 'completed' && this.settings.showCompletionDialog === false) {
+      return;
+    }
     this.outcomeTaskId = taskId;
     this.outcomeType = type;
     this.outcomeErrorMessage = errorMsg || null;
@@ -971,6 +974,7 @@ export class IdmStore {
     if ('mediaPanelOverlay' in raw) s.mediaPanelOverlay = raw.mediaPanelOverlay === 'true';
     if ('clipboardAutoCapture' in raw) s.clipboardAutoCapture = raw.clipboardAutoCapture === 'true';
     if ('notifyOnComplete' in raw) s.notifyOnComplete = raw.notifyOnComplete === 'true';
+    if ('showCompletionDialog' in raw) s.showCompletionDialog = raw.showCompletionDialog === 'true';
     if ('connectionType' in raw && raw.connectionType) s.connectionType = raw.connectionType;
     if ('defaultConnections' in raw) {
       const num = parseInt(raw.defaultConnections, 10);
@@ -1019,6 +1023,7 @@ export class IdmStore {
       mediaPanelOverlay: String(s.mediaPanelOverlay),
       clipboardAutoCapture: String(s.clipboardAutoCapture),
       notifyOnComplete: String(s.notifyOnComplete),
+      showCompletionDialog: String(s.showCompletionDialog ?? true),
       connectionType: s.connectionType,
       defaultConnections: String(s.defaultConnections),
       tcpWindowAutoTuning: String(s.tcpWindowAutoTuning),

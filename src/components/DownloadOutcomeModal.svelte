@@ -34,9 +34,19 @@
   let showLogs = $state(false);
   let recentLogs = $state<string[]>([]);
   let autoOpenOnClose = $state(false);
-  let dontShowAgain = $state(false);
+  let dontShowAgain = $state(!store.settings.showCompletionDialog);
   let isReporting = $state(false);
   let isReported = $state(false);
+
+  $effect(() => {
+    if (store.isOutcomeModalOpen) {
+      dontShowAgain = !store.settings.showCompletionDialog;
+    }
+  });
+
+  async function handleDontShowAgainToggle() {
+    await store.saveAppSettings({ showCompletionDialog: !dontShowAgain });
+  }
 
   $effect(() => {
     if (task?.id) {
@@ -111,12 +121,18 @@
   }
 
   async function handleOpenFile() {
+    if (dontShowAgain) {
+      await store.saveAppSettings({ showCompletionDialog: false });
+    }
     if (!task?.file_path) return;
     await store.openFile(task.file_path);
     store.closeOutcomeModal();
   }
 
   async function handleOpenFolder() {
+    if (dontShowAgain) {
+      await store.saveAppSettings({ showCompletionDialog: false });
+    }
     if (!task?.file_path) return;
     await store.openFolder(task.file_path);
   }
@@ -129,6 +145,9 @@
   }
 
   function handleClose() {
+    if (dontShowAgain) {
+      store.saveAppSettings({ showCompletionDialog: false });
+    }
     if (isCompleted && autoOpenOnClose && task?.file_path) {
       store.openFile(task.file_path);
     }
@@ -389,6 +408,7 @@
               <input
                 type="checkbox"
                 bind:checked={dontShowAgain}
+                onchange={handleDontShowAgainToggle}
                 class="w-4 h-4 rounded bg-[#171c24] border border-[#252a33] accent-[#00e5ff] cursor-pointer"
               />
               <span

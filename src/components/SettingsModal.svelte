@@ -502,6 +502,22 @@
                       </p>
                     </div>
                   </label>
+
+                  <label class="flex items-start gap-3 cursor-pointer group">
+                    <input
+                      type="checkbox"
+                      bind:checked={draft.showCompletionDialog}
+                      class="mt-0.5 rounded border-[#30353e] text-[#00e5ff] focus:ring-0 focus:ring-offset-0 bg-[#090e16]"
+                    />
+                    <div>
+                      <span class="text-xs font-semibold text-[#dee2ee] group-hover:text-[#00e5ff] transition-colors">
+                        {store.t('settings.showCompletionDialog')}
+                      </span>
+                      <p class="text-[11px] text-[#8c909f] leading-snug">
+                        {store.t('settings.showCompletionDialogDesc')}
+                      </p>
+                    </div>
+                  </label>
                 </div>
               </div>
 

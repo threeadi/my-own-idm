@@ -163,6 +163,7 @@ export interface AppSettings {
   mediaPanelOverlay: boolean;
   clipboardAutoCapture: boolean;
   notifyOnComplete: boolean;
+  showCompletionDialog: boolean;
   connectionType: string;
   defaultConnections: number;
   tcpWindowAutoTuning: boolean;
@@ -196,6 +197,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   mediaPanelOverlay: true,
   clipboardAutoCapture: true,
   notifyOnComplete: true,
+  showCompletionDialog: true,
   connectionType: 'broadband',
   defaultConnections: 16,
   tcpWindowAutoTuning: true,
